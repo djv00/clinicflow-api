@@ -1,5 +1,9 @@
 package com.jiangyudai.clinicflow.common.error;
 
+import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
+import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
+import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionTimeException;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -15,6 +19,58 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(DuplicateEncounterNumberException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateEncounterNumber(
+            DuplicateEncounterNumberException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problem.setTitle("Duplicate encounter number");
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(ActiveEncounterExistsException.class)
+    public ResponseEntity<ProblemDetail> handleActiveEncounterExists(
+            ActiveEncounterExistsException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problem.setTitle("Active encounter already exists");
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(EncounterNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleEncounterNotFound(
+            EncounterNotFoundException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+        problem.setTitle("Encounter not found");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidAdmissionTimeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAdmissionTime(
+            InvalidAdmissionTimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+        problem.setTitle("Invalid admission time");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
 
     @ExceptionHandler(DuplicateMedicalRecordNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(
