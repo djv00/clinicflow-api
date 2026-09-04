@@ -17,4 +17,6 @@ public interface EncounterLocationRepository
 
     List<EncounterLocation>
     findAllByEncounter_IdOrderByStartedAtAsc(UUID encounterId);
+
+    boolean existsByBed_IdAndEndedAtIsNull(UUID bedId);
 }

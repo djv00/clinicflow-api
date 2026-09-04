@@ -9,6 +9,8 @@ import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
+import com.jiangyudai.clinicflow.location.service.LocationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -48,6 +50,12 @@ class EncounterServiceTest {
 
     @InjectMocks
     private EncounterService encounterService;
+
+    @Mock
+    private EncounterLocationRepository encounterLocationRepository;
+
+    @Mock
+    private LocationService locationService;
 
     @Test
     void admitsPatient() {
