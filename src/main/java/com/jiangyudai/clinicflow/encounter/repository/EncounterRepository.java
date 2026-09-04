@@ -2,9 +2,14 @@ package com.jiangyudai.clinicflow.encounter.repository;
 
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface EncounterRepository
@@ -16,4 +21,8 @@ public interface EncounterRepository
             UUID patientId,
             Collection<EncounterStatus> statuses
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from Encounter e where e.id = :id")
+    Optional<Encounter> findByIdForUpdate(@Param("id") UUID id);
 }

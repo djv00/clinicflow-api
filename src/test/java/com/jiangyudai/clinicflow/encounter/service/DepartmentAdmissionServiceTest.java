@@ -100,7 +100,7 @@ class DepartmentAdmissionServiceTest {
         stubEncounter();
         stubDepartmentAndWard();
 
-        when(locationService.getActiveBed(BED_ID, WARD_ID))
+        when(locationService.getActiveBedForUpdate(BED_ID, WARD_ID))
                 .thenReturn(bed);
         when(encounterLocationRepository.save(any(EncounterLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -149,7 +149,8 @@ class DepartmentAdmissionServiceTest {
                 .isEqualTo(EncounterStatus.IN_DEPARTMENT);
 
         verify(encounterLocationRepository).save(location);
-        verify(locationService, never()).getActiveBed(any(), any());
+        verify(locationService, never())
+                .getActiveBedForUpdate(any(), any());
         verify(encounterLocationRepository, never())
                 .existsByBed_IdAndEndedAtIsNull(any());
     }
@@ -210,7 +211,7 @@ class DepartmentAdmissionServiceTest {
 
     @Test
     void rejectsUnknownEncounter() {
-        when(encounterRepository.findById(ENCOUNTER_ID))
+        when(encounterRepository.findByIdForUpdate(ENCOUNTER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> encounterService.admitToDepartment(
@@ -270,7 +271,7 @@ class DepartmentAdmissionServiceTest {
         stubEncounter();
         stubDepartmentAndWard();
 
-        when(locationService.getActiveBed(BED_ID, WARD_ID))
+        when(locationService.getActiveBedForUpdate(BED_ID, WARD_ID))
                 .thenReturn(bed);
         when(encounterLocationRepository
                 .existsByBed_IdAndEndedAtIsNull(BED_ID))
@@ -315,7 +316,7 @@ class DepartmentAdmissionServiceTest {
     }
 
     private void stubEncounter() {
-        when(encounterRepository.findById(ENCOUNTER_ID))
+        when(encounterRepository.findByIdForUpdate(ENCOUNTER_ID))
                 .thenReturn(Optional.of(encounter));
     }
 

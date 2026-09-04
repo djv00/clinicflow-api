@@ -21,6 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class LocationServiceTest {
@@ -116,5 +118,23 @@ class LocationServiceTest {
         when(ward.getId()).thenReturn(wardId);
 
         return new Bed("01", ward);
+    }
+
+    @Test
+    void getsActiveBedUsingLockingQuery() {
+        Bed bed = createBedInWard(WARD_ID);
+
+        when(bedRepository.findByIdForUpdate(BED_ID))
+                .thenReturn(Optional.of(bed));
+
+        Bed result = locationService.getActiveBedForUpdate(
+                BED_ID,
+                WARD_ID
+        );
+
+        assertThat(result).isSameAs(bed);
+
+        verify(bedRepository).findByIdForUpdate(BED_ID);
+        verify(bedRepository, never()).findById(BED_ID);
     }
 }

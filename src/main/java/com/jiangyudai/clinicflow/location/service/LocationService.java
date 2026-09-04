@@ -10,6 +10,7 @@ import com.jiangyudai.clinicflow.location.repository.DepartmentRepository;
 import com.jiangyudai.clinicflow.location.repository.WardRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.UUID;
 
@@ -70,9 +71,23 @@ public class LocationService {
                         new LocationNotFoundException("Bed", bedId)
                 );
 
+        return validateBed(bed, wardId);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Bed getActiveBedForUpdate(UUID bedId, UUID wardId) {
+        Bed bed = bedRepository.findByIdForUpdate(bedId)
+                .orElseThrow(() ->
+                        new LocationNotFoundException("Bed", bedId)
+                );
+
+        return validateBed(bed, wardId);
+    }
+
+    private Bed validateBed(Bed bed, UUID wardId) {
         if (!bed.isActive()) {
             throw new InvalidLocationException(
-                    "Bed is inactive: " + bedId
+                    "Bed is inactive: " + bed.getId()
             );
         }
 

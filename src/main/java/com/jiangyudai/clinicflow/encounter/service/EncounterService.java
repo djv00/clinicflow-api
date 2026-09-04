@@ -101,7 +101,9 @@ public class EncounterService {
             );
         }
 
-        Encounter encounter = getEncounter(encounterId);
+        Encounter encounter = encounterRepository
+                .findByIdForUpdate(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
 
         if (encounter.getStatus() != EncounterStatus.ADMITTED) {
             throw new InvalidEncounterStatusException(
@@ -134,7 +136,7 @@ public class EncounterService {
         Bed bed = null;
 
         if (bedId != null) {
-            bed = locationService.getActiveBed(bedId, wardId);
+            bed = locationService.getActiveBedForUpdate(bedId, wardId);
 
             if (encounterLocationRepository
                     .existsByBed_IdAndEndedAtIsNull(bedId)) {
