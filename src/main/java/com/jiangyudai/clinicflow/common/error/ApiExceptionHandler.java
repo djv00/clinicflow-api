@@ -1,9 +1,8 @@
 package com.jiangyudai.clinicflow.common.error;
 
-import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
-import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
-import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.*;
+import com.jiangyudai.clinicflow.location.exception.InvalidLocationException;
+import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -116,5 +115,51 @@ public class ApiExceptionHandler {
         problem.setProperty("errors", errors);
 
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler({
+            BedOccupiedException.class,
+            ActiveEncounterLocationExistsException.class,
+            InvalidEncounterStatusException.class
+    })
+    public ResponseEntity<ProblemDetail> handleDepartmentAdmissionConflict(
+            RuntimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problem.setTitle("Department admission conflict");
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler({
+            InvalidDepartmentAdmissionTimeException.class,
+            InvalidLocationException.class
+    })
+    public ResponseEntity<ProblemDetail> handleInvalidDepartmentAdmission(
+            RuntimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+        problem.setTitle("Invalid department admission");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(LocationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleLocationNotFound(
+            LocationNotFoundException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+        problem.setTitle("Location not found");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 }

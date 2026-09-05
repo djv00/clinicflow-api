@@ -1,12 +1,15 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
+import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
-import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
-import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
-import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.*;
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
+import com.jiangyudai.clinicflow.location.entity.Bed;
+import com.jiangyudai.clinicflow.location.entity.Department;
+import com.jiangyudai.clinicflow.location.entity.Ward;
+import com.jiangyudai.clinicflow.location.service.LocationService;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import org.springframework.stereotype.Service;
@@ -15,17 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-
-import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
-import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterLocationExistsException;
-import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidDepartmentAdmissionTimeException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
-import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
-import com.jiangyudai.clinicflow.location.entity.Bed;
-import com.jiangyudai.clinicflow.location.entity.Department;
-import com.jiangyudai.clinicflow.location.entity.Ward;
-import com.jiangyudai.clinicflow.location.service.LocationService;
 
 @Service
 @Transactional(readOnly = true)

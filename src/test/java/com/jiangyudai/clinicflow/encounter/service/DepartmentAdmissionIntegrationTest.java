@@ -3,6 +3,7 @@ package com.jiangyudai.clinicflow.encounter.service;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -22,22 +25,19 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:department-admission-it;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=10000",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
+@AutoConfigureMockMvc
 class DepartmentAdmissionIntegrationTest {
 
     @Autowired
@@ -51,6 +51,9 @@ class DepartmentAdmissionIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -353,5 +356,108 @@ class DepartmentAdmissionIntegrationTest {
             UUID bedId,
             OffsetDateTime startedAt
     ) {
+    }
+
+    @Test
+    void admitsToDepartmentThroughApi() throws Exception {
+        AdmissionData data = createAdmissionData();
+
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        data.encounterId()
+                )
+                        .contentType("application/json")
+                        .content("""
+                            {
+                              "departmentId": "%s",
+                              "wardId": "%s",
+                              "bedId": "%s",
+                              "startedAt": "%s"
+                            }
+                            """.formatted(
+                                data.departmentId(),
+                                data.wardId(),
+                                data.bedId(),
+                                data.startedAt()
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.encounterId")
+                        .value(data.encounterId().toString()))
+                .andExpect(jsonPath("$.departmentId")
+                        .value(data.departmentId().toString()))
+                .andExpect(jsonPath("$.wardId")
+                        .value(data.wardId().toString()))
+                .andExpect(jsonPath("$.bedId")
+                        .value(data.bedId().toString()));
+
+        transactions.executeWithoutResult(transactionStatus -> {
+            Encounter encounter = encounterRepository
+                    .findById(data.encounterId())
+                    .orElseThrow();
+
+            assertThat(encounter.getStatus())
+                    .isEqualTo(EncounterStatus.IN_DEPARTMENT);
+
+            EncounterLocation location = encounterLocationRepository
+                    .findByEncounter_IdAndEndedAtIsNull(data.encounterId())
+                    .orElseThrow();
+
+            assertThat(location.getBed().getId())
+                    .isEqualTo(data.bedId());
+        });
+    }
+
+    @Test
+    void returnsConflictWhenBedIsOccupied() throws Exception {
+        AdmissionData first = createAdmissionData();
+        AdmissionData second = createAdmissionData();
+
+        encounterService.admitToDepartment(
+                first.encounterId(),
+                first.departmentId(),
+                first.wardId(),
+                first.bedId(),
+                first.startedAt()
+        );
+
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        second.encounterId()
+                )
+                        .contentType("application/json")
+                        .content("""
+                            {
+                              "departmentId": "%s",
+                              "wardId": "%s",
+                              "bedId": "%s",
+                              "startedAt": "%s"
+                            }
+                            """.formatted(
+                                first.departmentId(),
+                                first.wardId(),
+                                first.bedId(),
+                                second.startedAt()
+                        )))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title")
+                        .value("Department admission conflict"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Bed is already occupied: " + first.bedId()));
+
+        transactions.executeWithoutResult(transactionStatus -> {
+            Encounter encounter = encounterRepository
+                    .findById(second.encounterId())
+                    .orElseThrow();
+
+            assertThat(encounter.getStatus())
+                    .isEqualTo(EncounterStatus.ADMITTED);
+
+            assertThat(encounterLocationRepository
+                    .findAllByEncounter_IdOrderByStartedAtAsc(
+                            second.encounterId()
+                    ))
+                    .isEmpty();
+        });
     }
 }
