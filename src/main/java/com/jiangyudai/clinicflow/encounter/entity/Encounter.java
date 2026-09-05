@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -73,6 +74,20 @@ public class Encounter {
         this.patient = patient;
         this.admittedAt = admittedAt;
         this.status = EncounterStatus.ADMITTED;
+    }
+
+    /**
+     * Advances an admitted encounter to its first department location.
+     */
+    public void admitToDepartment() {
+        if (status != EncounterStatus.ADMITTED) {
+            throw new InvalidEncounterStatusException(
+                    status,
+                    EncounterStatus.ADMITTED
+            );
+        }
+
+        status = EncounterStatus.IN_DEPARTMENT;
     }
 
     public UUID getId() {

@@ -1,9 +1,14 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
+import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidDepartmentAdmissionTimeException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import com.jiangyudai.clinicflow.location.entity.Department;
+import com.jiangyudai.clinicflow.location.entity.Ward;
+import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,10 +19,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,6 +40,21 @@ class EncounterControllerTest {
 
     private static final OffsetDateTime ADMITTED_AT =
             OffsetDateTime.parse("2025-09-02T16:30:00-04:00");
+
+    private static final UUID DEPARTMENT_ID = UUID.fromString(
+            "33333333-3333-3333-3333-333333333333"
+    );
+
+    private static final UUID WARD_ID = UUID.fromString(
+            "44444444-4444-4444-4444-444444444444"
+    );
+
+    private static final UUID LOCATION_ID = UUID.fromString(
+            "55555555-5555-5555-5555-555555555555"
+    );
+
+    private static final OffsetDateTime DEPARTMENT_ADMITTED_AT =
+            OffsetDateTime.parse("2025-09-02T18:30:00-04:00");
 
     @Autowired
     private MockMvc mockMvc;
@@ -150,6 +169,140 @@ class EncounterControllerTest {
                         .value("Encounter not found"));
     }
 
+    @Test
+    void admitsToDepartmentWithoutBed() throws Exception {
+        EncounterLocation location = createLocationWithoutBed();
+
+        when(encounterService.admitToDepartment(
+                eq(ENCOUNTER_ID),
+                eq(DEPARTMENT_ID),
+                eq(WARD_ID),
+                isNull(),
+                argThat(time ->
+                        time.isEqual(DEPARTMENT_ADMITTED_AT)
+                )
+        )).thenReturn(location);
+
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        ENCOUNTER_ID
+                )
+                        .contentType("application/json")
+                        .content(validDepartmentAdmissionJson()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id")
+                        .value(LOCATION_ID.toString()))
+                .andExpect(jsonPath("$.encounterId")
+                        .value(ENCOUNTER_ID.toString()))
+                .andExpect(jsonPath("$.departmentId")
+                        .value(DEPARTMENT_ID.toString()))
+                .andExpect(jsonPath("$.wardId")
+                        .value(WARD_ID.toString()))
+                .andExpect(jsonPath("$.bedId").value(nullValue()));
+
+        verify(encounterService).admitToDepartment(
+                eq(ENCOUNTER_ID),
+                eq(DEPARTMENT_ID),
+                eq(WARD_ID),
+                isNull(),
+                argThat(time ->
+                        time.isEqual(DEPARTMENT_ADMITTED_AT)
+                )
+        );
+    }
+
+    @Test
+    void rejectsMissingDepartmentAdmissionFields() throws Exception {
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        ENCOUNTER_ID
+                )
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title")
+                        .value("Invalid request"))
+                .andExpect(jsonPath("$.errors.departmentId")
+                        .value("Department ID is required"))
+                .andExpect(jsonPath("$.errors.wardId")
+                        .value("Ward ID is required"))
+                .andExpect(jsonPath("$.errors.startedAt")
+                        .value("Department admission time is required"));
+    }
+
+    @Test
+    void returnsNotFoundWhenDepartmentIsMissing() throws Exception {
+        when(encounterService.admitToDepartment(
+                eq(ENCOUNTER_ID),
+                eq(DEPARTMENT_ID),
+                eq(WARD_ID),
+                isNull(),
+                argThat(time ->
+                        time.isEqual(DEPARTMENT_ADMITTED_AT)
+                )
+        )).thenThrow(
+                new LocationNotFoundException(
+                        "Department",
+                        DEPARTMENT_ID
+                )
+        );
+
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        ENCOUNTER_ID
+                )
+                        .contentType("application/json")
+                        .content(validDepartmentAdmissionJson()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title")
+                        .value("Location not found"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Department not found: " + DEPARTMENT_ID));
+    }
+
+    @Test
+    void rejectsDepartmentAdmissionBeforeHospitalAdmission() throws Exception {
+        OffsetDateTime invalidTime = ADMITTED_AT.minusHours(1);
+
+        when(encounterService.admitToDepartment(
+                eq(ENCOUNTER_ID),
+                eq(DEPARTMENT_ID),
+                eq(WARD_ID),
+                isNull(),
+                argThat(time ->
+                        time.isEqual(invalidTime)
+                )
+        )).thenThrow(
+                new InvalidDepartmentAdmissionTimeException(
+                        "Department admission time cannot be before hospital admission"
+                )
+        );
+
+        mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/department-admissions",
+                        ENCOUNTER_ID
+                )
+                        .contentType("application/json")
+                        .content("""
+                            {
+                              "departmentId": "%s",
+                              "wardId": "%s",
+                              "startedAt": "%s"
+                            }
+                            """.formatted(
+                                DEPARTMENT_ID,
+                                WARD_ID,
+                                invalidTime
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title")
+                        .value("Invalid department admission"))
+                .andExpect(jsonPath("$.detail")
+                        .value(
+                                "Department admission time cannot be before hospital admission"
+                        ));
+    }
+
     private Encounter createEncounter() {
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(PATIENT_ID);
@@ -158,6 +311,42 @@ class EncounterControllerTest {
                 "ENC-2026-000001",
                 patient,
                 ADMITTED_AT
+        );
+    }
+
+    private EncounterLocation createLocationWithoutBed() {
+        Encounter encounter = mock(Encounter.class);
+        Department department = mock(Department.class);
+        Ward ward = mock(Ward.class);
+        EncounterLocation location = mock(EncounterLocation.class);
+
+        when(encounter.getId()).thenReturn(ENCOUNTER_ID);
+        when(department.getId()).thenReturn(DEPARTMENT_ID);
+        when(ward.getId()).thenReturn(WARD_ID);
+
+        when(location.getId()).thenReturn(LOCATION_ID);
+        when(location.getEncounter()).thenReturn(encounter);
+        when(location.getDepartment()).thenReturn(department);
+        when(location.getWard()).thenReturn(ward);
+        when(location.getBed()).thenReturn(null);
+        when(location.getStartedAt())
+                .thenReturn(DEPARTMENT_ADMITTED_AT);
+        when(location.getEndedAt()).thenReturn(null);
+
+        return location;
+    }
+
+    private String validDepartmentAdmissionJson() {
+        return """
+            {
+              "departmentId": "%s",
+              "wardId": "%s",
+              "startedAt": "%s"
+            }
+            """.formatted(
+                DEPARTMENT_ID,
+                WARD_ID,
+                DEPARTMENT_ADMITTED_AT
         );
     }
 }

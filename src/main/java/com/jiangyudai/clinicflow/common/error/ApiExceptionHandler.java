@@ -1,9 +1,8 @@
 package com.jiangyudai.clinicflow.common.error;
 
-import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
-import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
-import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.*;
+import com.jiangyudai.clinicflow.location.exception.InvalidLocationException;
+import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -17,9 +16,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Converts business and validation failures into consistent API problem details.
+ *
+ * @author Jiangyu Dai
+ */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    // Encounter admission errors
     @ExceptionHandler(DuplicateEncounterNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateEncounterNumber(
             DuplicateEncounterNumberException exception
@@ -72,6 +77,7 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    // Patient registration errors
     @ExceptionHandler(DuplicateMedicalRecordNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(
             DuplicateMedicalRecordNumberException exception
@@ -98,6 +104,7 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 
+    // Request validation errors
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidation(
             MethodArgumentNotValidException exception
@@ -116,5 +123,52 @@ public class ApiExceptionHandler {
         problem.setProperty("errors", errors);
 
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    // Department admission errors
+    @ExceptionHandler({
+            BedOccupiedException.class,
+            ActiveEncounterLocationExistsException.class,
+            InvalidEncounterStatusException.class
+    })
+    public ResponseEntity<ProblemDetail> handleDepartmentAdmissionConflict(
+            RuntimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problem.setTitle("Department admission conflict");
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler({
+            InvalidDepartmentAdmissionTimeException.class,
+            InvalidLocationException.class
+    })
+    public ResponseEntity<ProblemDetail> handleInvalidDepartmentAdmission(
+            RuntimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+        problem.setTitle("Invalid department admission");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(LocationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleLocationNotFound(
+            LocationNotFoundException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+        problem.setTitle("Location not found");
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 }
