@@ -44,6 +44,7 @@ public class Ward {
     @Column(nullable = false)
     private boolean active;
 
+    // Required by JPA.
     protected Ward() {
     }
 

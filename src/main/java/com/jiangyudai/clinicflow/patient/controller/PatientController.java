@@ -16,6 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+/**
+ * REST endpoints for patient registration and lookup.
+ *
+ * @author Jiangyu Dai
+ */
 @RestController
 @RequestMapping("/api/v1/patients")
 public class PatientController {

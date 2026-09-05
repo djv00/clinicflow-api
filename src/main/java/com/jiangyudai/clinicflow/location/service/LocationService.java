@@ -14,6 +14,11 @@ import org.springframework.transaction.annotation.Propagation;
 
 import java.util.UUID;
 
+/**
+ * Resolves active department, ward, and bed references for encounter workflows.
+ *
+ * @author Jiangyu Dai
+ */
 @Service
 @Transactional(readOnly = true)
 public class LocationService {
@@ -74,6 +79,10 @@ public class LocationService {
         return validateBed(bed, wardId);
     }
 
+    /**
+     * Loads a bed with a write lock held by the caller's transaction.
+     * This method must be called from an existing workflow transaction.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public Bed getActiveBedForUpdate(UUID bedId, UUID wardId) {
         Bed bed = bedRepository.findByIdForUpdate(bedId)

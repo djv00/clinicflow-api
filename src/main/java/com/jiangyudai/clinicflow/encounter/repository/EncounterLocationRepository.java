@@ -10,13 +10,22 @@ import java.util.UUID;
 public interface EncounterLocationRepository
         extends JpaRepository<EncounterLocation, UUID> {
 
+    /**
+     * Returns the current location; an open location has no end time.
+     */
     Optional<EncounterLocation>
     findByEncounter_IdAndEndedAtIsNull(UUID encounterId);
 
     boolean existsByEncounter_IdAndEndedAtIsNull(UUID encounterId);
 
+    /**
+     * Returns the complete location history in workflow order.
+     */
     List<EncounterLocation>
     findAllByEncounter_IdOrderByStartedAtAsc(UUID encounterId);
 
+    /**
+     * Checks whether a bed is assigned to an open location.
+     */
     boolean existsByBed_IdAndEndedAtIsNull(UUID bedId);
 }

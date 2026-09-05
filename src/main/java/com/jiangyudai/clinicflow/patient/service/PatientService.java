@@ -10,6 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * Applies patient registration rules before patient data is stored.
+ *
+ * @author Jiangyu Dai
+ */
 @Service
 @Transactional(readOnly = true)
 public class PatientService {
@@ -20,6 +25,9 @@ public class PatientService {
         this.patientRepository = patientRepository;
     }
 
+    /**
+     * Registers a patient after checking the medical record number.
+     */
     @Transactional
     public Patient createPatient(
             String medicalRecordNumber,
@@ -43,6 +51,9 @@ public class PatientService {
         return patientRepository.save(patient);
     }
 
+    /**
+     * Returns a patient or reports that the supplied identifier is unknown.
+     */
     public Patient getPatient(UUID id) {
         return patientRepository.findById(id)
                 .orElseThrow(() -> new PatientNotFoundException(id));

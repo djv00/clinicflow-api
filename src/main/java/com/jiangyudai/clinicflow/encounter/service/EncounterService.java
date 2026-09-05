@@ -19,10 +19,16 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Coordinates hospital admission and encounter state changes.
+ *
+ * @author Jiangyu Dai
+ */
 @Service
 @Transactional(readOnly = true)
 public class EncounterService {
 
+    // These states still represent a patient receiving hospital care.
     private static final List<EncounterStatus> ACTIVE_STATUSES = List.of(
             EncounterStatus.ADMITTED,
             EncounterStatus.IN_DEPARTMENT
@@ -46,6 +52,9 @@ public class EncounterService {
         this.locationService = locationService;
     }
 
+    /**
+     * Opens a hospital encounter after checking admission rules.
+     */
     @Transactional
     public Encounter admitPatient(
             UUID patientId,
@@ -78,7 +87,11 @@ public class EncounterService {
         return encounterRepository.save(encounter);
     }
 
-    //入科
+    /**
+     * Places an admitted encounter in a department. A bed may be assigned later.
+     *
+     * @param bedId bed to assign, or {@code null} when no bed is assigned yet
+     */
     @Transactional
     public EncounterLocation admitToDepartment(
             UUID encounterId,
@@ -93,6 +106,7 @@ public class EncounterService {
             );
         }
 
+        // Keep the lock order Encounter -> Bed for every location workflow.
         Encounter encounter = encounterRepository
                 .findByIdForUpdate(encounterId)
                 .orElseThrow(() -> new EncounterNotFoundException(encounterId));
@@ -128,6 +142,7 @@ public class EncounterService {
         Bed bed = null;
 
         if (bedId != null) {
+            // Hold the bed lock until the occupancy check and insert are committed.
             bed = locationService.getActiveBedForUpdate(bedId, wardId);
 
             if (encounterLocationRepository
@@ -144,11 +159,15 @@ public class EncounterService {
                 startedAt
         );
 
+        // The state change and location record are committed as one transaction.
         encounter.admitToDepartment();
 
         return encounterLocationRepository.save(location);
     }
 
+    /**
+     * Returns an encounter without acquiring a workflow write lock.
+     */
     public Encounter getEncounter(UUID id) {
         return encounterRepository.findById(id)
                 .orElseThrow(() -> new EncounterNotFoundException(id));

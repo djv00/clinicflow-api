@@ -22,6 +22,9 @@ public interface BedRepository extends JpaRepository<Bed, UUID> {
             String bedNumber
     );
 
+    /**
+     * Loads a bed with a write lock before its current occupancy is checked.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from Bed b where b.id = :id")
     Optional<Bed> findByIdForUpdate(@Param("id") UUID id);

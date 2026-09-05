@@ -49,6 +49,7 @@ public class Bed {
     @Column(nullable = false)
     private boolean active;
 
+    // Required by JPA.
     protected Bed() {
     }
 

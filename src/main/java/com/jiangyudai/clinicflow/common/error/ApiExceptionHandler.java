@@ -16,9 +16,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Converts business and validation failures into consistent API problem details.
+ *
+ * @author Jiangyu Dai
+ */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    // Encounter admission errors
     @ExceptionHandler(DuplicateEncounterNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateEncounterNumber(
             DuplicateEncounterNumberException exception
@@ -71,6 +77,7 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    // Patient registration errors
     @ExceptionHandler(DuplicateMedicalRecordNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(
             DuplicateMedicalRecordNumberException exception
@@ -97,6 +104,7 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 
+    // Request validation errors
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidation(
             MethodArgumentNotValidException exception
@@ -117,6 +125,7 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    // Department admission errors
     @ExceptionHandler({
             BedOccupiedException.class,
             ActiveEncounterLocationExistsException.class,

@@ -22,6 +22,9 @@ public interface EncounterRepository
             Collection<EncounterStatus> statuses
     );
 
+    /**
+     * Loads an encounter with a write lock for a state-changing workflow.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Encounter e where e.id = :id")
     Optional<Encounter> findByIdForUpdate(@Param("id") UUID id);

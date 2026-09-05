@@ -76,6 +76,9 @@ public class Encounter {
         this.status = EncounterStatus.ADMITTED;
     }
 
+    /**
+     * Advances an admitted encounter to its first department location.
+     */
     public void admitToDepartment() {
         if (status != EncounterStatus.ADMITTED) {
             throw new InvalidEncounterStatusException(

@@ -13,6 +13,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+/**
+ * REST endpoints for hospital and department admission workflows.
+ *
+ * @author Jiangyu Dai
+ */
 @RestController
 @RequestMapping("/api/v1/encounters")
 public class EncounterController {

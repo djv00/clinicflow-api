@@ -64,6 +64,7 @@ public class EncounterLocation {
     )
     private Ward ward;
 
+    // A department admission can be recorded before a bed is assigned.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "bed_id",
@@ -76,9 +77,11 @@ public class EncounterLocation {
     @Column(name = "started_at", nullable = false)
     private OffsetDateTime startedAt;
 
+    // null marks the encounter's current location.
     @Column(name = "ended_at")
     private OffsetDateTime endedAt;
 
+    // Required by JPA.
     protected EncounterLocation() {
     }
 

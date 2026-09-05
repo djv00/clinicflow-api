@@ -44,6 +44,7 @@ public class Department {
     @Column(nullable = false)
     private boolean active;
 
+    // Required by JPA.
     protected Department() {
     }
 

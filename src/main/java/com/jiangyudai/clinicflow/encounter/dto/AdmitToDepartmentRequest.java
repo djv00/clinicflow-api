@@ -6,6 +6,11 @@ import jakarta.validation.constraints.PastOrPresent;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * Input for department admission. A bed assignment is optional.
+ *
+ * @author Jiangyu Dai
+ */
 public record AdmitToDepartmentRequest(
 
         @NotNull(message = "Department ID is required")
