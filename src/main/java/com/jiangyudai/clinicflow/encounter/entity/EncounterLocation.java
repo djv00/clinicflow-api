@@ -15,6 +15,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationAlreadyEndedException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterLocationTimeException;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -97,6 +100,29 @@ public class EncounterLocation {
         this.ward = ward;
         this.bed = bed;
         this.startedAt = startedAt;
+    }
+
+    /**
+     * Ends the current location when the encounter moves or leaves care.
+     */
+    public void endAt(OffsetDateTime endedAt) {
+        if (this.endedAt != null) {
+            throw new EncounterLocationAlreadyEndedException();
+        }
+
+        if (endedAt == null) {
+            throw new InvalidEncounterLocationTimeException(
+                    "Encounter location end time is required"
+            );
+        }
+
+        if (endedAt.isBefore(startedAt)) {
+            throw new InvalidEncounterLocationTimeException(
+                    "Encounter location end time cannot be before start time"
+            );
+        }
+
+        this.endedAt = endedAt;
     }
 
     public UUID getId() {
