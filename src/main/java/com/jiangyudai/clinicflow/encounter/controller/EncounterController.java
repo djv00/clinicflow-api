@@ -4,17 +4,24 @@ import com.jiangyudai.clinicflow.encounter.dto.AdmitPatientRequest;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitToDepartmentRequest;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
 /**
- * REST endpoints for hospital and department admission workflows.
+ * REST endpoints for hospital encounters and location workflows.
  *
  * @author Jiangyu Dai
  */
@@ -63,4 +70,23 @@ public class EncounterController {
 
         return EncounterLocationResponse.from(location);
     }
+
+    @PostMapping("/{id}/transfers")
+    @ResponseStatus(HttpStatus.CREATED)
+    public EncounterLocationResponse transferEncounter(
+            @PathVariable("id") UUID encounterId,
+            @Valid @RequestBody TransferEncounterRequest request
+    ) {
+        EncounterLocation location =
+                encounterService.transferEncounter(
+                        encounterId,
+                        request.departmentId(),
+                        request.wardId(),
+                        request.bedId(),
+                        request.transferredAt()
+                );
+
+        return EncounterLocationResponse.from(location);
+    }
+
 }

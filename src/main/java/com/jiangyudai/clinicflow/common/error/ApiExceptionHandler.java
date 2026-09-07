@@ -125,36 +125,41 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
-    // Department admission errors
+    // Encounter location workflow errors
     @ExceptionHandler({
             BedOccupiedException.class,
             ActiveEncounterLocationExistsException.class,
+            CurrentEncounterLocationNotFoundException.class,
+            EncounterLocationAlreadyEndedException.class,
+            SameEncounterLocationException.class,
             InvalidEncounterStatusException.class
     })
-    public ResponseEntity<ProblemDetail> handleDepartmentAdmissionConflict(
+    public ResponseEntity<ProblemDetail> handleEncounterLocationConflict(
             RuntimeException exception
     ) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT,
                 exception.getMessage()
         );
-        problem.setTitle("Department admission conflict");
+        problem.setTitle("Encounter location conflict");
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
     @ExceptionHandler({
             InvalidDepartmentAdmissionTimeException.class,
+            InvalidEncounterTransferTimeException.class,
+            InvalidEncounterLocationTimeException.class,
             InvalidLocationException.class
     })
-    public ResponseEntity<ProblemDetail> handleInvalidDepartmentAdmission(
+    public ResponseEntity<ProblemDetail> handleInvalidEncounterLocation(
             RuntimeException exception
     ) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,
                 exception.getMessage()
         );
-        problem.setTitle("Invalid department admission");
+        problem.setTitle("Invalid encounter location");
 
         return ResponseEntity.badRequest().body(problem);
     }

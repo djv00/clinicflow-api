@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationAlreadyEndedException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterLocationTimeException;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
@@ -97,6 +99,29 @@ public class EncounterLocation {
         this.ward = ward;
         this.bed = bed;
         this.startedAt = startedAt;
+    }
+
+    /**
+     * Ends the current location when the encounter moves or leaves care.
+     */
+    public void endAt(OffsetDateTime endedAt) {
+        if (this.endedAt != null) {
+            throw new EncounterLocationAlreadyEndedException();
+        }
+
+        if (endedAt == null) {
+            throw new InvalidEncounterLocationTimeException(
+                    "Encounter location end time is required"
+            );
+        }
+
+        if (endedAt.isBefore(startedAt)) {
+            throw new InvalidEncounterLocationTimeException(
+                    "Encounter location end time cannot be before start time"
+            );
+        }
+
+        this.endedAt = endedAt;
     }
 
     public UUID getId() {

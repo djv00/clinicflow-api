@@ -16,11 +16,16 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 class EncounterLocationRepositoryTest {
+
+    private static final UUID OTHER_ENCOUNTER_ID = UUID.fromString(
+            "88888888-8888-8888-8888-888888888888"
+    );
 
     @Autowired
     private PatientRepository patientRepository;
@@ -42,6 +47,61 @@ class EncounterLocationRepositoryTest {
 
     @Test
     void savesCurrentEncounterLocation() {
+        LocationData data = createLocationData();
+
+        EncounterLocation location = encounterLocationRepository
+                .findByEncounter_IdAndEndedAtIsNull(
+                        data.encounter().getId()
+                )
+                .orElseThrow();
+
+        assertThat(location.getEncounter().getId())
+                .isEqualTo(data.encounter().getId());
+        assertThat(location.getDepartment().getId())
+                .isEqualTo(data.department().getId());
+        assertThat(location.getWard().getId())
+                .isEqualTo(data.ward().getId());
+        assertThat(location.getBed().getId())
+                .isEqualTo(data.bed().getId());
+        assertThat(location.getEndedAt()).isNull();
+    }
+
+    @Test
+    void countsOnlyAnotherOpenEncounterAsBedOccupancy() {
+        LocationData data = createLocationData();
+
+        boolean occupiedBySameEncounter = encounterLocationRepository
+                .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
+                        data.bed().getId(),
+                        data.encounter().getId()
+                );
+
+        boolean occupiedByAnotherEncounter = encounterLocationRepository
+                .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
+                        data.bed().getId(),
+                        OTHER_ENCOUNTER_ID
+                );
+
+        assertThat(occupiedBySameEncounter).isFalse();
+        assertThat(occupiedByAnotherEncounter).isTrue();
+
+        data.location().endAt(
+                data.location().getStartedAt().plusHours(1)
+        );
+
+        // Flush verifies that Hibernate persists the managed entity change.
+        encounterLocationRepository.flush();
+
+        boolean occupiedAfterLocationEnded = encounterLocationRepository
+                .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
+                        data.bed().getId(),
+                        OTHER_ENCOUNTER_ID
+                );
+
+        assertThat(occupiedAfterLocationEnded).isFalse();
+    }
+
+    private LocationData createLocationData() {
         Patient patient = patientRepository.saveAndFlush(
                 new Patient(
                         "MRN-300001",
@@ -73,28 +133,34 @@ class EncounterLocationRepositoryTest {
                 new Bed("01", ward)
         );
 
-        encounterLocationRepository.saveAndFlush(
-                new EncounterLocation(
-                        encounter,
-                        department,
-                        ward,
-                        bed,
-                        OffsetDateTime.parse(
-                                "2026-09-01T15:00:00-04:00"
+        EncounterLocation location =
+                encounterLocationRepository.saveAndFlush(
+                        new EncounterLocation(
+                                encounter,
+                                department,
+                                ward,
+                                bed,
+                                OffsetDateTime.parse(
+                                        "2026-09-01T15:00:00-04:00"
+                                )
                         )
-                )
+                );
+
+        return new LocationData(
+                encounter,
+                department,
+                ward,
+                bed,
+                location
         );
+    }
 
-        EncounterLocation location = encounterLocationRepository
-                .findByEncounter_IdAndEndedAtIsNull(encounter.getId())
-                .orElseThrow();
-
-        assertThat(location.getDepartment().getId())
-                .isEqualTo(department.getId());
-        assertThat(location.getWard().getId())
-                .isEqualTo(ward.getId());
-        assertThat(location.getBed().getId())
-                .isEqualTo(bed.getId());
-        assertThat(location.getEndedAt()).isNull();
+    private record LocationData(
+            Encounter encounter,
+            Department department,
+            Ward ward,
+            Bed bed,
+            EncounterLocation location
+    ) {
     }
 }

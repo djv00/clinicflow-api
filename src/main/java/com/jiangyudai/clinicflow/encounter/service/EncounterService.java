@@ -166,10 +166,115 @@ public class EncounterService {
     }
 
     /**
+     * Moves an encounter to a new department, ward, or bed.
+     */
+    @Transactional
+    public EncounterLocation transferEncounter(
+            UUID encounterId,
+            UUID departmentId,
+            UUID wardId,
+            UUID bedId,
+            OffsetDateTime transferredAt
+    ) {
+        if (transferredAt == null) {
+            throw new InvalidEncounterTransferTimeException(
+                    "Transfer time is required"
+            );
+        }
+
+        // Preserve the Encounter -> Bed lock order used by location workflows.
+        Encounter encounter = encounterRepository
+                .findByIdForUpdate(encounterId)
+                .orElseThrow(() ->
+                        new EncounterNotFoundException(encounterId)
+                );
+
+        if (encounter.getStatus() != EncounterStatus.IN_DEPARTMENT) {
+            throw new InvalidEncounterStatusException(
+                    encounter.getStatus(),
+                    EncounterStatus.IN_DEPARTMENT
+            );
+        }
+
+        EncounterLocation currentLocation = encounterLocationRepository
+                .findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .orElseThrow(() ->
+                        new CurrentEncounterLocationNotFoundException(
+                                encounterId
+                        )
+                );
+
+        if (transferredAt.isBefore(currentLocation.getStartedAt())) {
+            throw new InvalidEncounterTransferTimeException(
+                    "Transfer time cannot be before the current location start time"
+            );
+        }
+
+        if (transferredAt.isAfter(OffsetDateTime.now())) {
+            throw new InvalidEncounterTransferTimeException(
+                    "Transfer time cannot be in the future"
+            );
+        }
+
+        Department department =
+                locationService.getActiveDepartment(departmentId);
+        Ward ward = locationService.getActiveWard(wardId);
+
+        Bed bed = null;
+
+        if (bedId != null) {
+            bed = locationService.getActiveBedForUpdate(bedId, wardId);
+        }
+
+        if (isSameLocation(currentLocation, department, ward, bed)) {
+            throw new SameEncounterLocationException(encounterId);
+        }
+
+        if (bed != null
+                && encounterLocationRepository
+                .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
+                        bed.getId(),
+                        encounterId
+                )) {
+            throw new BedOccupiedException(bed.getId());
+        }
+
+        EncounterLocation nextLocation = new EncounterLocation(
+                encounter,
+                department,
+                ward,
+                bed,
+                transferredAt
+        );
+
+        // Both history records change within the same transaction.
+        currentLocation.endAt(transferredAt);
+
+        return encounterLocationRepository.save(nextLocation);
+    }
+
+    /**
      * Returns an encounter without acquiring a workflow write lock.
      */
     public Encounter getEncounter(UUID id) {
         return encounterRepository.findById(id)
                 .orElseThrow(() -> new EncounterNotFoundException(id));
+    }
+
+    private boolean isSameLocation(
+            EncounterLocation currentLocation,
+            Department department,
+            Ward ward,
+            Bed bed
+    ) {
+        boolean sameBed = currentLocation.getBed() == null
+                ? bed == null
+                : bed != null
+                && currentLocation.getBed().getId().equals(bed.getId());
+
+        return currentLocation.getDepartment().getId()
+                .equals(department.getId())
+                && currentLocation.getWard().getId().equals(ward.getId())
+                && sameBed;
     }
 }
