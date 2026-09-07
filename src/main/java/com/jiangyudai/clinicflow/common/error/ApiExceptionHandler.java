@@ -77,6 +77,19 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    @ExceptionHandler(InvalidDischargeTimeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidDischargeTime(
+            InvalidDischargeTimeException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+        problem.setTitle("Invalid discharge time");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
+
     // Patient registration errors
     @ExceptionHandler(DuplicateMedicalRecordNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(

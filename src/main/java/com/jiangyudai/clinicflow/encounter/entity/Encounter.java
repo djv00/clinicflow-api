@@ -1,6 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
 import com.jiangyudai.clinicflow.patient.entity.Patient;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -88,6 +89,39 @@ public class Encounter {
         }
 
         status = EncounterStatus.IN_DEPARTMENT;
+    }
+
+    /**
+     * Records discharge after the encounter has entered a department.
+     */
+    public void dischargeAt(OffsetDateTime dischargedAt) {
+        if (status != EncounterStatus.IN_DEPARTMENT) {
+            throw new InvalidEncounterStatusException(
+                    status,
+                    EncounterStatus.IN_DEPARTMENT
+            );
+        }
+
+        if (dischargedAt == null) {
+            throw new InvalidDischargeTimeException(
+                    "Discharge time is required"
+            );
+        }
+
+        if (dischargedAt.isBefore(admittedAt)) {
+            throw new InvalidDischargeTimeException(
+                    "Discharge time cannot be before hospital admission"
+            );
+        }
+
+        if (dischargedAt.isAfter(OffsetDateTime.now())) {
+            throw new InvalidDischargeTimeException(
+                    "Discharge time cannot be in the future"
+            );
+        }
+
+        this.dischargedAt = dischargedAt;
+        status = EncounterStatus.DISCHARGED;
     }
 
     public UUID getId() {
