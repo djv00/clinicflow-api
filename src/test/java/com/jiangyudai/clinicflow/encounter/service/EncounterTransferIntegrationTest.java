@@ -1,8 +1,10 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -15,31 +17,37 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:encounter-transfer-it;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=10000",
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
+@AutoConfigureMockMvc
 class EncounterTransferIntegrationTest {
+    private static final DateTimeFormatter JSON_DATE_TIME =
+            DateTimeFormatter.ofPattern(
+                    "yyyy-MM-dd'T'HH:mm:ssXXX"
+            );
 
     @Autowired
     private EncounterService encounterService;
@@ -52,6 +60,9 @@ class EncounterTransferIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -326,6 +337,83 @@ class EncounterTransferIntegrationTest {
                     .as("Transfer worker should stop")
                     .isTrue();
         }
+    }
+
+    @Test
+    void transfersEncounterThroughApi() throws Exception {
+        TransferData data = createTransferData();
+
+        String transferredAtJson =
+                data.transferredAt().format(JSON_DATE_TIME);
+
+        MvcResult result = mockMvc.perform(post(
+                        "/api/v1/encounters/{id}/transfers",
+                        data.encounterId()
+                )
+                        .contentType("application/json")
+                        .content("""
+                        {
+                          "departmentId": "%s",
+                          "wardId": "%s",
+                          "bedId": "%s",
+                          "transferredAt": "%s"
+                        }
+                        """.formatted(
+                                data.targetDepartmentId(),
+                                data.targetWardId(),
+                                data.targetBedId(),
+                                transferredAtJson
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.encounterId")
+                        .value(data.encounterId().toString()))
+                .andExpect(jsonPath("$.departmentId")
+                        .value(
+                                data.targetDepartmentId().toString()
+                        ))
+                .andExpect(jsonPath("$.wardId")
+                        .value(data.targetWardId().toString()))
+                .andExpect(jsonPath("$.bedId")
+                        .value(data.targetBedId().toString()))
+                .andExpect(jsonPath("$.endedAt")
+                        .value(nullValue()))
+                .andReturn();
+    String responseStartedAt = JsonPath.read(
+            result.getResponse().getContentAsString(),
+            "$.startedAt"
+    );
+
+        assertThat(OffsetDateTime.parse(responseStartedAt).toInstant())
+                .isEqualTo(data.transferredAt().toInstant());
+
+        transactions.executeWithoutResult(status -> {
+            List<EncounterLocation> history =
+                    encounterLocationRepository
+                            .findAllByEncounter_IdOrderByStartedAtAsc(
+                                    data.encounterId()
+                            );
+
+            assertThat(history).hasSize(2);
+
+            EncounterLocation previousLocation = history.getFirst();
+            EncounterLocation currentLocation = history.getLast();
+
+            assertThat(previousLocation.getBed().getId())
+                    .isEqualTo(data.currentBedId());
+            assertThat(previousLocation.getEndedAt())
+                    .isEqualTo(data.transferredAt());
+
+            assertThat(currentLocation.getDepartment().getId())
+                    .isEqualTo(data.targetDepartmentId());
+            assertThat(currentLocation.getWard().getId())
+                    .isEqualTo(data.targetWardId());
+            assertThat(currentLocation.getBed().getId())
+                    .isEqualTo(data.targetBedId());
+            assertThat(currentLocation.getStartedAt())
+                    .isEqualTo(data.transferredAt());
+            assertThat(currentLocation.getEndedAt()).isNull();
+        });
     }
 
     private void awaitBlockedTransfer(

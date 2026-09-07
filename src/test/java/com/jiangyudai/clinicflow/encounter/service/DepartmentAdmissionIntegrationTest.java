@@ -441,7 +441,7 @@ class DepartmentAdmissionIntegrationTest {
                         )))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title")
-                        .value("Department admission conflict"))
+                        .value("Encounter location conflict"))
                 .andExpect(jsonPath("$.detail")
                         .value("Bed is already occupied: " + first.bedId()));
 

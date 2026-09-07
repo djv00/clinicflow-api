@@ -10,11 +10,12 @@ import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
 
 import java.util.UUID;
 
 /**
- * REST endpoints for hospital and department admission workflows.
+ * REST endpoints for hospital encounters and location workflows.
  *
  * @author Jiangyu Dai
  */
@@ -63,4 +64,24 @@ public class EncounterController {
 
         return EncounterLocationResponse.from(location);
     }
+
+
+    @PostMapping("/{id}/transfers")
+    @ResponseStatus(HttpStatus.CREATED)
+    public EncounterLocationResponse transferEncounter(
+            @PathVariable("id") UUID encounterId,
+            @Valid @RequestBody TransferEncounterRequest request
+    ) {
+        EncounterLocation location =
+                encounterService.transferEncounter(
+                        encounterId,
+                        request.departmentId(),
+                        request.wardId(),
+                        request.bedId(),
+                        request.transferredAt()
+                );
+
+        return EncounterLocationResponse.from(location);
+    }
+
 }
