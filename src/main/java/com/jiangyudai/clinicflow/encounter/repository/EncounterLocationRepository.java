@@ -28,4 +28,12 @@ public interface EncounterLocationRepository
      * Checks whether a bed is assigned to an open location.
      */
     boolean existsByBed_IdAndEndedAtIsNull(UUID bedId);
+
+    /**
+     * Checks whether another encounter currently occupies a bed.
+     */
+    boolean existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
+            UUID bedId,
+            UUID encounterId
+    );
 }
