@@ -254,6 +254,50 @@ public class EncounterService {
     }
 
     /**
+     * Discharges an encounter and closes its current location in one transaction.
+     */
+    @Transactional
+    public Encounter dischargeEncounter(
+            UUID encounterId,
+            OffsetDateTime dischargedAt
+    ) {
+        if (dischargedAt == null) {
+            throw new InvalidDischargeTimeException(
+                    "Discharge time is required"
+            );
+        }
+
+        // Serialize discharge with transfers and other changes to this encounter.
+        Encounter encounter = encounterRepository
+                .findByIdForUpdate(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+
+        if (encounter.getStatus() != EncounterStatus.IN_DEPARTMENT) {
+            throw new InvalidEncounterStatusException(
+                    encounter.getStatus(),
+                    EncounterStatus.IN_DEPARTMENT
+            );
+        }
+
+        EncounterLocation currentLocation = encounterLocationRepository
+                .findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .orElseThrow(() ->
+                        new CurrentEncounterLocationNotFoundException(encounterId)
+                );
+
+        if (dischargedAt.isBefore(currentLocation.getStartedAt())) {
+            throw new InvalidDischargeTimeException(
+                    "Discharge time cannot be before the current location start time"
+            );
+        }
+
+        encounter.dischargeAt(dischargedAt);
+        currentLocation.endAt(dischargedAt);
+
+        return encounter;
+    }
+
+    /**
      * Returns an encounter without acquiring a workflow write lock.
      */
     public Encounter getEncounter(UUID id) {

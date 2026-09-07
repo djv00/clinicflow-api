@@ -2,6 +2,7 @@ package com.jiangyudai.clinicflow.encounter.controller;
 
 import com.jiangyudai.clinicflow.encounter.dto.AdmitPatientRequest;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitToDepartmentRequest;
+import com.jiangyudai.clinicflow.encounter.dto.DischargeEncounterRequest;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
@@ -69,6 +70,19 @@ public class EncounterController {
         );
 
         return EncounterLocationResponse.from(location);
+    }
+
+    @PostMapping("/{id}/discharges")
+    public EncounterResponse dischargeEncounter(
+            @PathVariable("id") UUID encounterId,
+            @Valid @RequestBody DischargeEncounterRequest request
+    ) {
+        Encounter encounter = encounterService.dischargeEncounter(
+                encounterId,
+                request.dischargedAt()
+        );
+
+        return EncounterResponse.from(encounter);
     }
 
     @PostMapping("/{id}/transfers")
