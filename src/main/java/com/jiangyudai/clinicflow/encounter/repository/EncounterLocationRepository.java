@@ -18,6 +18,8 @@ public interface EncounterLocationRepository
 
     boolean existsByEncounter_IdAndEndedAtIsNull(UUID encounterId);
 
+    boolean existsByEncounter_Id(UUID encounterId);
+
     /**
      * Returns the complete location history in workflow order.
      */

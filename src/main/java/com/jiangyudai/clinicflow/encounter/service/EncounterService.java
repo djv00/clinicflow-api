@@ -298,6 +298,37 @@ public class EncounterService {
     }
 
     /**
+     * Cancels an admission only while no department location has been recorded.
+     */
+    @Transactional
+    public Encounter cancelAdmission(
+            UUID encounterId,
+            OffsetDateTime cancelledAt,
+            String cancelledBy
+    ) {
+        // Use the same lock as department admission so only one workflow can proceed.
+        Encounter encounter = encounterRepository
+                .findByIdForUpdate(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+
+        if (encounter.getStatus() != EncounterStatus.ADMITTED) {
+            throw new InvalidEncounterStatusException(
+                    encounter.getStatus(),
+                    EncounterStatus.ADMITTED
+            );
+        }
+
+        // Even closed history means department care has already been recorded.
+        if (encounterLocationRepository.existsByEncounter_Id(encounterId)) {
+            throw new EncounterLocationHistoryExistsException(encounterId);
+        }
+
+        encounter.cancelAdmission(cancelledAt, cancelledBy);
+
+        return encounter;
+    }
+
+    /**
      * Returns an encounter without acquiring a workflow write lock.
      */
     public Encounter getEncounter(UUID id) {

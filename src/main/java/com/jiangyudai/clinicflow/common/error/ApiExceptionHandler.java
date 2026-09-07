@@ -90,6 +90,19 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    @ExceptionHandler(InvalidAdmissionCancellationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidAdmissionCancellation(
+            InvalidAdmissionCancellationException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+        problem.setTitle("Invalid admission cancellation");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
+
     // Patient registration errors
     @ExceptionHandler(DuplicateMedicalRecordNumberException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(
@@ -144,6 +157,7 @@ public class ApiExceptionHandler {
             ActiveEncounterLocationExistsException.class,
             CurrentEncounterLocationNotFoundException.class,
             EncounterLocationAlreadyEndedException.class,
+            EncounterLocationHistoryExistsException.class,
             SameEncounterLocationException.class,
             InvalidEncounterStatusException.class
     })
