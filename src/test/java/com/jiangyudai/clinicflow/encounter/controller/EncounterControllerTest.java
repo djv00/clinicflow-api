@@ -3,8 +3,11 @@ package com.jiangyudai.clinicflow.encounter.controller;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
+import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDepartmentAdmissionTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterTransferTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.SameEncounterLocationException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
@@ -27,10 +30,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterTransferTimeException;
-import com.jiangyudai.clinicflow.encounter.exception.SameEncounterLocationException;
 
 @WebMvcTest(EncounterController.class)
 class EncounterControllerTest {

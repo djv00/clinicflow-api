@@ -32,9 +32,6 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class EncounterTransferServiceTest {
-    private Department currentDepartment;
-    private Ward currentWard;
-    private Bed currentBed;
 
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "11111111-1111-1111-1111-111111111111"
@@ -90,6 +87,9 @@ class EncounterTransferServiceTest {
 
     private Encounter encounter;
     private EncounterLocation currentLocation;
+    private Department currentDepartment;
+    private Ward currentWard;
+    private Bed currentBed;
 
     private Department targetDepartment;
     private Ward targetWard;

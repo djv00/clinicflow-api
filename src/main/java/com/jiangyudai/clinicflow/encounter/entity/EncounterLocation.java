@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationAlreadyEndedException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterLocationTimeException;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
@@ -14,9 +16,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-
-import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationAlreadyEndedException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterLocationTimeException;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
