@@ -12,7 +12,9 @@ public record EncounterResponse(
         UUID patientId,
         EncounterStatus status,
         OffsetDateTime admittedAt,
-        OffsetDateTime dischargedAt
+        OffsetDateTime dischargedAt,
+        OffsetDateTime admissionCancelledAt,
+        String admissionCancelledBy
 ) {
 
     public static EncounterResponse from(Encounter encounter) {
@@ -22,7 +24,9 @@ public record EncounterResponse(
                 encounter.getPatient().getId(),
                 encounter.getStatus(),
                 encounter.getAdmittedAt(),
-                encounter.getDischargedAt()
+                encounter.getDischargedAt(),
+                encounter.getAdmissionCancelledAt(),
+                encounter.getAdmissionCancelledBy()
         );
     }
 }

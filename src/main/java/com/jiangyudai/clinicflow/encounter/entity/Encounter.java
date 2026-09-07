@@ -2,6 +2,7 @@ package com.jiangyudai.clinicflow.encounter.entity;
 
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionCancellationException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -61,6 +62,12 @@ public class Encounter {
 
     @Column(name = "discharged_at")
     private OffsetDateTime dischargedAt;
+
+    @Column(name = "admission_cancelled_at")
+    private OffsetDateTime admissionCancelledAt;
+
+    @Column(name = "admission_cancelled_by", length = 100)
+    private String admissionCancelledBy;
 
     // Required by JPA.
     protected Encounter() {
@@ -124,6 +131,45 @@ public class Encounter {
         status = EncounterStatus.DISCHARGED;
     }
 
+    /**
+     * Cancels an admission before department care begins, retaining the encounter.
+     */
+    public void cancelAdmission(OffsetDateTime cancelledAt, String cancelledBy) {
+        if (status != EncounterStatus.ADMITTED) {
+            throw new InvalidEncounterStatusException(status, EncounterStatus.ADMITTED);
+        }
+
+        if (cancelledAt == null) {
+            throw new InvalidAdmissionCancellationException("Cancellation time is required");
+        }
+
+        if (cancelledAt.isBefore(admittedAt)) {
+            throw new InvalidAdmissionCancellationException(
+                    "Cancellation time cannot be before hospital admission"
+            );
+        }
+
+        if (cancelledAt.isAfter(OffsetDateTime.now())) {
+            throw new InvalidAdmissionCancellationException(
+                    "Cancellation time cannot be in the future"
+            );
+        }
+
+        if (cancelledBy == null || cancelledBy.isBlank()) {
+            throw new InvalidAdmissionCancellationException("Cancellation operator is required");
+        }
+
+        if (cancelledBy.length() > 100) {
+            throw new InvalidAdmissionCancellationException(
+                    "Cancellation operator must not exceed 100 characters"
+            );
+        }
+
+        admissionCancelledAt = cancelledAt;
+        admissionCancelledBy = cancelledBy;
+        status = EncounterStatus.ADMISSION_CANCELLED;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -146,5 +192,13 @@ public class Encounter {
 
     public OffsetDateTime getDischargedAt() {
         return dischargedAt;
+    }
+
+    public OffsetDateTime getAdmissionCancelledAt() {
+        return admissionCancelledAt;
+    }
+
+    public String getAdmissionCancelledBy() {
+        return admissionCancelledBy;
     }
 }
