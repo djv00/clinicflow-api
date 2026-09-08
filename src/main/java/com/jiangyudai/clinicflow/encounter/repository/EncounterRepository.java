@@ -17,6 +17,10 @@ public interface EncounterRepository
 
     boolean existsByEncounterNumber(String encounterNumber);
 
+    // Read only the ID so the encounter is not cached before acquiring workflow locks.
+    @Query("select e.patient.id from Encounter e where e.id = :id")
+    Optional<UUID> findPatientIdById(@Param("id") UUID id);
+
     boolean existsByPatient_IdAndStatusIn(
             UUID patientId,
             Collection<EncounterStatus> statuses

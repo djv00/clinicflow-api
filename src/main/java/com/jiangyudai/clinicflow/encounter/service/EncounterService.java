@@ -1,9 +1,11 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
+import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.*;
+import com.jiangyudai.clinicflow.encounter.repository.EncounterDischargeRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -39,17 +41,20 @@ public class EncounterService {
 
     private final EncounterRepository encounterRepository;
     private final PatientService patientService;
+    private final EncounterDischargeRepository encounterDischargeRepository;
 
     public EncounterService(
             EncounterRepository encounterRepository,
             PatientService patientService,
             EncounterLocationRepository encounterLocationRepository,
-            LocationService locationService
+            LocationService locationService,
+            EncounterDischargeRepository encounterDischargeRepository
     ) {
         this.encounterRepository = encounterRepository;
         this.patientService = patientService;
         this.encounterLocationRepository = encounterLocationRepository;
         this.locationService = locationService;
+        this.encounterDischargeRepository = encounterDischargeRepository;
     }
 
     /**
@@ -65,7 +70,7 @@ public class EncounterService {
             throw new InvalidAdmissionTimeException(admittedAt);
         }
 
-        Patient patient = patientService.getPatient(patientId);
+        Patient patient = patientService.getPatientForUpdate(patientId);
 
         if (encounterRepository.existsByEncounterNumber(encounterNumber)) {
             throw new DuplicateEncounterNumberException(encounterNumber);
@@ -293,6 +298,7 @@ public class EncounterService {
 
         encounter.dischargeAt(dischargedAt);
         currentLocation.endAt(dischargedAt);
+        encounterDischargeRepository.save(new EncounterDischarge(encounter, currentLocation));
 
         return encounter;
     }
@@ -326,6 +332,65 @@ public class EncounterService {
         encounter.cancelAdmission(cancelledAt, cancelledBy);
 
         return encounter;
+    }
+
+    /**
+     * Resumes care at the discharge location without rewriting earlier history.
+     */
+    @Transactional
+    public Encounter cancelDischarge(
+            UUID encounterId,
+            OffsetDateTime cancelledAt,
+            String cancelledBy
+    ) {
+        UUID patientId = encounterRepository.findPatientIdById(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+
+        // Patient -> Encounter -> Bed also protects against concurrent readmission.
+        patientService.getPatientForUpdate(patientId);
+        Encounter encounter = encounterRepository.findByIdForUpdate(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+        if (encounter.getStatus() != EncounterStatus.DISCHARGED) {
+            throw new InvalidEncounterStatusException(encounter.getStatus(), EncounterStatus.DISCHARGED);
+        }
+        if (encounterRepository.existsByPatient_IdAndStatusIn(patientId, ACTIVE_STATUSES)) {
+            throw new ActiveEncounterExistsException(patientId);
+        }
+        if (encounterLocationRepository.existsByEncounter_IdAndEndedAtIsNull(encounterId)) {
+            throw new ActiveEncounterLocationExistsException(encounterId);
+        }
+
+        EncounterDischarge discharge = encounterDischargeRepository
+                .findByEncounter_IdAndCancelledAtIsNull(encounterId)
+                .orElseThrow(() -> new DischargeRecordConflictException("Current discharge record is missing"));
+        EncounterLocation previous = discharge.getLocation();
+        if (encounter.getDischargedAt() == null
+                || !discharge.getDischargedAt().isEqual(encounter.getDischargedAt())
+                || previous.getEndedAt() == null
+                || !previous.getEndedAt().isEqual(discharge.getDischargedAt())) {
+            throw new DischargeRecordConflictException("Discharge record does not match the closed location");
+        }
+
+        Department department = locationService.getActiveDepartment(previous.getDepartment().getId());
+        Ward ward = locationService.getActiveWard(previous.getWard().getId());
+        Bed bed = null;
+        if (previous.getBed() != null) {
+            bed = locationService.getActiveBedForUpdate(previous.getBed().getId(), ward.getId());
+            if (encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(bed.getId())) {
+                throw new BedOccupiedException(bed.getId());
+            }
+        }
+
+        EncounterLocation restored = new EncounterLocation(encounter, department, ward, bed, cancelledAt);
+        discharge.cancelAt(cancelledAt, cancelledBy, restored);
+        encounter.cancelDischarge();
+        encounterLocationRepository.save(restored);
+        return encounter;
+    }
+
+    public List<EncounterDischarge> getDischarges(UUID encounterId) {
+        getEncounter(encounterId);
+        return encounterDischargeRepository.findAllByEncounter_IdOrderByDischargedAtAscIdAsc(encounterId);
     }
 
     /**
