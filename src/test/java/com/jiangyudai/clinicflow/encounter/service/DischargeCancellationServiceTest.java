@@ -97,11 +97,17 @@ class DischargeCancellationServiceTest {
         assertThat(restored.getDepartment()).isSameAs(department);
         assertThat(restored.getWard()).isSameAs(ward);
         assertThat(restored.getBed()).isSameAs(bed);
+        assertThat(restored.getStartedAt()).isEqualTo(DISCHARGED_AT);
+        assertThat(discharge.getCancelledAt()).isEqualTo(DISCHARGED_AT.plusHours(1));
         var order = inOrder(patientService, encounterRepository, locationService, encounterLocationRepository);
         order.verify(patientService).getPatientForUpdate(PATIENT_ID);
         order.verify(encounterRepository).findByIdForUpdate(ENCOUNTER_ID);
+        order.verify(encounterRepository).existsConflictingEncounterAfterDischarge(
+                PATIENT_ID, ENCOUNTER_ID, DISCHARGED_AT, EncounterStatus.ADMISSION_CANCELLED
+        );
         order.verify(locationService).getActiveBedForUpdate(bed.getId(), ward.getId());
         order.verify(encounterLocationRepository).existsByBed_IdAndEndedAtIsNull(bed.getId());
+        order.verify(encounterLocationRepository).existsClosedBedHistoryAfter(bed.getId(), DISCHARGED_AT);
         order.verify(encounterLocationRepository).save(restored);
     }
 

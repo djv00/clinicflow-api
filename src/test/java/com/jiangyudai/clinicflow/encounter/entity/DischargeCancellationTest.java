@@ -12,6 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -41,7 +42,7 @@ class DischargeCancellationTest {
     @Test
     void retainsDischargeDetailsWhenCareResumes() {
         OffsetDateTime time = DISCHARGED_AT.plusHours(1);
-        EncounterLocation restored = locationAt(time);
+        EncounterLocation restored = locationAt(DISCHARGED_AT);
 
         discharge.cancelAt(time, "demo-clerk", restored);
         encounter.cancelDischarge();
@@ -54,6 +55,7 @@ class DischargeCancellationTest {
         assertThat(discharge.getCancelledAt()).isEqualTo(time);
         assertThat(discharge.getCancelledBy()).isEqualTo("demo-clerk");
         assertThat(discharge.getRestoredLocation()).isSameAs(restored);
+        assertThat(restored.getStartedAt()).isEqualTo(previous.getEndedAt());
 
         assertThatThrownBy(() -> discharge.cancelAt(time.plusMinutes(1), "another-clerk", restored))
                 .isInstanceOf(DischargeRecordConflictException.class);
@@ -101,9 +103,11 @@ class DischargeCancellationTest {
                 .isInstanceOf(DischargeRecordConflictException.class);
     }
 
-    @Test
-    void rejectsAResumptionLocationWithADifferentStartTime() {
-        assertThatThrownBy(() -> discharge.cancelAt(DISCHARGED_AT, "demo-clerk", locationAt(DISCHARGED_AT.plusHours(1))))
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 1, 3600})
+    void rejectsAGapOrOverlapInRestoredHistory(int secondsFromDischarge) {
+        assertThatThrownBy(() -> discharge.cancelAt(DISCHARGED_AT.plusHours(1), "demo-clerk",
+                locationAt(DISCHARGED_AT.plusSeconds(secondsFromDischarge))))
                 .isInstanceOf(DischargeRecordConflictException.class);
         assertThat(discharge.getCancelledAt()).isNull();
     }

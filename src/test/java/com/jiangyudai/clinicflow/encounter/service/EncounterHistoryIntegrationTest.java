@@ -206,8 +206,10 @@ class EncounterHistoryIntegrationTest {
             assertThat(discharge.getRestoredLocation()).isNull();
         });
 
-        assertThat(encounterService.cancelDischarge(data.encounterId(), DISCHARGED_AT.plusHours(3), "retry-clerk")
-                .getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        // A later operation time cannot remove a conflict in effective bed history.
+        assertThatThrownBy(() -> encounterService.cancelDischarge(
+                data.encounterId(), DISCHARGED_AT.plusHours(3), "retry-clerk"
+        )).isInstanceOf(BedHistoryConflictException.class);
     }
 
     @Test

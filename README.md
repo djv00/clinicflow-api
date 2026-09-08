@@ -123,20 +123,28 @@ Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
 - The encounter must be `DISCHARGED`, have a matching uncancelled discharge
   record, and have no current location. The patient cannot have another active
   encounter (`ADMITTED` or `IN_DEPARTMENT`).
+- Another non-cancelled encounter starting at or after this discharge, or ending
+  after it, also prevents cancellation, even if that encounter has finished.
+  Same-instant admissions are treated as conflicts because their order is ambiguous.
+  An `ADMISSION_CANCELLED` record does not block correction of the earlier discharge.
 - The cancellation time must include an offset, be at or after discharge, and
   not be in the future. The operator is required and limited to 100 characters;
   as with admission cancellation, it is supplied by the caller.
-- Care resumes at the department, ward, and optional bed referenced by that
-  discharge. These references must still be active, and an assigned bed must
-  be free. This endpoint does not accept a replacement bed.
-- The original location remains closed at discharge. A new current location
-  starts at `cancelledAt`; the interval between these two times stays in history.
-  Cancelling a discharge does not retrospectively extend the old bed assignment.
+- Effective care continues at the department, ward, and optional bed referenced
+  by that discharge. These references must still be active. The bed must be free
+  now and have no conflicting occupancy since the original discharge, including
+  assignments that ended before cancellation. This endpoint does not accept a replacement bed.
+- The original location remains closed at `dischargedAt`. A continuation location
+  starts at that same instant, leaving no gap or overlap in effective occupancy.
+  These adjacent records describe continuous care, not a physical transfer.
+  `cancelledAt` records when the cancellation was operated; it does not set the
+  start of effective care. For example, a 10:00 mistaken discharge cancelled at
+  10:15 produces intervals ending and starting at 10:00, with 10:15 retained in audit.
 - The discharge record retains `discharged_at` and `location_id`, and records
   `cancelled_at`, `cancelled_by`, and `restored_location_id`. A later discharge
   creates a separate record, so repeated discharge/cancellation cycles remain traceable.
 - Admission and discharge cancellation take a patient write lock before checking
-  for active encounters. Cancellation then locks the encounter and, when needed,
+  for conflicting encounters. Cancellation then locks the encounter and, when needed,
   the bed (`Patient -> Encounter -> Bed`). Existing location workflows retain
   their `Encounter -> Bed` order. This prevents concurrent readmission or bed
   assignment from passing the same availability check.
@@ -145,7 +153,9 @@ Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
 
 Unknown encounters return `404`. Invalid request data, time, or inactive location
 references return `400`. Invalid encounter state, another active encounter,
-an occupied bed, or inconsistent discharge/location records return `409`.
+conflicting encounter or bed history, an occupied bed, or inconsistent
+discharge/location records return `409`. Advancing `cancelledAt` cannot bypass
+a historical conflict. A genuine readmission requires a new encounter.
 
 ### Discharge history
 
@@ -171,20 +181,17 @@ The supplied discharge-cancellation samples contain these fields:
 
 The supplied `VISIT` and `VISITWARDHISTORY` diagrams inform the separation of
 encounter state and location history. The samples establish field names, but do
-not specify reversal rules. Restoring the original location, checking current
-availability, and starting a new location interval are ClinicFlow design choices.
+not specify reversal rules. Restoring the original location, checking historical
+availability, and continuing occupancy from discharge are ClinicFlow design choices.
 The original system's reversal behavior has not been verified. XML ingestion,
 billing reversal, and alternative-bed selection are not implemented.
 
 The current H2 database is recreated on startup. Existing persistent discharge
 data would require a migration before enabling this workflow; missing discharge
-records are rejected rather than reconstructed from timestamps.
-
-Known limitations of this initial cancellation workflow: it does not yet reject
-cancellation of an older encounter after a later encounter has been discharged.
-It also starts the restored location at the operation time, so it cannot yet
-represent uninterrupted occupancy following a mistakenly recorded discharge.
-Both require a separate correction of the cancellation contract and history.
+records are rejected rather than reconstructed from timestamps. Data created by
+the earlier cancellation implementation, where continuation started at operation
+time, would need conflict review before correcting those intervals. This version
+does not silently rewrite existing records.
 
 ## Tests
 
@@ -206,8 +213,10 @@ rollback after flush, and concurrent cancellation/department admission.
 
 Discharge cancellation tests cover retained discharge records, restoration with
 or without a bed, multiple cancellation cycles, equal transfer/discharge times,
+continuous effective history, later completed encounters, intervening bed use,
 inactive references, rollback after flush, and concurrent cancellation,
-readmission, and bed assignment. These locking checks use H2 at `READ_COMMITTED`;
+readmission, and bed assignment, including workflows that finish before releasing
+their locks. These locking checks use H2 at `READ_COMMITTED`;
 they do not establish behavior on a different database or isolation level.
 
 History tests cover backdated admissions and bed assignments, exact boundaries

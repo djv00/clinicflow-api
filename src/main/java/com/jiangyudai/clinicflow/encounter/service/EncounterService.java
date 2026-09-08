@@ -346,7 +346,7 @@ public class EncounterService {
     }
 
     /**
-     * Resumes care at the discharge location without rewriting earlier history.
+     * Cancels a mistaken discharge and continues location history from its effective time.
      */
     @Transactional
     public Encounter cancelDischarge(
@@ -384,6 +384,12 @@ public class EncounterService {
 
         discharge.validateCancellation(cancelledAt, cancelledBy);
 
+        if (encounterRepository.existsConflictingEncounterAfterDischarge(
+                patientId, encounterId, discharge.getDischargedAt(), EncounterStatus.ADMISSION_CANCELLED
+        )) {
+            throw new SubsequentEncounterExistsException(patientId);
+        }
+
         Department department = locationService.getActiveDepartment(previous.getDepartment().getId());
         Ward ward = locationService.getActiveWard(previous.getWard().getId());
         Bed bed = null;
@@ -392,10 +398,13 @@ public class EncounterService {
             if (encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(bed.getId())) {
                 throw new BedOccupiedException(bed.getId());
             }
-            checkBedHistory(bed.getId(), cancelledAt);
+            checkBedHistory(bed.getId(), discharge.getDischargedAt());
         }
 
-        EncounterLocation restored = new EncounterLocation(encounter, department, ward, bed, cancelledAt);
+        // The operation time belongs to audit; effective occupancy continues from discharge.
+        EncounterLocation restored = new EncounterLocation(
+                encounter, department, ward, bed, discharge.getDischargedAt()
+        );
         discharge.cancelAt(cancelledAt, cancelledBy, restored);
         encounter.cancelDischarge();
         encounterLocationRepository.save(restored);

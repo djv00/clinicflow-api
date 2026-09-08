@@ -51,7 +51,8 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
-    @ExceptionHandler({EncounterHistoryConflictException.class, BedHistoryConflictException.class})
+    @ExceptionHandler({EncounterHistoryConflictException.class, BedHistoryConflictException.class,
+            SubsequentEncounterExistsException.class})
     public ResponseEntity<ProblemDetail> handleEncounterHistoryConflict(RuntimeException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Encounter history conflict");

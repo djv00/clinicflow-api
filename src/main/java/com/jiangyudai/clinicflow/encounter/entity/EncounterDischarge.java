@@ -71,18 +71,18 @@ public class EncounterDischarge {
     }
 
     /**
-     * Retains the original discharge and records where care resumes.
+     * Retains discharge audit and links the continuation of effective location history.
      */
     public void cancelAt(OffsetDateTime cancelledAt, String cancelledBy, EncounterLocation restoredLocation) {
         validateCancellation(cancelledAt, cancelledBy);
         if (restoredLocation == null
                 || restoredLocation.getEndedAt() != null
                 || restoredLocation.getStartedAt() == null
-                || !cancelledAt.isEqual(restoredLocation.getStartedAt())
+                || !dischargedAt.isEqual(restoredLocation.getStartedAt())
                 || (restoredLocation.getEncounter() != encounter
                     && (encounter.getId() == null
                         || !encounter.getId().equals(restoredLocation.getEncounter().getId())))) {
-            throw new DischargeRecordConflictException("Restored location must start at cancellation for the same encounter");
+            throw new DischargeRecordConflictException("Restored location must start at discharge for the same encounter");
         }
         this.cancelledAt = cancelledAt;
         this.cancelledBy = cancelledBy;

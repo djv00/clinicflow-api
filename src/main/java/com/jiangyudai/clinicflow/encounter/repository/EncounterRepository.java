@@ -33,6 +33,19 @@ public interface EncounterRepository
             OffsetDateTime admittedAt
     );
 
+    @Query("""
+            select count(e) > 0 from Encounter e
+            where e.patient.id = :patientId and e.id <> :encounterId
+              and e.status <> :cancelledStatus
+              and (e.admittedAt >= :dischargedAt or e.dischargedAt > :dischargedAt)
+            """)
+    boolean existsConflictingEncounterAfterDischarge(
+            @Param("patientId") UUID patientId,
+            @Param("encounterId") UUID encounterId,
+            @Param("dischargedAt") OffsetDateTime dischargedAt,
+            @Param("cancelledStatus") EncounterStatus cancelledStatus
+    );
+
     /**
      * Loads an encounter with a write lock for a state-changing workflow.
      */
