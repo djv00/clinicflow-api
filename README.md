@@ -19,6 +19,28 @@ The API starts on port 8080. It currently uses an in-memory H2 database that is
 cleared on shutdown. Department, ward, and bed data are set up by the integration
 tests; reference-data maintenance endpoints are not available yet.
 
+## Admission and bed history
+
+New admissions and location assignments open intervals without an end time.
+The API supports past timestamps subject to these rules:
+
+- A new admission cannot start before any existing `DISCHARGED` encounter for
+  the same patient has ended. Cancelled admissions do not block a replacement.
+  The existing restriction to one active encounter per patient still applies.
+- Department admission, transfer, and discharge cancellation check both current
+  bed occupancy and closed bed history. A new assignment cannot overlap a
+  non-empty closed interval for that bed, even when the bed is free now.
+- Bed intervals are `[startedAt, endedAt)`: the next assignment may start exactly
+  when the previous one ends. Zero-duration closed locations do not occupy time.
+  Comparisons use instants, including when requests use different UTC offsets.
+- History conflicts return `409` with title `Encounter history conflict` and a
+  patient- or bed-specific detail. Failed requests leave workflow records unchanged.
+  Checks run within the existing patient or bed write lock.
+
+These are ClinicFlow consistency rules, not restrictions established by the
+source message samples. Importing complete historical encounters out of order
+and correcting existing history are outside these creation endpoints' scope.
+
 ## Discharge
 
 ```http
@@ -158,6 +180,12 @@ The current H2 database is recreated on startup. Existing persistent discharge
 data would require a migration before enabling this workflow; missing discharge
 records are rejected rather than reconstructed from timestamps.
 
+Known limitations of this initial cancellation workflow: it does not yet reject
+cancellation of an older encounter after a later encounter has been discharged.
+It also starts the restored location at the operation time, so it cannot yet
+represent uninterrupted occupancy following a mistakenly recorded discharge.
+Both require a separate correction of the cancellation contract and history.
+
 ## Tests
 
 ```powershell
@@ -165,6 +193,7 @@ records are rejected rather than reconstructed from timestamps.
 .\mvnw.cmd '-Dtest=EncounterDischarge*Test' test
 .\mvnw.cmd '-Dtest=AdmissionCancellation*Test' test
 .\mvnw.cmd '-Dtest=DischargeCancellation*Test' test
+.\mvnw.cmd '-Dtest=EncounterHistoryIntegrationTest' test
 ```
 
 Discharge tests cover the API, state and time rules, location history, bed reuse,
@@ -180,3 +209,7 @@ or without a bed, multiple cancellation cycles, equal transfer/discharge times,
 inactive references, rollback after flush, and concurrent cancellation,
 readmission, and bed assignment. These locking checks use H2 at `READ_COMMITTED`;
 they do not establish behavior on a different database or isolation level.
+
+History tests cover backdated admissions and bed assignments, exact boundaries
+across UTC offsets, cancelled admissions, zero-duration locations, failed transfers
+and cancellations, and waiting workflows reading newly committed closed history.

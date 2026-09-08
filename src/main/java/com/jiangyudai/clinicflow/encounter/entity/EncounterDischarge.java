@@ -74,6 +74,25 @@ public class EncounterDischarge {
      * Retains the original discharge and records where care resumes.
      */
     public void cancelAt(OffsetDateTime cancelledAt, String cancelledBy, EncounterLocation restoredLocation) {
+        validateCancellation(cancelledAt, cancelledBy);
+        if (restoredLocation == null
+                || restoredLocation.getEndedAt() != null
+                || restoredLocation.getStartedAt() == null
+                || !cancelledAt.isEqual(restoredLocation.getStartedAt())
+                || (restoredLocation.getEncounter() != encounter
+                    && (encounter.getId() == null
+                        || !encounter.getId().equals(restoredLocation.getEncounter().getId())))) {
+            throw new DischargeRecordConflictException("Restored location must start at cancellation for the same encounter");
+        }
+        this.cancelledAt = cancelledAt;
+        this.cancelledBy = cancelledBy;
+        this.restoredLocation = restoredLocation;
+    }
+
+    /**
+     * Validates cancellation before the workflow checks historical availability.
+     */
+    public void validateCancellation(OffsetDateTime cancelledAt, String cancelledBy) {
         if (this.cancelledAt != null) {
             throw new DischargeRecordConflictException("Discharge has already been cancelled");
         }
@@ -92,18 +111,6 @@ public class EncounterDischarge {
         if (cancelledBy.length() > 100) {
             throw new InvalidDischargeCancellationException("Cancellation operator must not exceed 100 characters");
         }
-        if (restoredLocation == null
-                || restoredLocation.getEndedAt() != null
-                || restoredLocation.getStartedAt() == null
-                || !cancelledAt.isEqual(restoredLocation.getStartedAt())
-                || (restoredLocation.getEncounter() != encounter
-                    && (encounter.getId() == null
-                        || !encounter.getId().equals(restoredLocation.getEncounter().getId())))) {
-            throw new DischargeRecordConflictException("Restored location must start at cancellation for the same encounter");
-        }
-        this.cancelledAt = cancelledAt;
-        this.cancelledBy = cancelledBy;
-        this.restoredLocation = restoredLocation;
     }
 
     public UUID getId() {

@@ -83,6 +83,12 @@ public class EncounterService {
             throw new ActiveEncounterExistsException(patientId);
         }
 
+        if (encounterRepository.existsByPatient_IdAndStatusAndDischargedAtAfter(
+                patientId, EncounterStatus.DISCHARGED, admittedAt
+        )) {
+            throw new EncounterHistoryConflictException(patientId);
+        }
+
         Encounter encounter = new Encounter(
                 encounterNumber,
                 patient,
@@ -154,6 +160,7 @@ public class EncounterService {
                     .existsByBed_IdAndEndedAtIsNull(bedId)) {
                 throw new BedOccupiedException(bedId);
             }
+            checkBedHistory(bedId, startedAt);
         }
 
         EncounterLocation location = new EncounterLocation(
@@ -242,6 +249,10 @@ public class EncounterService {
                         encounterId
                 )) {
             throw new BedOccupiedException(bed.getId());
+        }
+
+        if (bed != null) {
+            checkBedHistory(bed.getId(), transferredAt);
         }
 
         EncounterLocation nextLocation = new EncounterLocation(
@@ -371,6 +382,8 @@ public class EncounterService {
             throw new DischargeRecordConflictException("Discharge record does not match the closed location");
         }
 
+        discharge.validateCancellation(cancelledAt, cancelledBy);
+
         Department department = locationService.getActiveDepartment(previous.getDepartment().getId());
         Ward ward = locationService.getActiveWard(previous.getWard().getId());
         Bed bed = null;
@@ -379,6 +392,7 @@ public class EncounterService {
             if (encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(bed.getId())) {
                 throw new BedOccupiedException(bed.getId());
             }
+            checkBedHistory(bed.getId(), cancelledAt);
         }
 
         EncounterLocation restored = new EncounterLocation(encounter, department, ward, bed, cancelledAt);
@@ -399,6 +413,12 @@ public class EncounterService {
     public Encounter getEncounter(UUID id) {
         return encounterRepository.findById(id)
                 .orElseThrow(() -> new EncounterNotFoundException(id));
+    }
+
+    private void checkBedHistory(UUID bedId, OffsetDateTime startedAt) {
+        if (encounterLocationRepository.existsClosedBedHistoryAfter(bedId, startedAt)) {
+            throw new BedHistoryConflictException(bedId);
+        }
     }
 
     private boolean isSameLocation(

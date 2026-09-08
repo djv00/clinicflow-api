@@ -51,6 +51,13 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
+    @ExceptionHandler({EncounterHistoryConflictException.class, BedHistoryConflictException.class})
+    public ResponseEntity<ProblemDetail> handleEncounterHistoryConflict(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Encounter history conflict");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler(EncounterNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleEncounterNotFound(
             EncounterNotFoundException exception
