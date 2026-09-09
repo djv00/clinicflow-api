@@ -5,6 +5,7 @@ The current workflow covers patient registration, inpatient admission, departmen
 admission, transfers, discharge, admission cancellation, and discharge cancellation. Integration delivery
 is not implemented yet. A timeline query exposes each encounter's effective
 location history and discharge audit.
+Department, ward, and bed queries resolve the location IDs used by those workflows.
 
 ## Run locally
 
@@ -18,7 +19,53 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 
 The API starts on port 8080. It currently uses an in-memory H2 database that is
 cleared on shutdown. Department, ward, and bed data are set up by the integration
-tests; reference-data maintenance endpoints are not available yet.
+tests; reference-data creation and maintenance endpoints are not available yet.
+Without prepared data, the location list queries return empty arrays.
+
+## Departments, wards, and beds
+
+| Endpoint | Optional filters | Response fields |
+| --- | --- | --- |
+| `GET /api/v1/departments` | `active` | `id`, `departmentCode`, `departmentName`, `active` |
+| `GET /api/v1/wards` | `active` | `id`, `wardCode`, `wardName`, `active` |
+| `GET /api/v1/beds` | `wardId`, `active`, `occupied` | `id`, `bedNumber`, `wardId`, `active`, `occupied` |
+
+Each resource also supports `GET /api/v1/{resource}/{id}` to resolve one reference,
+including inactive records found in encounter history. Successful requests return
+`200`; an unknown detail ID returns `404`; malformed UUID or boolean values return `400`.
+
+```http
+GET /api/v1/departments?active=true
+GET /api/v1/wards?active=true
+GET /api/v1/beds?wardId=20000000-0000-0000-0000-000000000001&active=true&occupied=false
+```
+
+Use the ward ID returned by the ward query; the UUID above is an example, not a
+record created by the default application startup.
+
+- Omitted filters include all values. `active=false` selects inactive records;
+  `occupied=false` selects beds without an open location. Filters combine with AND.
+- An unmatched filter, including a well-formed but unknown `wardId`, returns `[]`.
+  Lists currently return all matches without pagination. Department and ward lists
+  sort by their code; beds sort by ward code, bed number, then ID. Bed numbers are
+  unique within a ward, so different wards may contain the same number.
+- `occupied` means an `EncounterLocation` references the bed with `endedAt = null`.
+  Closed history does not count as current occupancy. Dictionary fields and
+  occupancy are selected together in one query, without reserving beds.
+- `active` on a bed describes the bed itself, independently of its ward's status
+  or occupancy. A bed can be inactive and occupied. An active, unoccupied bed in
+  an inactive ward still cannot be assigned. Query the ward to check its status.
+- A query result is advisory: admission and transfer still validate active
+  references, current occupancy, historical conflicts, and workflow times while
+  holding their existing locks. An unoccupied result does not guarantee that a
+  later or backdated assignment will succeed.
+
+The supplied dictionary samples include `BED_NO`, `WARD_CODE`, and `DEFUNCT_IND`;
+department samples distinguish specialty and subspecialty codes. This API retains
+ClinicFlow's existing `bedNumber`, ward, department, and `active` fields. External
+code mapping and message ingestion remain separate work. The available material
+does not establish a one-to-one department/ward relationship, so this query adds
+no such constraint or inferred department filter on wards or beds.
 
 ## Encounter timeline
 
@@ -239,6 +286,7 @@ does not silently rewrite existing records.
 .\mvnw.cmd '-Dtest=DischargeCancellation*Test' test
 .\mvnw.cmd '-Dtest=EncounterHistoryIntegrationTest' test
 .\mvnw.cmd '-Dtest=EncounterTimelineIntegrationTest' test
+.\mvnw.cmd '-Dtest=LocationQueryIntegrationTest' test
 ```
 
 Discharge tests cover the API, state and time rules, location history, bed reuse,
@@ -265,3 +313,8 @@ Timeline tests cover admission/cancellation, transfers, repeated discharge and
 cancellation, same-instant ordering and links, nullable beds, deactivated references,
 encounter isolation, and concurrent reads with committed or rolled-back workflows.
 DTOs are materialized within the transaction with Open EntityManager in View disabled.
+
+Location query tests cover dictionary codes and names, inactive detail lookup,
+combined filters, identical bed numbers in different wards, and occupancy changes
+through admission, transfer, discharge, and cancellation. They also verify that
+current occupancy does not override historical conflicts or inactive-ward rules.
