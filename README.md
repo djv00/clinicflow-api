@@ -18,9 +18,56 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 ```
 
 The API starts on port 8080. It currently uses an in-memory H2 database that is
-cleared on shutdown. Department, ward, and bed data are set up by the integration
-tests; reference-data creation and maintenance endpoints are not available yet.
-Without prepared data, the location list queries return empty arrays.
+cleared on shutdown. Default startup does not load reference data, so location
+list queries return empty arrays. Reference-data creation and maintenance
+endpoints are not available yet.
+
+### Demo workflow
+
+To load fictional reference data, stop the application and start it with the
+optional `demo` profile in the same JDK 21 terminal:
+
+```powershell
+.\mvnw.cmd '-Dspring-boot.run.profiles=demo' spring-boot:run
+```
+
+For a packaged application:
+
+```powershell
+.\mvnw.cmd clean verify
+java -jar target/clinicflow-api-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo
+```
+
+The profile loads two departments, two wards, and three beds after Hibernate
+creates the H2 tables. Both wards have an active bed numbered `01`; the first ward
+also has an inactive bed `02`. The IDs are fixed in `src/main/resources/demo/data.sql`.
+No patients or encounters are created at startup. This is local sample data, not
+an import of the supplied HIS messages or a database migration.
+
+With the demo application running, open another PowerShell terminal in the
+repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\demo-workflow.ps1
+# If the application uses another port:
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\demo-workflow.ps1 -BaseUrl http://localhost:8081
+```
+
+`RemoteSigned` applies only to this process and does not change the saved
+PowerShell execution policy.
+
+The script queries reference IDs, registers a fictional patient, cancels an
+admission before department entry, then admits the patient again. It enters the
+first ward, transfers to the second, discharges, cancels discharge, and discharges
+again. It checks bed occupancy and the discharge audit along the way, then prints
+the patient/encounter IDs and the final timeline JSON and URL.
+
+A completed run leaves three closed location intervals, two discharge records
+(one cancelled), and both active beds free. Each run generates new record numbers
+and uses current UTC operation times, so sequential runs can share the same demo
+database. Use one run at a time with both demo beds free. If a request fails, the
+script stops and earlier successful operations remain available for inspection.
+Restarting the application clears all H2 data and reloads only the demo dictionary.
 
 ## Departments, wards, and beds
 
