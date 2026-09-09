@@ -5,6 +5,7 @@ import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberE
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.repository.PatientRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -56,6 +57,15 @@ public class PatientService {
      */
     public Patient getPatient(UUID id) {
         return patientRepository.findById(id)
+                .orElseThrow(() -> new PatientNotFoundException(id));
+    }
+
+    /**
+     * Serializes workflows that can open an active encounter for this patient.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Patient getPatientForUpdate(UUID id) {
+        return patientRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new PatientNotFoundException(id));
     }
 }

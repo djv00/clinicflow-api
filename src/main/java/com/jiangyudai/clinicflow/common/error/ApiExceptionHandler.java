@@ -51,6 +51,14 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
+    @ExceptionHandler({EncounterHistoryConflictException.class, BedHistoryConflictException.class,
+            SubsequentEncounterExistsException.class})
+    public ResponseEntity<ProblemDetail> handleEncounterHistoryConflict(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Encounter history conflict");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler(EncounterNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleEncounterNotFound(
             EncounterNotFoundException exception
@@ -100,6 +108,15 @@ public class ApiExceptionHandler {
         );
         problem.setTitle("Invalid admission cancellation");
 
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(InvalidDischargeCancellationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidDischargeCancellation(
+            InvalidDischargeCancellationException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid discharge cancellation");
         return ResponseEntity.badRequest().body(problem);
     }
 
@@ -158,6 +175,7 @@ public class ApiExceptionHandler {
             CurrentEncounterLocationNotFoundException.class,
             EncounterLocationAlreadyEndedException.class,
             EncounterLocationHistoryExistsException.class,
+            DischargeRecordConflictException.class,
             SameEncounterLocationException.class,
             InvalidEncounterStatusException.class
     })

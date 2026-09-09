@@ -9,6 +9,7 @@ import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeExcepti
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
+import com.jiangyudai.clinicflow.encounter.repository.EncounterDischargeRepository;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.service.LocationService;
@@ -45,6 +46,9 @@ class EncounterDischargeServiceTest {
     private static final OffsetDateTime STARTED_AT =
             OffsetDateTime.parse("2025-09-02T15:00:00-04:00");
     private static final OffsetDateTime DISCHARGED_AT = STARTED_AT.plusDays(1);
+
+    @Mock
+    private EncounterDischargeRepository encounterDischargeRepository;
 
     @Mock
     private EncounterRepository encounterRepository;

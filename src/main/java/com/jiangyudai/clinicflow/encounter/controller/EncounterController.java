@@ -3,9 +3,12 @@ package com.jiangyudai.clinicflow.encounter.controller;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitPatientRequest;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitToDepartmentRequest;
 import com.jiangyudai.clinicflow.encounter.dto.CancelAdmissionRequest;
+import com.jiangyudai.clinicflow.encounter.dto.CancelDischargeRequest;
 import com.jiangyudai.clinicflow.encounter.dto.DischargeEncounterRequest;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterDischargeResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -54,6 +58,11 @@ public class EncounterController {
     @GetMapping("/{id}")
     public EncounterResponse getEncounter(@PathVariable UUID id) {
         return EncounterResponse.from(encounterService.getEncounter(id));
+    }
+
+    @GetMapping("/{id}/timeline")
+    public EncounterTimelineResponse getTimeline(@PathVariable("id") UUID encounterId) {
+        return encounterService.getTimeline(encounterId);
     }
 
     @PostMapping("/{id}/department-admissions")
@@ -98,6 +107,22 @@ public class EncounterController {
         );
 
         return EncounterResponse.from(encounter);
+    }
+
+    @PostMapping("/{id}/discharge-cancellations")
+    public EncounterResponse cancelDischarge(
+            @PathVariable("id") UUID encounterId,
+            @Valid @RequestBody CancelDischargeRequest request
+    ) {
+        return EncounterResponse.from(encounterService.cancelDischarge(
+                encounterId, request.cancelledAt(), request.cancelledBy()
+        ));
+    }
+
+    @GetMapping("/{id}/discharges")
+    public List<EncounterDischargeResponse> getDischarges(@PathVariable("id") UUID encounterId) {
+        return encounterService.getDischarges(encounterId).stream()
+                .map(EncounterDischargeResponse::from).toList();
     }
 
     @PostMapping("/{id}/transfers")

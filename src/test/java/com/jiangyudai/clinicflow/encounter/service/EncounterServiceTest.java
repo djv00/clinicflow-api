@@ -61,7 +61,7 @@ class EncounterServiceTest {
     void admitsPatient() {
         Patient patient = createPatient();
 
-        when(patientService.getPatient(PATIENT_ID))
+        when(patientService.getPatientForUpdate(PATIENT_ID))
                 .thenReturn(patient);
         when(encounterRepository.existsByEncounterNumber(
                 "ENC-2026-000001"
@@ -90,7 +90,7 @@ class EncounterServiceTest {
 
     @Test
     void rejectsUnknownPatient() {
-        when(patientService.getPatient(PATIENT_ID))
+        when(patientService.getPatientForUpdate(PATIENT_ID))
                 .thenThrow(new PatientNotFoundException(PATIENT_ID));
 
         assertThatThrownBy(() -> encounterService.admitPatient(
@@ -104,7 +104,7 @@ class EncounterServiceTest {
 
     @Test
     void rejectsDuplicateEncounterNumber() {
-        when(patientService.getPatient(PATIENT_ID))
+        when(patientService.getPatientForUpdate(PATIENT_ID))
                 .thenReturn(createPatient());
         when(encounterRepository.existsByEncounterNumber(
                 "ENC-2026-000001"
@@ -121,7 +121,7 @@ class EncounterServiceTest {
 
     @Test
     void rejectsSecondActiveEncounter() {
-        when(patientService.getPatient(PATIENT_ID))
+        when(patientService.getPatientForUpdate(PATIENT_ID))
                 .thenReturn(createPatient());
         when(encounterRepository.existsByEncounterNumber(
                 "ENC-2026-000001"

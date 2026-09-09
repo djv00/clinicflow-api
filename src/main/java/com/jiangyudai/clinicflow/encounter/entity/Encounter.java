@@ -170,6 +170,17 @@ public class Encounter {
         status = EncounterStatus.ADMISSION_CANCELLED;
     }
 
+    /**
+     * Restores inpatient care after the discharge and location have been checked.
+     */
+    public void cancelDischarge() {
+        if (status != EncounterStatus.DISCHARGED) {
+            throw new InvalidEncounterStatusException(status, EncounterStatus.DISCHARGED);
+        }
+        status = EncounterStatus.IN_DEPARTMENT;
+        dischargedAt = null;
+    }
+
     public UUID getId() {
         return id;
     }
