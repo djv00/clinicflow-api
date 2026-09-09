@@ -3,7 +3,8 @@ A healthcare encounter workflow and system integration API built with Java and S
 
 The current workflow covers patient registration, inpatient admission, department
 admission, transfers, discharge, admission cancellation, and discharge cancellation. Integration delivery
-is not implemented yet.
+is not implemented yet. A timeline query exposes each encounter's effective
+location history and discharge audit.
 
 ## Run locally
 
@@ -18,6 +19,42 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 The API starts on port 8080. It currently uses an in-memory H2 database that is
 cleared on shutdown. Department, ward, and bed data are set up by the integration
 tests; reference-data maintenance endpoints are not available yet.
+
+## Encounter timeline
+
+```http
+GET /api/v1/encounters/{id}/timeline
+```
+
+Returns `200 OK` with three fields, reusing the existing response formats:
+
+| Field | Contents |
+| --- | --- |
+| `encounter` | Encounter ID and number, patient ID, current status, admission/discharge times, and admission cancellation details. |
+| `locations` | Effective department, ward, and optional bed intervals, ordered by `startedAt`, then ID. |
+| `discharges` | Discharge records with cancellation time/operator and original/restored location IDs, ordered by `dischargedAt`, then ID. |
+
+- An admitted patient who has not entered a department has empty `locations` and
+  `discharges` arrays. A cancelled admission retains its cancellation details in
+  `encounter`; it does not create a location or discharge record.
+- `endedAt: null` identifies the current location; `bedId: null` means no bed was
+  assigned. Do not assume the last array entry is current when timestamps tie.
+- After discharge cancellation, `locationId` and `restoredLocationId` link the
+  original interval to its continuation. The continuation starts at the original
+  discharge time; `cancelledAt` is the operation time. Cancelled discharge records
+  remain visible and must not be treated as an effective departure.
+- Same-instant records, including zero-duration locations, are retained. ID is
+  only a stable display tie-breaker, not proof of the order in which operations
+  occurred. This query does not invent missing event timestamps or operators.
+- Historical references remain visible even if a department, ward, or bed is
+  subsequently deactivated. Results are scoped to one encounter, not every
+  encounter belonging to the patient.
+- The query briefly locks the encounter against workflow changes while loading
+  and materializing the response. It may wait for a concurrent workflow, so all
+  three fields reflect the same committed workflow state. It changes no records.
+
+An unknown encounter returns `404`; a malformed UUID returns `400`. The query
+returns the full history of this encounter and currently has no pagination.
 
 ## Admission and bed history
 
@@ -201,6 +238,7 @@ does not silently rewrite existing records.
 .\mvnw.cmd '-Dtest=AdmissionCancellation*Test' test
 .\mvnw.cmd '-Dtest=DischargeCancellation*Test' test
 .\mvnw.cmd '-Dtest=EncounterHistoryIntegrationTest' test
+.\mvnw.cmd '-Dtest=EncounterTimelineIntegrationTest' test
 ```
 
 Discharge tests cover the API, state and time rules, location history, bed reuse,
@@ -222,3 +260,8 @@ they do not establish behavior on a different database or isolation level.
 History tests cover backdated admissions and bed assignments, exact boundaries
 across UTC offsets, cancelled admissions, zero-duration locations, failed transfers
 and cancellations, and waiting workflows reading newly committed closed history.
+
+Timeline tests cover admission/cancellation, transfers, repeated discharge and
+cancellation, same-instant ordering and links, nullable beds, deactivated references,
+encounter isolation, and concurrent reads with committed or rolled-back workflows.
+DTOs are materialized within the transaction with Open EntityManager in View disabled.

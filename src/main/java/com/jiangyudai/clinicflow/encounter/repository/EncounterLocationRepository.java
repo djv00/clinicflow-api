@@ -29,6 +29,9 @@ public interface EncounterLocationRepository
     List<EncounterLocation>
     findAllByEncounter_IdOrderByStartedAtAsc(UUID encounterId);
 
+    // ID breaks timestamp ties for display; it does not establish operation order.
+    List<EncounterLocation> findAllByEncounter_IdOrderByStartedAtAscIdAsc(UUID encounterId);
+
     /**
      * Checks whether a bed is assigned to an open location.
      */

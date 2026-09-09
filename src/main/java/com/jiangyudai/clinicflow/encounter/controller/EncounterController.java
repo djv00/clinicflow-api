@@ -8,6 +8,7 @@ import com.jiangyudai.clinicflow.encounter.dto.DischargeEncounterRequest;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterDischargeResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -57,6 +58,11 @@ public class EncounterController {
     @GetMapping("/{id}")
     public EncounterResponse getEncounter(@PathVariable UUID id) {
         return EncounterResponse.from(encounterService.getEncounter(id));
+    }
+
+    @GetMapping("/{id}/timeline")
+    public EncounterTimelineResponse getTimeline(@PathVariable("id") UUID encounterId) {
+        return encounterService.getTimeline(encounterId);
     }
 
     @PostMapping("/{id}/department-admissions")

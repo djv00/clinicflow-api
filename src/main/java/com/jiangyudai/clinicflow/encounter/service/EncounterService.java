@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -409,6 +410,20 @@ public class EncounterService {
         encounter.cancelDischarge();
         encounterLocationRepository.save(restored);
         return encounter;
+    }
+
+    /**
+     * Returns effective location history and discharge audit from one consistent workflow state.
+     */
+    @Transactional
+    public EncounterTimelineResponse getTimeline(UUID encounterId) {
+        Encounter encounter = encounterRepository.findByIdForRead(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+        List<EncounterLocation> locations = encounterLocationRepository
+                .findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
+        List<EncounterDischarge> discharges = encounterDischargeRepository
+                .findAllByEncounter_IdOrderByDischargedAtAscIdAsc(encounterId);
+        return EncounterTimelineResponse.from(encounter, locations, discharges);
     }
 
     public List<EncounterDischarge> getDischarges(UUID encounterId) {

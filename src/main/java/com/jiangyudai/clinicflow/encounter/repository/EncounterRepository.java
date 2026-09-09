@@ -47,6 +47,13 @@ public interface EncounterRepository
     );
 
     /**
+     * Keeps workflow changes from interleaving with a multi-query timeline read.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select e from Encounter e where e.id = :id")
+    Optional<Encounter> findByIdForRead(@Param("id") UUID id);
+
+    /**
      * Loads an encounter with a write lock for a state-changing workflow.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
