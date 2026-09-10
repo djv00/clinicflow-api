@@ -62,6 +62,38 @@ The first migration matches the existing patient-flow entities, including foreig
 keys, unique constraints and history indexes. Add a new versioned migration for
 later schema changes instead of editing a migration already applied to a database.
 
+### PostgreSQL integration tests
+
+The normal `mvnw.cmd clean verify` command runs the existing H2 and unit tests
+without requiring Docker. To also run the PostgreSQL tests, start Docker Desktop
+and use the Maven profile:
+
+```powershell
+.\mvnw.cmd -Ppostgres-it clean verify
+```
+
+Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
+application's `postgres` profile and Flyway migrations, and verify migration
+re-entry, discharge cancellation, rollback after SQL has been flushed, and two
+admissions competing for one bed. The concurrency test checks PostgreSQL's lock
+wait information before allowing the winning transaction to commit.
+
+Without Docker, the same tests can use a dedicated PostgreSQL test database:
+
+```powershell
+$env:TEST_DATABASE_URL = 'jdbc:postgresql://localhost:5432/clinicflow_test'
+$env:TEST_DATABASE_USERNAME = 'clinicflow_test'
+$env:TEST_DATABASE_PASSWORD = 'your-test-database-password'
+.\mvnw.cmd -Ppostgres-it clean verify
+```
+
+The test user must own the test database or have permission to create schemas.
+Each run creates a randomly named `clinicflow_it_...` schema and removes that
+schema after the tests. Development tables and the `DB_*` application credentials
+are not used. A missing database or unavailable Docker runtime fails this explicit
+test run instead of silently skipping the tests. Remove the `TEST_DATABASE_*`
+environment variables to return to Testcontainers.
+
 ### Demo workflow
 
 To load fictional reference data, stop the application and start it with the
