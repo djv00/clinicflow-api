@@ -12,7 +12,7 @@
 	<artifactId>clinicflow-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ClinicFlow API</name>
-	<description>An ADT patient flow and healthcare integration API.</description>
+	<description>A REST API for inpatient admissions, transfers, and discharges.</description>
 	<url/>
 	<licenses>
 		<license/>
