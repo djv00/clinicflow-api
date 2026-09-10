@@ -94,6 +94,24 @@ are not used. A missing database or unavailable Docker runtime fails this explic
 test run instead of silently skipping the tests. Remove the `TEST_DATABASE_*`
 environment variables to return to Testcontainers.
 
+### Continuous integration
+
+The [CI workflow](.github/workflows/ci.yml) runs on every push, on pull requests
+targeting `main`, and when started manually from GitHub Actions. It uses Java 21
+on Ubuntu and runs the same Maven profile as the local PostgreSQL checks:
+
+```bash
+bash ./mvnw --batch-mode --no-transfer-progress -Ppostgres-it clean verify
+```
+
+This builds the application and runs both the regular tests and PostgreSQL
+integration tests. Testcontainers starts PostgreSQL 17 using the runner's Docker
+daemon; no shared database or repository database secrets are required.
+
+Surefire and Failsafe reports are uploaded as the `test-reports` artifact for
+seven days, including when tests fail. Open a workflow run in the repository's
+Actions tab to inspect its logs and download the reports.
+
 ### Demo workflow
 
 To load fictional reference data, stop the application and start it with the
