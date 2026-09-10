@@ -17,10 +17,50 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\mvnw.cmd spring-boot:run
 ```
 
-The API starts on port 8080. It currently uses an in-memory H2 database that is
+The API starts on port 8080. By default, it uses an in-memory H2 database that is
 cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
+
+### PostgreSQL
+
+The `postgres` profile stores data in PostgreSQL. Flyway applies versioned SQL
+migrations on startup; Hibernate validates the schema without creating or dropping
+tables. The default H2 configuration and its tests continue to use Hibernate.
+
+With Docker Desktop running, start the local database in the same terminal used
+to run the application:
+
+```powershell
+$env:DB_PASSWORD = 'choose-a-local-password'
+docker compose up -d --wait postgres
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+The Compose service binds PostgreSQL to localhost port 5432, creates the
+`clinicflow` database and user, and stores data in a named volume. Stop it with
+`docker compose stop postgres`; restarting the application or database preserves
+the data. The password initializes a new volume; changing the environment variable
+does not change the password in an existing database.
+
+An existing PostgreSQL server can be used without Docker. Create an empty database
+owned by an application user, then set these variables before starting the profile:
+
+```powershell
+$env:DB_URL = 'jdbc:postgresql://localhost:5432/clinicflow'
+$env:DB_USERNAME = 'clinicflow'
+$env:DB_PASSWORD = 'your-database-password'
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+`DB_URL` and `DB_USERNAME` default to the values shown above; `DB_PASSWORD` is
+required. Keep actual credentials outside the repository. Use `postgres` and
+`demo` separately: the demo dictionary is only loaded into the disposable H2
+database. PostgreSQL starts without patient or reference data.
+
+The first migration matches the existing patient-flow entities, including foreign
+keys, unique constraints and history indexes. Add a new versioned migration for
+later schema changes instead of editing a migration already applied to a database.
 
 ### Demo workflow
 
