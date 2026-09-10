@@ -17,10 +17,82 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 .\mvnw.cmd spring-boot:run
 ```
 
-The API starts on port 8080. It currently uses an in-memory H2 database that is
+The API starts on port 8080. By default, it uses an in-memory H2 database that is
 cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
+
+### PostgreSQL
+
+The `postgres` profile stores data in PostgreSQL. Flyway applies versioned SQL
+migrations on startup; Hibernate validates the schema without creating or dropping
+tables. The default H2 configuration and its tests continue to use Hibernate.
+
+With Docker Desktop running, start the local database in the same terminal used
+to run the application:
+
+```powershell
+$env:DB_PASSWORD = 'choose-a-local-password'
+docker compose up -d --wait postgres
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+The Compose service binds PostgreSQL to localhost port 5432, creates the
+`clinicflow` database and user, and stores data in a named volume. Stop it with
+`docker compose stop postgres`; restarting the application or database preserves
+the data. The password initializes a new volume; changing the environment variable
+does not change the password in an existing database.
+
+An existing PostgreSQL server can be used without Docker. Create an empty database
+owned by an application user, then set these variables before starting the profile:
+
+```powershell
+$env:DB_URL = 'jdbc:postgresql://localhost:5432/clinicflow'
+$env:DB_USERNAME = 'clinicflow'
+$env:DB_PASSWORD = 'your-database-password'
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+`DB_URL` and `DB_USERNAME` default to the values shown above; `DB_PASSWORD` is
+required. Keep actual credentials outside the repository. Use `postgres` and
+`demo` separately: the demo dictionary is only loaded into the disposable H2
+database. PostgreSQL starts without patient or reference data.
+
+The first migration matches the existing patient-flow entities, including foreign
+keys, unique constraints and history indexes. Add a new versioned migration for
+later schema changes instead of editing a migration already applied to a database.
+
+### PostgreSQL integration tests
+
+The normal `mvnw.cmd clean verify` command runs the existing H2 and unit tests
+without requiring Docker. To also run the PostgreSQL tests, start Docker Desktop
+and use the Maven profile:
+
+```powershell
+.\mvnw.cmd -Ppostgres-it clean verify
+```
+
+Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
+application's `postgres` profile and Flyway migrations, and verify migration
+re-entry, discharge cancellation, rollback after SQL has been flushed, and two
+admissions competing for one bed. The concurrency test checks PostgreSQL's lock
+wait information before allowing the winning transaction to commit.
+
+Without Docker, the same tests can use a dedicated PostgreSQL test database:
+
+```powershell
+$env:TEST_DATABASE_URL = 'jdbc:postgresql://localhost:5432/clinicflow_test'
+$env:TEST_DATABASE_USERNAME = 'clinicflow_test'
+$env:TEST_DATABASE_PASSWORD = 'your-test-database-password'
+.\mvnw.cmd -Ppostgres-it clean verify
+```
+
+The test user must own the test database or have permission to create schemas.
+Each run creates a randomly named `clinicflow_it_...` schema and removes that
+schema after the tests. Development tables and the `DB_*` application credentials
+are not used. A missing database or unavailable Docker runtime fails this explicit
+test run instead of silently skipping the tests. Remove the `TEST_DATABASE_*`
+environment variables to return to Testcontainers.
 
 ### Demo workflow
 
