@@ -20,6 +20,7 @@ record numbers and current UTC timestamps.
 | Method | Path after `/api/v1` | Success | Response |
 | --- | --- | --- | --- |
 | POST | `/patients` | 201 | Patient |
+| GET | `/patients` | 200 | Patient page |
 | GET | `/patients/{id}` | 200 | Patient |
 | POST | `/encounters` | 201 | Encounter |
 | GET | `/encounters/{id}` | 200 | Encounter |
@@ -58,6 +59,55 @@ The medical record number is required and limited to 50 characters; first and
 last names are required and limited to 100 characters each. Date of birth must
 be a date in the past. Invalid fields return `400`; an already registered
 medical record number returns `409`; an unknown patient ID returns `404`.
+
+## Patient search
+
+```http
+GET /api/v1/patients?keyword=demo&page=0&size=20
+```
+
+| Parameter | Default | Behaviour |
+| --- | --- | --- |
+| `keyword` | Omitted | Up to 100 characters. Case-insensitive substring of the medical record number or `firstName lastName`. |
+| `page` | `0` | Zero-based page number, at least 0. |
+| `size` | `20` | Number of patients per page, from 1 to 100. |
+
+Leading and trailing whitespace is removed from the keyword. An omitted or
+blank keyword lists all patients, still paginated. Search treats `%`, `_`, `!`,
+and backslash as ordinary characters; they do not act as wildcards. URL-encode
+query values when constructing a request.
+
+Results are ordered by `lastName`, then `firstName`, then `medicalRecordNumber`,
+all ascending. The unique record number gives patients with identical names a
+consistent order. Sorting uses the stored values and the database's collation.
+
+For a database containing only the patient registered above:
+
+```json
+{
+  "items": [
+    {
+      "id": "<patientId>",
+      "medicalRecordNumber": "DEMO-DOC-001",
+      "firstName": "Demo",
+      "lastName": "Patient",
+      "dateOfBirth": "1990-05-14"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+`totalElements` counts matching patients across all pages. A page beyond the last
+returns `200` with an empty `items` array and the actual totals. No matches return
+`totalElements: 0` and `totalPages: 0`.
+
+Invalid pagination or an overlong keyword returns `400` with an `errors` field
+map. The requested offset (`page * size`) must fit within JPA's signed 32-bit
+offset range; exceeding it returns an `errors.pageOffsetValid` validation error.
 
 ## Hospital admission
 

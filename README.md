@@ -103,9 +103,10 @@ and use the Maven profile:
 
 Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
 application's `postgres` profile and Flyway migrations, and verify migration
-re-entry, discharge cancellation, rollback after SQL has been flushed, and two
-admissions competing for one bed. The concurrency test checks PostgreSQL's lock
-wait information before allowing the winning transaction to commit.
+re-entry, patient search and pagination, discharge cancellation, rollback after
+SQL has been flushed, and two admissions competing for one bed. The concurrency
+test checks PostgreSQL's lock wait information before allowing the winning
+transaction to commit.
 
 Without Docker, the same tests can use a dedicated PostgreSQL test database:
 
@@ -222,14 +223,15 @@ unique constraints, and history indexes are defined in the
 ```
 
 The default build runs unit, controller, and H2 integration tests. Coverage includes
-request validation, state transitions, optional beds, backdated operations,
-cancellation history, transaction rollback, and concurrent workflow changes.
+request validation, patient search and pagination, state transitions, optional
+beds, backdated operations, cancellation history, transaction rollback, and
+concurrent workflow changes.
 
 The [PostgreSQL test profile](#postgresql-integration-tests) adds checks for
-Flyway migration re-entry, discharge cancellation and bed restoration, rollback
-after SQL has been flushed, and two admissions competing for a bed. These tests
-exercise PostgreSQL directly; the broader H2 suite still runs separately within
-the same build.
+Flyway migration re-entry, literal patient search and pagination, discharge
+cancellation and bed restoration, rollback after SQL has been flushed, and two
+admissions competing for a bed. These tests exercise PostgreSQL directly; the
+broader H2 suite still runs separately within the same build.
 
 [CI](#continuous-integration) runs both groups with Java 21 and PostgreSQL 17.
 Test configuration and expected behaviour are in
@@ -237,8 +239,9 @@ Test configuration and expected behaviour are in
 
 ## Current scope
 
-Patient and encounter details are retrieved by ID. Patient search, paginated
-inpatient lists, and reference-data maintenance endpoints are not implemented.
+Patients can be listed and searched by name or medical record number, with
+pagination. Patient and encounter details are retrieved by ID. Paginated
+inpatient lists and reference-data maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
 Authentication and role-based access are not implemented. Cancellation operators
@@ -248,5 +251,5 @@ system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs. Physician
 assignment, outpatient scheduling, clinical orders, billing, and a frontend are
-outside the implemented scope. The next business increments are patient lookup
-and inpatient lists, followed by authenticated operations.
+outside the implemented scope. The next business increment is a patient
+management page, followed by inpatient lists and authenticated operations.

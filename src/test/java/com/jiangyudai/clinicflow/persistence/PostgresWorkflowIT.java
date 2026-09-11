@@ -8,6 +8,7 @@ import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.repository.BedRepository;
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import jakarta.persistence.EntityManager;
@@ -29,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -115,6 +117,26 @@ class PostgresWorkflowIT {
                 Integer.class)).isEqualTo(1);
         assertThat(patientService.getPatient(patient.getId()).getMedicalRecordNumber())
                 .isEqualTo(patient.getMedicalRecordNumber());
+    }
+
+    @Test
+    void searchesPatientsWithLiteralKeywordsAndStablePages() {
+        String prefix = "SEARCH-" + UUID.randomUUID().toString().substring(0, 12);
+        LocalDate dateOfBirth = LocalDate.of(1990, 5, 14);
+        Patient second = patientService.createPatient(prefix + "B", "Test", "Zulu", dateOfBirth);
+        Patient first = patientService.createPatient(prefix + "%_!\\", prefix, "O'Neil", dateOfBirth);
+
+        var page = patientService.searchPatients(prefix.toLowerCase(Locale.ROOT), 0, 1);
+        assertThat(page.items()).extracting(PatientResponse::id).containsExactly(first.getId());
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(patientService.searchPatients(prefix, 1, 1).items())
+                .extracting(PatientResponse::id).containsExactly(second.getId());
+        assertThat(patientService.searchPatients(prefix, 2, 1).items()).isEmpty();
+        assertThat(patientService.searchPatients(prefix + "%_!\\", 0, 20).items())
+                .extracting(PatientResponse::id).containsExactly(first.getId());
+        assertThat(patientService.searchPatients("  " + prefix + " o'neil  ", 0, 20).items())
+                .extracting(PatientResponse::id).containsExactly(first.getId());
     }
 
     @Test
