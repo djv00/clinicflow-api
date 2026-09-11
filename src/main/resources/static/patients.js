@@ -1,0 +1,251 @@
+const element = (id) => document.getElementById(id);
+const dateFormat = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
+});
+const formatDate = (value) => dateFormat.format(new Date(`${value}T00:00:00Z`));
+const registrationFields = ['medicalRecordNumber', 'firstName', 'lastName', 'dateOfBirth'];
+let keyword = '';
+let page = 0;
+let totalPages = 0;
+let listVersion = 0;
+let listController;
+let detailController;
+let selectedPatientId;
+let saving = false;
+
+class ApiError extends Error {
+    constructor(status, problem) {
+        super(status >= 500 ? 'The server could not complete the request. Please try again.'
+            : problem?.detail || `The request failed (${status}).`);
+        this.status = status;
+        this.fields = problem?.errors || {};
+    }
+}
+
+async function request(url, options = {}, controller = new AbortController()) {
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+        const response = await fetch(url, {
+            ...options, signal: controller.signal, cache: 'no-store',
+            headers: { Accept: 'application/json', ...options.headers }
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new ApiError(response.status, body);
+        if (body === null) throw new Error('The server returned an unreadable response.');
+        return body;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function setListState(title, detail = '') {
+    element('list-state-title').textContent = title;
+    element('list-state-detail').textContent = detail;
+    element('list-state').hidden = false;
+}
+
+async function loadPatients() {
+    const version = ++listVersion;
+    listController?.abort();
+    listController = new AbortController();
+    element('patient-rows').replaceChildren();
+    element('list-error').hidden = true;
+    element('table-region').setAttribute('aria-busy', 'true');
+    element('previous-page').disabled = true;
+    element('next-page').disabled = true;
+    element('results-summary').textContent = 'Loading patients…';
+    element('page-summary').textContent = 'Page —';
+    setListState('Loading patients…');
+    const params = new URLSearchParams({ keyword, page, size: element('page-size').value });
+    try {
+        const result = await request(`./api/v1/patients?${params}`, {}, listController);
+        // A later search must not be overwritten by an earlier response.
+        if (version !== listVersion) return;
+        page = result.page;
+        totalPages = result.totalPages;
+        const fragment = document.createDocumentFragment();
+        for (const patient of result.items) {
+            const row = document.createElement('tr');
+            const name = `${patient.lastName}, ${patient.firstName}`;
+            for (const value of [name, patient.medicalRecordNumber, formatDate(patient.dateOfBirth)]) {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.append(cell);
+            }
+            row.children[1].className = 'record-number';
+            const actions = document.createElement('td');
+            const view = document.createElement('button');
+            view.type = 'button';
+            view.className = 'row-action';
+            view.textContent = 'View record';
+            view.setAttribute('aria-label', `View record for ${name}, ${patient.medicalRecordNumber}`);
+            view.addEventListener('click', () => openPatient(patient.id));
+            actions.append(view);
+            row.append(actions);
+            fragment.append(row);
+        }
+        element('patient-rows').replaceChildren(fragment);
+        element('list-state').hidden = result.items.length > 0;
+        if (result.items.length === 0) {
+            if (result.totalElements > 0) setListState('No patients on this page', 'Use Previous to return to an earlier page.');
+            else if (keyword) setListState('No matching patients', 'Try another name or medical record number, or clear the search.');
+            else setListState('No patients registered yet', 'Register a patient to start building the directory.');
+        }
+        const start = result.items.length ? page * result.size + 1 : 0;
+        const end = result.items.length ? start + result.items.length - 1 : 0;
+        element('results-summary').textContent = `${start}–${end} of ${result.totalElements} ${keyword ? 'matching patients' : 'patients'}`;
+        element('page-summary').textContent = `Page ${totalPages ? page + 1 : 0} of ${totalPages}`;
+        element('previous-page').disabled = page === 0;
+        element('next-page').disabled = page + 1 >= totalPages;
+    } catch (error) {
+        if (version !== listVersion) return;
+        element('results-summary').textContent = 'Patient list unavailable';
+        element('list-state').hidden = true;
+        element('list-error-text').textContent = error instanceof ApiError ? error.message
+            : 'Could not load patients. Check your connection and try again.';
+        element('list-error').hidden = false;
+    } finally {
+        if (version === listVersion) element('table-region').setAttribute('aria-busy', 'false');
+    }
+}
+
+element('search-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    keyword = element('keyword').value.trim();
+    page = 0;
+    element('notice').hidden = true;
+    loadPatients();
+});
+element('clear-search').addEventListener('click', () => {
+    keyword = '';
+    element('keyword').value = '';
+    page = 0;
+    element('notice').hidden = true;
+    loadPatients();
+    element('keyword').focus();
+});
+element('page-size').addEventListener('change', () => { page = 0; loadPatients(); });
+element('previous-page').addEventListener('click', () => { if (page > 0) { page--; loadPatients(); } });
+element('next-page').addEventListener('click', () => { if (page + 1 < totalPages) { page++; loadPatients(); } });
+element('retry-list').addEventListener('click', loadPatients);
+
+function clearFieldError(field) {
+    element(`${field}-error`).hidden = true;
+    element(field).removeAttribute('aria-invalid');
+}
+
+function showFieldError(field, message) {
+    element(`${field}-error`).textContent = message;
+    element(`${field}-error`).hidden = false;
+    element(field).setAttribute('aria-invalid', 'true');
+}
+
+element('register-patient').addEventListener('click', () => {
+    element('registration-form').reset();
+    registrationFields.forEach(clearFieldError);
+    element('registration-error').hidden = true;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    element('dateOfBirth').max = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    element('registration-dialog').showModal();
+    element('medicalRecordNumber').focus();
+});
+for (const id of ['close-registration', 'cancel-registration']) {
+    element(id).addEventListener('click', () => { if (!saving) element('registration-dialog').close(); });
+}
+element('registration-dialog').addEventListener('cancel', (event) => { if (saving) event.preventDefault(); });
+registrationFields.forEach((field) => element(field).addEventListener('input', () => clearFieldError(field)));
+
+element('registration-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (saving) return;
+    registrationFields.forEach(clearFieldError);
+    const body = Object.fromEntries(registrationFields.map((field) => [field, element(field).value.trim()]));
+    saving = true;
+    element('registration-fields').disabled = true;
+    for (const id of ['save-patient', 'close-registration', 'cancel-registration']) element(id).disabled = true;
+    element('save-patient').textContent = 'Saving…';
+    element('registration-error').hidden = true;
+    let patient;
+    let firstErrorField;
+    try {
+        patient = await request('./api/v1/patients', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+    } catch (error) {
+        let message = error instanceof ApiError ? error.message
+            : 'Could not confirm registration. Search for this medical record number before trying again.';
+        if (error instanceof ApiError && error.status >= 500) {
+            message = 'Could not confirm registration. Search for this medical record number before trying again.';
+        }
+        if (error instanceof ApiError && error.status === 409) {
+            showFieldError('medicalRecordNumber', 'This medical record number is already registered.');
+            firstErrorField = 'medicalRecordNumber';
+            message = 'A patient with this medical record number already exists. Cancel and search for the existing record.';
+        }
+        for (const field of registrationFields) {
+            if (error.fields?.[field]) {
+                showFieldError(field, error.fields[field]);
+                firstErrorField ||= field;
+                message = 'Check the highlighted fields and try again.';
+            }
+        }
+        element('registration-error').textContent = message;
+        element('registration-error').hidden = false;
+    } finally {
+        saving = false;
+        element('registration-fields').disabled = false;
+        for (const id of ['save-patient', 'close-registration', 'cancel-registration']) element(id).disabled = false;
+        element('save-patient').textContent = 'Save patient';
+    }
+    if (firstErrorField) element(firstErrorField).focus();
+    if (patient) {
+        element('registration-dialog').close();
+        element('notice').textContent = `Registered ${patient.firstName} ${patient.lastName} (${patient.medicalRecordNumber}). The directory is now filtered by this record number.`;
+        element('notice').hidden = false;
+        keyword = patient.medicalRecordNumber;
+        element('keyword').value = keyword;
+        page = 0;
+        loadPatients();
+    }
+});
+
+async function loadPatientDetails() {
+    detailController?.abort();
+    const controller = new AbortController();
+    detailController = controller;
+    element('patient-details').hidden = true;
+    element('retry-patient').hidden = true;
+    element('patient-status').hidden = false;
+    element('patient-status').textContent = 'Loading patient…';
+    element('patient-status').className = '';
+    try {
+        const patient = await request(`./api/v1/patients/${encodeURIComponent(selectedPatientId)}`, {}, controller);
+        if (controller !== detailController) return;
+        element('detail-record-number').textContent = patient.medicalRecordNumber;
+        element('detail-first-name').textContent = patient.firstName;
+        element('detail-last-name').textContent = patient.lastName;
+        element('detail-birth-date').textContent = formatDate(patient.dateOfBirth);
+        element('patient-details').hidden = false;
+        element('patient-status').hidden = true;
+    } catch (error) {
+        if (controller !== detailController) return;
+        element('patient-status').textContent = error instanceof ApiError ? error.message
+            : 'Could not load this patient. Check your connection and try again.';
+        element('patient-status').className = 'message error';
+        element('retry-patient').hidden = false;
+    }
+}
+
+function openPatient(id) {
+    selectedPatientId = id;
+    element('patient-dialog').showModal();
+    loadPatientDetails();
+}
+for (const id of ['close-patient', 'done-patient']) {
+    element(id).addEventListener('click', () => element('patient-dialog').close());
+}
+element('patient-dialog').addEventListener('close', () => { detailController?.abort(); detailController = null; });
+element('retry-patient').addEventListener('click', loadPatientDetails);
+
+loadPatients();

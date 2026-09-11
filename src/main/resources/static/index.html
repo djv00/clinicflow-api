@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Patients · ClinicFlow</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./patients.css">
+    <script type="module" src="./patients.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header">
+    <a class="brand" href="./" aria-label="ClinicFlow home">
+        <span class="brand-mark" aria-hidden="true"></span>ClinicFlow
+    </a>
+    <span class="header-section">Patient administration</span>
+</header>
+<main id="main">
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Patient directory</p>
+            <h1>Patients</h1>
+            <p class="intro">Find an existing patient or register a new record.</p>
+        </div>
+        <button id="register-patient" class="button primary" type="button">
+            <span aria-hidden="true">+</span> Register patient
+        </button>
+    </div>
+
+    <noscript><p class="message error">Enable JavaScript to search and register patients.</p></noscript>
+    <p id="notice" class="message success" role="status" hidden></p>
+
+    <section class="directory" aria-label="Patient directory">
+        <form id="search-form" class="search-bar" role="search">
+            <div class="search-field">
+                <label for="keyword">Search patients</label>
+                <input id="keyword" name="keyword" type="search" maxlength="100"
+                       placeholder="Name or medical record number" autocomplete="off">
+            </div>
+            <button class="button primary" type="submit">Search</button>
+            <button id="clear-search" class="button secondary" type="button">Clear</button>
+        </form>
+
+        <div class="list-heading">
+            <p id="results-summary" role="status">Loading patients…</p>
+            <span class="muted">Sorted by last name, then first name</span>
+        </div>
+        <div id="list-error" class="message error list-error" role="alert" hidden>
+            <p id="list-error-text"></p>
+            <button id="retry-list" class="button secondary" type="button">Try again</button>
+        </div>
+        <div id="table-region" class="table-region" aria-busy="true">
+            <table>
+                <caption class="sr-only">Patients matching the current search</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Patient name</th>
+                    <th scope="col">Medical record number</th>
+                    <th scope="col">Date of birth</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+                </thead>
+                <tbody id="patient-rows"></tbody>
+            </table>
+            <div id="list-state" class="list-state" role="status">
+                <p id="list-state-title">Loading patients…</p>
+                <p id="list-state-detail" class="muted"></p>
+            </div>
+        </div>
+        <div class="pagination">
+            <label for="page-size">Rows per page
+                <select id="page-size">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                </select>
+            </label>
+            <nav class="page-controls" aria-label="Patient pages">
+                <span id="page-summary">Page —</span>
+                <button id="previous-page" class="button secondary" type="button" disabled>Previous</button>
+                <button id="next-page" class="button secondary" type="button" disabled>Next</button>
+            </nav>
+        </div>
+    </section>
+    <p class="directory-note">Use the medical record number and date of birth to distinguish patients with the same name.</p>
+</main>
+
+<dialog id="registration-dialog" aria-labelledby="registration-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Patient registration</p><h2 id="registration-title">Register patient</h2></div>
+        <button id="close-registration" class="close-button" type="button" aria-label="Close registration">×</button>
+    </div>
+    <p class="dialog-intro">All fields are required. Check for an existing record before registering.</p>
+    <form id="registration-form">
+        <p id="registration-error" class="message error" role="alert" hidden></p>
+        <fieldset id="registration-fields">
+            <legend class="sr-only">Patient details</legend>
+            <div class="field">
+                <label for="medicalRecordNumber">Medical record number</label>
+                <input id="medicalRecordNumber" name="medicalRecordNumber" required maxlength="50"
+                       autocomplete="off" aria-describedby="medicalRecordNumber-error">
+                <p id="medicalRecordNumber-error" class="field-error" hidden></p>
+            </div>
+            <div class="name-fields">
+                <div class="field">
+                    <label for="firstName">First name</label>
+                    <input id="firstName" name="firstName" required maxlength="100"
+                           autocomplete="off" aria-describedby="firstName-error">
+                    <p id="firstName-error" class="field-error" hidden></p>
+                </div>
+                <div class="field">
+                    <label for="lastName">Last name</label>
+                    <input id="lastName" name="lastName" required maxlength="100"
+                           autocomplete="off" aria-describedby="lastName-error">
+                    <p id="lastName-error" class="field-error" hidden></p>
+                </div>
+            </div>
+            <div class="field birth-field">
+                <label for="dateOfBirth">Date of birth</label>
+                <input id="dateOfBirth" name="dateOfBirth" type="date" required
+                       aria-describedby="birth-hint dateOfBirth-error">
+                <p id="birth-hint" class="field-hint">Must be a date in the past.</p>
+                <p id="dateOfBirth-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <div class="dialog-actions">
+            <button id="cancel-registration" class="button secondary" type="button">Cancel</button>
+            <button id="save-patient" class="button primary" type="submit">Save patient</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="patient-dialog" aria-labelledby="patient-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Patient record</p><h2 id="patient-title">Patient details</h2></div>
+        <button id="close-patient" class="close-button" type="button" aria-label="Close patient record">×</button>
+    </div>
+    <p id="patient-status" role="status">Loading patient…</p>
+    <dl id="patient-details" class="patient-details" hidden>
+        <div><dt>Medical record number</dt><dd id="detail-record-number"></dd></div>
+        <div><dt>First name</dt><dd id="detail-first-name"></dd></div>
+        <div><dt>Last name</dt><dd id="detail-last-name"></dd></div>
+        <div><dt>Date of birth</dt><dd id="detail-birth-date"></dd></div>
+    </dl>
+    <div class="dialog-actions">
+        <button id="retry-patient" class="button secondary" type="button" hidden>Try again</button>
+        <button id="done-patient" class="button primary" type="button">Done</button>
+    </div>
+</dialog>
+</body>
+</html>

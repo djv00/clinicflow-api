@@ -14,6 +14,7 @@ PostgreSQL, and Flyway. H2 supports the local demo and regular tests; JUnit,
 Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 
 - [Run the demo](#demo-workflow)
+- [Open the patient workbench](#patient-workbench)
 - [Use PostgreSQL](#postgresql)
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
@@ -50,6 +51,30 @@ The API starts on port 8080. By default, it uses an in-memory H2 database that i
 cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
+
+### Patient workbench
+
+After starting the application, open [http://localhost:8080/](http://localhost:8080/).
+If you set another server port, use that port in the browser. Restart the
+application after pulling or building changes to the page.
+
+The patient directory supports name or medical record number search, pagination,
+registration, and viewing patient details. Registration errors appear in the form;
+a successful registration filters the directory by the new medical record number.
+Use **Clear** to return to all patients. The default and demo H2 databases start
+without patients and are cleared when the application stops.
+
+The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packaged
+with the Spring Boot application. The page calls the existing REST/JSON patient
+endpoints on the same origin; it needs no separate frontend server or Node build.
+It stores no patient records in browser storage. Inpatient workflows are still
+available through the API and demo script; they do not have screens yet.
+
+For a browser check, register a fictional patient, search by name, open the record,
+and try the same medical record number again to see the duplicate warning. Search
+for an unmatched name to check the empty state. With more than 10 patients, select
+10 rows per page and use **Next** and **Previous**. Stop the local server and search
+to check the retry message, then restart and select **Try again**.
 
 ### PostgreSQL
 
@@ -249,7 +274,8 @@ are supplied by the caller; these fields do not identify an authenticated user.
 The timeline contains location and discharge history, not a complete audit of all
 system activity.
 
-The project currently covers inpatient flow through REST/JSON APIs. Physician
-assignment, outpatient scheduling, clinical orders, billing, and a frontend are
-outside the implemented scope. The next business increment is a patient
-management page, followed by inpatient lists and authenticated operations.
+The project currently covers inpatient flow through REST/JSON APIs and provides
+a patient directory and registration page. Physician assignment, outpatient
+scheduling, clinical orders, billing, and inpatient workflow screens are outside
+the implemented scope. The next business increments are inpatient lists and
+their workbench screens, followed by authenticated operations.
