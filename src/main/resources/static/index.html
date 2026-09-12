@@ -144,6 +144,31 @@
         <div><dt>Last name</dt><dd id="detail-last-name"></dd></div>
         <div><dt>Date of birth</dt><dd id="detail-birth-date"></dd></div>
     </dl>
+    <section id="patient-encounters" class="patient-encounters" aria-labelledby="encounters-title" hidden>
+        <h3 id="encounters-title">Hospital encounters</h3>
+        <p class="muted">Newest admission first. Times are shown in your local time.</p>
+        <p id="encounters-state" role="status">Loading encounters…</p>
+        <button id="retry-encounters" class="button secondary" type="button" hidden>Retry encounters</button>
+        <div id="encounters-table-region" class="table-region" hidden>
+            <table id="encounters-table">
+                <caption class="sr-only">Hospital encounters for this patient</caption>
+                <thead><tr>
+                    <th scope="col">Encounter number</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Admitted</th>
+                    <th scope="col">Discharged / cancelled</th>
+                </tr></thead>
+                <tbody id="encounter-rows"></tbody>
+            </table>
+        </div>
+        <nav class="encounter-pagination" aria-label="Hospital encounter pages">
+            <span id="encounters-page-summary" role="status"></span>
+            <div class="page-controls">
+                <button id="previous-encounters" class="button secondary" type="button" disabled>Previous encounters</button>
+                <button id="next-encounters" class="button secondary" type="button" disabled>Next encounters</button>
+            </div>
+        </nav>
+    </section>
     <div class="dialog-actions">
         <button id="retry-patient" class="button secondary" type="button" hidden>Try again</button>
         <button id="done-patient" class="button primary" type="button">Done</button>

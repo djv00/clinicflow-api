@@ -3,6 +3,8 @@ package com.jiangyudai.clinicflow.encounter.repository;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +19,8 @@ public interface EncounterRepository
         extends JpaRepository<Encounter, UUID> {
 
     boolean existsByEncounterNumber(String encounterNumber);
+
+    Page<Encounter> findAllByPatient_Id(UUID patientId, Pageable pageable);
 
     // Read only the ID so the encounter is not cached before acquiring workflow locks.
     @Query("select e.patient.id from Encounter e where e.id = :id")

@@ -22,6 +22,7 @@ record numbers and current UTC timestamps.
 | POST | `/patients` | 201 | Patient |
 | GET | `/patients` | 200 | Patient page |
 | GET | `/patients/{id}` | 200 | Patient |
+| GET | `/patients/{patientId}/encounters` | 200 | Encounter page |
 | POST | `/encounters` | 201 | Encounter |
 | GET | `/encounters/{id}` | 200 | Encounter |
 | POST | `/encounters/{id}/department-admissions` | 201 | Location |
@@ -108,6 +109,33 @@ returns `200` with an empty `items` array and the actual totals. No matches retu
 Invalid pagination or an overlong keyword returns `400` with an `errors` field
 map. The requested offset (`page * size`) must fit within JPA's signed 32-bit
 offset range; exceeding it returns an `errors.pageOffsetValid` validation error.
+
+## Patient encounter history
+
+```http
+GET /api/v1/patients/<patientId>/encounters?page=0&size=20
+```
+
+Lists only that patient's encounters, including current stays, discharged stays,
+and cancelled admissions. Sort order is `admittedAt` descending, followed by
+`encounterNumber` descending to keep equal admission times in a consistent order.
+
+The response contains `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Each item has the same fields as `GET /api/v1/encounters/{id}`: `id`,
+`encounterNumber`, `patientId`, `status`, `admittedAt`, `dischargedAt`,
+`admissionCancelledAt`, and `admissionCancelledBy`. These describe the current
+encounter state; discharge corrections remain available in the timeline and
+discharge-history endpoints. Cancelling a discharge clears the encounter's
+`dischargedAt` and restores `IN_DEPARTMENT` without creating a new encounter.
+
+`page` defaults to 0 and must be non-negative. `size` defaults to 20 and must be
+between 1 and 100. Invalid parameters, an invalid UUID, or an offset beyond the
+signed 32-bit JPA range return `400`.
+
+An unknown patient returns `404`. An existing patient with no encounters returns
+`200` with empty `items` and zero totals. A page beyond the last returns empty
+`items` while preserving the actual totals. This endpoint lists historical and
+current encounters; it is not a hospital-wide census of current inpatients.
 
 ## Hospital admission
 

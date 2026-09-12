@@ -18,6 +18,7 @@ Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 - [Use PostgreSQL](#postgresql)
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
+- [Current progress and next steps](docs/roadmap.md)
 
 ## Workflow
 
@@ -59,7 +60,9 @@ If you set another server port, use that port in the browser. Restart the
 application after pulling or building changes to the page.
 
 The patient directory supports name or medical record number search, pagination,
-registration, and viewing patient details. Registration errors appear in the form;
+registration, and viewing patient details with paginated hospital encounter
+history. The history includes cancelled admissions and current encounter states.
+Registration errors appear in the form;
 a successful registration filters the directory by the new medical record number.
 Use **Clear** to return to all patients. The default and demo H2 databases start
 without patients and are cleared when the application stops.
@@ -68,7 +71,8 @@ The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packag
 with the Spring Boot application. The page calls the existing REST/JSON patient
 endpoints on the same origin; it needs no separate frontend server or Node build.
 It stores no patient records in browser storage. Inpatient workflows are still
-available through the API and demo script; they do not have screens yet.
+available through the API and demo script. The page displays encounters but does
+not yet provide admission, transfer, or discharge actions.
 
 For a browser check, register a fictional patient, search by name, open the record,
 and try the same medical record number again to see the duplicate warning. Search
@@ -265,8 +269,9 @@ Test configuration and expected behaviour are in
 ## Current scope
 
 Patients can be listed and searched by name or medical record number, with
-pagination. Patient and encounter details are retrieved by ID. Paginated
-inpatient lists and reference-data maintenance endpoints are not implemented.
+pagination. Patient records also show their encounters with pagination. Patient
+and encounter details are retrieved by ID. A hospital-wide inpatient list and
+reference-data maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
 Authentication and role-based access are not implemented. Cancellation operators

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterPageResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
@@ -15,6 +16,8 @@ import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.service.LocationService;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -437,6 +440,16 @@ public class EncounterService {
     public Encounter getEncounter(UUID id) {
         return encounterRepository.findById(id)
                 .orElseThrow(() -> new EncounterNotFoundException(id));
+    }
+
+    /**
+     * Lists all encounters for an existing patient, including cancelled admissions.
+     */
+    public EncounterPageResponse getPatientEncounters(UUID patientId, int page, int size) {
+        patientService.getPatient(patientId);
+        PageRequest pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "admittedAt", "encounterNumber"));
+        return EncounterPageResponse.from(encounterRepository.findAllByPatient_Id(patientId, pageable));
     }
 
     private void checkBedHistory(UUID bedId, OffsetDateTime startedAt) {

@@ -109,6 +109,17 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 dt { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
 dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 #patient-status { margin-block: 24px; }
+#patient-dialog { width: min(900px, calc(100% - 32px)); }
+.patient-details { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
+.patient-encounters { margin-bottom: 24px; border-top: 1px solid var(--line); padding-top: 20px; }
+.patient-encounters h3 { margin: 0 0 5px; font-size: 17px; }
+.patient-encounters > .muted { margin: 0 0 18px; }
+#encounters-table th, #encounters-table td { padding: 12px; width: 25%; }
+#encounters-table td { font-size: 13px; font-weight: 400; }
+.encounter-status { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #eff2f4; color: #425b68; }
+.encounter-status.active { background: #e9f3f0; color: #246449; }
+.encounter-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
+#encounters-page-summary { font-size: 12px; color: var(--muted); }
 @media (max-width: 700px) {
     .app-header { padding: 0 20px; height: 66px; }
     .header-section { display: none; }
@@ -124,5 +135,6 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
     .page-controls { flex-wrap: wrap; }
     dialog { padding: 22px; }
     .name-fields { grid-template-columns: 1fr; gap: 0; }
+    .patient-details { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }

@@ -10,6 +10,9 @@ let totalPages = 0;
 let listVersion = 0;
 let listController;
 let detailController;
+let encountersController;
+let encountersPage = 0;
+let encountersTotalPages = 0;
 let selectedPatientId;
 let saving = false;
 
@@ -212,6 +215,9 @@ element('registration-form').addEventListener('submit', async (event) => {
 
 async function loadPatientDetails() {
     detailController?.abort();
+    encountersController?.abort();
+    encountersController = null;
+    element('patient-encounters').hidden = true;
     const controller = new AbortController();
     detailController = controller;
     element('patient-details').hidden = true;
@@ -228,6 +234,8 @@ async function loadPatientDetails() {
         element('detail-birth-date').textContent = formatDate(patient.dateOfBirth);
         element('patient-details').hidden = false;
         element('patient-status').hidden = true;
+        element('patient-encounters').hidden = false;
+        loadPatientEncounters();
     } catch (error) {
         if (controller !== detailController) return;
         element('patient-status').textContent = error instanceof ApiError ? error.message
@@ -239,13 +247,92 @@ async function loadPatientDetails() {
 
 function openPatient(id) {
     selectedPatientId = id;
+    encountersPage = 0;
     element('patient-dialog').showModal();
     loadPatientDetails();
 }
 for (const id of ['close-patient', 'done-patient']) {
     element(id).addEventListener('click', () => element('patient-dialog').close());
 }
-element('patient-dialog').addEventListener('close', () => { detailController?.abort(); detailController = null; });
+element('patient-dialog').addEventListener('close', () => {
+    detailController?.abort();
+    detailController = null;
+    encountersController?.abort();
+    encountersController = null;
+});
 element('retry-patient').addEventListener('click', loadPatientDetails);
+
+const encounterStatuses = {
+    ADMITTED: 'Admitted', IN_DEPARTMENT: 'In department',
+    DISCHARGED: 'Discharged', ADMISSION_CANCELLED: 'Admission cancelled'
+};
+const encounterTimeFormat = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+});
+const formatEncounterTime = (value) => value ? encounterTimeFormat.format(new Date(value)) : '—';
+
+async function loadPatientEncounters() {
+    encountersController?.abort();
+    const controller = new AbortController();
+    encountersController = controller;
+    element('encounter-rows').replaceChildren();
+    element('encounters-table-region').hidden = true;
+    element('encounters-state').hidden = false;
+    element('encounters-state').className = '';
+    element('encounters-state').textContent = 'Loading encounters…';
+    element('encounters-page-summary').textContent = '';
+    element('retry-encounters').hidden = true;
+    element('previous-encounters').disabled = true;
+    element('next-encounters').disabled = true;
+    try {
+        const params = new URLSearchParams({ page: encountersPage, size: 5 });
+        const result = await request(`./api/v1/patients/${encodeURIComponent(selectedPatientId)}/encounters?${params}`, {}, controller);
+        if (controller !== encountersController) return;
+        encountersPage = result.page;
+        encountersTotalPages = result.totalPages;
+        const fragment = document.createDocumentFragment();
+        for (const encounter of result.items) {
+            const row = document.createElement('tr');
+            const number = document.createElement('td');
+            number.textContent = encounter.encounterNumber;
+            number.className = 'record-number';
+            const status = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = 'encounter-status';
+            if (['ADMITTED', 'IN_DEPARTMENT'].includes(encounter.status)) badge.classList.add('active');
+            badge.textContent = encounterStatuses[encounter.status] || encounter.status;
+            status.append(badge);
+            const admitted = document.createElement('td');
+            admitted.textContent = formatEncounterTime(encounter.admittedAt);
+            const ended = document.createElement('td');
+            ended.textContent = formatEncounterTime(encounter.status === 'ADMISSION_CANCELLED'
+                ? encounter.admissionCancelledAt : encounter.dischargedAt);
+            row.append(number, status, admitted, ended);
+            fragment.append(row);
+        }
+        element('encounter-rows').replaceChildren(fragment);
+        element('encounters-table-region').hidden = result.items.length === 0;
+        element('encounters-state').hidden = result.items.length > 0;
+        element('encounters-state').textContent = result.totalElements === 0
+            ? 'No hospital encounters recorded for this patient.' : 'No encounters on this page.';
+        element('encounters-page-summary').textContent = `${result.totalElements} encounters · Page ${result.totalPages ? result.page + 1 : 0} of ${result.totalPages}`;
+        element('previous-encounters').disabled = result.page === 0;
+        element('next-encounters').disabled = result.page + 1 >= result.totalPages;
+    } catch (error) {
+        if (controller !== encountersController) return;
+        element('encounters-state').textContent = error instanceof ApiError ? error.message
+            : 'Could not load hospital encounters. Check your connection and try again.';
+        element('encounters-state').className = 'message error';
+        element('retry-encounters').hidden = false;
+    }
+}
+
+element('retry-encounters').addEventListener('click', loadPatientEncounters);
+element('previous-encounters').addEventListener('click', () => {
+    if (encountersPage > 0) { encountersPage--; loadPatientEncounters(); }
+});
+element('next-encounters').addEventListener('click', () => {
+    if (encountersPage + 1 < encountersTotalPages) { encountersPage++; loadPatientEncounters(); }
+});
 
 loadPatients();

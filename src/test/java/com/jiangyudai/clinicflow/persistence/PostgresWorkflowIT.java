@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
@@ -137,6 +138,30 @@ class PostgresWorkflowIT {
                 .extracting(PatientResponse::id).containsExactly(first.getId());
         assertThat(patientService.searchPatients("  " + prefix + " o'neil  ", 0, 20).items())
                 .extracting(PatientResponse::id).containsExactly(first.getId());
+    }
+
+    @Test
+    void paginatesPatientEncountersWithoutIncludingAnotherPatient() {
+        Patient patient = registerPatient();
+        String prefix = "HISTORY-" + UUID.randomUUID().toString().substring(0, 12);
+        var first = encounterService.admitPatient(patient.getId(), prefix + "-1", ADMITTED_AT);
+        encounterService.cancelAdmission(first.getId(), ADMITTED_AT.plusHours(1), "test-clerk");
+        var second = encounterService.admitPatient(patient.getId(), prefix + "-2", ADMITTED_AT);
+        encounterService.cancelAdmission(second.getId(), ADMITTED_AT.plusHours(1), "test-clerk");
+        var third = encounterService.admitPatient(patient.getId(), prefix + "-3", ADMITTED_AT.plusDays(1));
+        encounterService.admitPatient(registerPatient().getId(), prefix + "-OTHER", ADMITTED_AT.plusDays(2));
+
+        var page = encounterService.getPatientEncounters(patient.getId(), 0, 2);
+        assertThat(page.items()).extracting(EncounterResponse::id).containsExactly(third.getId(), second.getId());
+        assertThat(page.totalElements()).isEqualTo(3);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(encounterService.getPatientEncounters(patient.getId(), 1, 2).items())
+                .singleElement().satisfies(item -> {
+                    assertThat(item.id()).isEqualTo(first.getId());
+                    assertThat(item.status()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
+                    assertThat(item.admissionCancelledBy()).isEqualTo("test-clerk");
+                });
+        assertThat(encounterService.getPatientEncounters(patient.getId(), 2, 2).items()).isEmpty();
     }
 
     @Test
