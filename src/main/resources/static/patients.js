@@ -1,4 +1,6 @@
-const element = (id) => document.getElementById(id);
+import { element, ApiError, request, clearFieldError, showFieldError, localDateTimeValue,
+    encounterStatuses, formatEncounterTime } from './workbench.js';
+import { openDepartmentAdmission } from './department-admission.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -17,32 +19,6 @@ let encountersTotalPages = 0;
 let selectedPatientId;
 let saving = false;
 let admitting = false;
-
-class ApiError extends Error {
-    constructor(status, problem) {
-        super(status >= 500 ? 'The server could not complete the request. Please try again.'
-            : problem?.detail || `The request failed (${status}).`);
-        this.status = status;
-        this.title = problem?.title;
-        this.fields = problem?.errors || {};
-    }
-}
-
-async function request(url, options = {}, controller = new AbortController()) {
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    try {
-        const response = await fetch(url, {
-            ...options, signal: controller.signal, cache: 'no-store',
-            headers: { Accept: 'application/json', ...options.headers }
-        });
-        const body = await response.json().catch(() => null);
-        if (!response.ok) throw new ApiError(response.status, body);
-        if (body === null) throw new Error('The server returned an unreadable response.');
-        return body;
-    } finally {
-        clearTimeout(timeout);
-    }
-}
 
 function setListState(title, detail = '') {
     element('list-state-title').textContent = title;
@@ -134,17 +110,6 @@ element('page-size').addEventListener('change', () => { page = 0; loadPatients()
 element('previous-page').addEventListener('click', () => { if (page > 0) { page--; loadPatients(); } });
 element('next-page').addEventListener('click', () => { if (page + 1 < totalPages) { page++; loadPatients(); } });
 element('retry-list').addEventListener('click', loadPatients);
-
-function clearFieldError(field) {
-    element(`${field}-error`).hidden = true;
-    element(field).removeAttribute('aria-invalid');
-}
-
-function showFieldError(field, message) {
-    element(`${field}-error`).textContent = message;
-    element(`${field}-error`).hidden = false;
-    element(field).setAttribute('aria-invalid', 'true');
-}
 
 element('register-patient').addEventListener('click', () => {
     element('registration-form').reset();
@@ -268,11 +233,6 @@ element('patient-dialog').addEventListener('close', () => {
 });
 element('retry-patient').addEventListener('click', loadPatientDetails);
 
-function localDateTimeValue(date) {
-    const pad = (value) => String(value).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function hideAdmissionForm() {
     element('admission-form').hidden = true;
     element('admit-patient').hidden = false;
@@ -387,15 +347,6 @@ element('admission-form').addEventListener('submit', async (event) => {
     }
 });
 
-const encounterStatuses = {
-    ADMITTED: 'Admitted', IN_DEPARTMENT: 'In department',
-    DISCHARGED: 'Discharged', ADMISSION_CANCELLED: 'Admission cancelled'
-};
-const encounterTimeFormat = new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-});
-const formatEncounterTime = (value) => value ? encounterTimeFormat.format(new Date(value)) : '—';
-
 async function loadPatientEncounters() {
     encountersController?.abort();
     const controller = new AbortController();
@@ -432,7 +383,31 @@ async function loadPatientEncounters() {
             const ended = document.createElement('td');
             ended.textContent = formatEncounterTime(encounter.status === 'ADMISSION_CANCELLED'
                 ? encounter.admissionCancelledAt : encounter.dischargedAt);
-            row.append(number, status, admitted, ended);
+            const actions = document.createElement('td');
+            if (encounter.status === 'ADMITTED') {
+                const enter = document.createElement('button');
+                enter.type = 'button';
+                enter.className = 'row-action';
+                enter.textContent = 'Enter department';
+                enter.setAttribute('aria-label', `Enter department for ${encounter.encounterNumber}`);
+                enter.addEventListener('click', () => {
+                    if (admitting) return;
+                    hideAdmissionForm();
+                    const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
+                    openDepartmentAdmission(encounter, patient, (notice) => {
+                        if (notice) {
+                            element('admission-notice').textContent = notice;
+                            element('admission-notice').hidden = false;
+                            element('admission-notice').focus();
+                        }
+                        loadPatientEncounters();
+                    });
+                });
+                actions.append(enter);
+            } else {
+                actions.textContent = '—';
+            }
+            row.append(number, status, admitted, ended, actions);
             fragment.append(row);
         }
         element('encounter-rows').replaceChildren(fragment);
@@ -440,7 +415,7 @@ async function loadPatientEncounters() {
         element('encounters-state').hidden = result.items.length > 0;
         element('encounters-state').textContent = result.totalElements === 0
             ? 'No hospital encounters recorded for this patient.' : 'No encounters on this page.';
-        element('encounters-page-summary').textContent = `${result.totalElements} encounters · Page ${result.totalPages ? result.page + 1 : 0} of ${result.totalPages}`;
+        element('encounters-page-summary').textContent = `${result.totalElements} ${result.totalElements === 1 ? 'encounter' : 'encounters'} · Page ${result.totalPages ? result.page + 1 : 0} of ${result.totalPages}`;
         element('previous-encounters').disabled = result.page === 0;
         element('next-encounters').disabled = result.page + 1 >= result.totalPages;
     } catch (error) {

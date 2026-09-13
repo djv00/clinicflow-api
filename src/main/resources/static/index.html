@@ -191,6 +191,7 @@
                     <th scope="col">Status</th>
                     <th scope="col">Admitted</th>
                     <th scope="col">Discharged / cancelled</th>
+                    <th scope="col">Actions</th>
                 </tr></thead>
                 <tbody id="encounter-rows"></tbody>
             </table>
@@ -207,6 +208,63 @@
         <button id="retry-patient" class="button secondary" type="button" hidden>Try again</button>
         <button id="done-patient" class="button primary" type="button">Done</button>
     </div>
+</dialog>
+<dialog id="department-dialog" aria-labelledby="department-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Department entry</p><h2 id="department-title">Enter department</h2></div>
+        <button id="close-department" class="close-button" type="button" aria-label="Close department entry">×</button>
+    </div>
+    <dl class="placement-summary">
+        <div><dt>Patient</dt><dd id="department-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="department-encounter-number" class="record-number"></dd></div>
+        <div><dt>Hospital admission</dt><dd id="department-admitted-at"></dd></div>
+    </dl>
+    <p id="placement-state" role="status"></p>
+    <form id="department-form">
+        <p id="department-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <fieldset id="department-fields" disabled>
+            <legend class="sr-only">Department entry details</legend>
+            <div class="name-fields">
+                <div class="field">
+                    <label for="departmentId">Department</label>
+                    <select id="departmentId" name="departmentId" required aria-describedby="departmentId-error">
+                        <option value="" disabled selected>Select a department</option>
+                    </select>
+                    <p id="departmentId-error" class="field-error" hidden></p>
+                </div>
+                <div class="field">
+                    <label for="wardId">Ward</label>
+                    <select id="wardId" name="wardId" required aria-describedby="wardId-error">
+                        <option value="" disabled selected>Select a ward</option>
+                    </select>
+                    <p id="wardId-error" class="field-error" hidden></p>
+                </div>
+            </div>
+            <div class="field">
+                <label for="bedId">Bed assignment</label>
+                <select id="bedId" name="bedId" required aria-describedby="bed-availability bedId-error" disabled>
+                    <option value="" disabled selected>Select a bed assignment</option>
+                </select>
+                <p id="bed-availability" class="field-hint" role="status">Choose a ward to see available beds.</p>
+                <p id="bedId-error" class="field-error" hidden></p>
+            </div>
+            <div class="field">
+                <label for="startedAt">Department entry time</label>
+                <input id="startedAt" name="startedAt" type="datetime-local" step="1" required
+                       aria-describedby="department-time-hint startedAt-error">
+                <p id="department-time-hint" class="field-hint"></p>
+                <p id="startedAt-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <div class="placement-retry">
+            <button id="refresh-placement" class="button secondary" type="button">Refresh availability</button>
+            <button id="retry-beds" class="button secondary" type="button" hidden>Retry beds</button>
+        </div>
+        <div class="dialog-actions">
+            <button id="cancel-department" class="button secondary" type="button">Cancel</button>
+            <button id="save-department" class="button primary" type="submit" disabled>Save department entry</button>
+        </div>
+    </form>
 </dialog>
 </body>
 </html>

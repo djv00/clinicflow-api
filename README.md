@@ -74,10 +74,23 @@ active encounters, and conflicting admission times are shown in the form. If the
 save result cannot be confirmed, use **Refresh encounters** to check the record
 before retrying; the page does not retry a write automatically.
 
+For an admitted encounter, select **Enter department** in the history table.
+Choose an active department and ward, then select an available bed or explicitly
+choose **No bed assigned**. Changing wards clears the bed selection. The entry
+time must be on or after hospital admission and no later than now. Saving updates
+the encounter to **In department** and displays the selected placement.
+
+Use **Refresh availability** after a conflict or an unconfirmed save. This checks
+the encounter again and reloads the location choices; a bed that became occupied
+must be reselected. Availability is advisory until the backend saves the entry.
+To try this locally with location choices, start with the `demo` profile described
+below. The default empty H2 database has no departments, wards, or beds.
+
 The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packaged
 with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
-It stores no patient records in browser storage. Department entry, transfer,
+After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
+It stores no patient records in browser storage. Transfer,
 discharge, and correction actions remain available through the API and demo
 script; their workbench controls are the next slices.
 

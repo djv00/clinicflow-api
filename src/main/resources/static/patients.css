@@ -54,7 +54,7 @@ label { display: block; font-weight: 600; font-size: 13px; }
 input, select { background: white; color: #20343e; border: 1px solid #b9c7cf; border-radius: 5px; }
 input { display: block; width: 100%; min-width: 0; height: 42px; padding: 9px 12px; margin-top: 7px; }
 input::placeholder { color: #788892; }
-input[aria-invalid="true"] { border-color: #b9453b; }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: #b9453b; }
 .list-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 24px; }
 .list-heading p { margin: 0; font-weight: 600; }
 .muted { color: var(--muted); font-size: 13px; }
@@ -120,8 +120,16 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .admission-form .dialog-intro { margin: 8px 0 20px; }
 .admission-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; }
 #refresh-admission-records { margin-right: auto; }
-#encounters-table th, #encounters-table td { padding: 12px; width: 25%; }
+#encounters-table th, #encounters-table td { padding: 12px; width: 20%; }
 #encounters-table td { font-size: 13px; font-weight: 400; }
+#encounters-table { min-width: 740px; }
+.placement-summary { margin: 22px 0; }
+.placement-summary div { margin-bottom: 12px; }
+.placement-summary dd { font-size: 14px; }
+#department-dialog { width: min(660px, calc(100% - 32px)); }
+#department-fields select { display: block; width: 100%; min-width: 0; min-height: 42px; margin-top: 7px; padding: 9px 12px; }
+.placement-retry { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+.information { color: #344b58; background: #f3f7f9; border: 1px solid var(--line); }
 .encounter-status { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #eff2f4; color: #425b68; }
 .encounter-status.active { background: #e9f3f0; color: #246449; }
 .encounter-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
