@@ -4,6 +4,7 @@ const dateFormat = new Intl.DateTimeFormat('en-CA', {
 });
 const formatDate = (value) => dateFormat.format(new Date(`${value}T00:00:00Z`));
 const registrationFields = ['medicalRecordNumber', 'firstName', 'lastName', 'dateOfBirth'];
+const admissionFields = ['encounterNumber', 'admittedAt'];
 let keyword = '';
 let page = 0;
 let totalPages = 0;
@@ -15,12 +16,14 @@ let encountersPage = 0;
 let encountersTotalPages = 0;
 let selectedPatientId;
 let saving = false;
+let admitting = false;
 
 class ApiError extends Error {
     constructor(status, problem) {
         super(status >= 500 ? 'The server could not complete the request. Please try again.'
             : problem?.detail || `The request failed (${status}).`);
         this.status = status;
+        this.title = problem?.title;
         this.fields = problem?.errors || {};
     }
 }
@@ -248,12 +251,15 @@ async function loadPatientDetails() {
 function openPatient(id) {
     selectedPatientId = id;
     encountersPage = 0;
+    hideAdmissionForm();
+    element('admission-notice').hidden = true;
     element('patient-dialog').showModal();
     loadPatientDetails();
 }
 for (const id of ['close-patient', 'done-patient']) {
-    element(id).addEventListener('click', () => element('patient-dialog').close());
+    element(id).addEventListener('click', () => { if (!admitting) element('patient-dialog').close(); });
 }
+element('patient-dialog').addEventListener('cancel', (event) => { if (admitting) event.preventDefault(); });
 element('patient-dialog').addEventListener('close', () => {
     detailController?.abort();
     detailController = null;
@@ -261,6 +267,125 @@ element('patient-dialog').addEventListener('close', () => {
     encountersController = null;
 });
 element('retry-patient').addEventListener('click', loadPatientDetails);
+
+function localDateTimeValue(date) {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function hideAdmissionForm() {
+    element('admission-form').hidden = true;
+    element('admit-patient').hidden = false;
+    element('admit-patient').setAttribute('aria-expanded', 'false');
+}
+
+element('admit-patient').addEventListener('click', () => {
+    element('admission-form').reset();
+    admissionFields.forEach(clearFieldError);
+    element('admission-error').hidden = true;
+    element('admission-notice').hidden = true;
+    element('refresh-admission-records').hidden = true;
+    element('admittedAt').value = localDateTimeValue(new Date());
+    element('admission-time-hint').textContent = `Local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Future times are not allowed.`;
+    element('admission-form').hidden = false;
+    element('admit-patient').setAttribute('aria-expanded', 'true');
+    element('admit-patient').hidden = true;
+    element('encounterNumber').focus();
+});
+element('cancel-admission').addEventListener('click', () => {
+    if (admitting) return;
+    hideAdmissionForm();
+    element('admit-patient').focus();
+});
+admissionFields.forEach((field) => element(field).addEventListener('input', () => clearFieldError(field)));
+element('refresh-admission-records').addEventListener('click', () => {
+    encountersPage = 0;
+    loadPatientEncounters();
+});
+
+element('admission-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (admitting) return;
+    admissionFields.forEach(clearFieldError);
+    element('admission-error').hidden = true;
+    element('refresh-admission-records').hidden = true;
+    const encounterNumber = element('encounterNumber').value.trim();
+    const enteredTime = element('admittedAt').value;
+    const admittedAt = new Date(enteredTime);
+    if (!encounterNumber) {
+        showFieldError('encounterNumber', 'Encounter number is required.');
+        element('encounterNumber').focus();
+        return;
+    }
+    // Reject local times that the clock skips when daylight saving time starts.
+    if (Number.isNaN(admittedAt.getTime()) || localDateTimeValue(admittedAt) !== enteredTime) {
+        showFieldError('admittedAt', 'Enter a valid local admission time.');
+        element('admittedAt').focus();
+        return;
+    }
+    if (admittedAt > new Date()) {
+        showFieldError('admittedAt', 'Admission time cannot be in the future.');
+        element('admittedAt').focus();
+        return;
+    }
+    admitting = true;
+    element('admission-fields').disabled = true;
+    element('admission-form').setAttribute('aria-busy', 'true');
+    const buttons = ['save-admission', 'cancel-admission', 'close-patient', 'done-patient'];
+    buttons.forEach((id) => { element(id).disabled = true; });
+    element('save-admission').textContent = 'Saving…';
+    let encounter;
+    let firstErrorField;
+    try {
+        encounter = await request('./api/v1/encounters', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patientId: selectedPatientId, encounterNumber, admittedAt: admittedAt.toISOString() })
+        });
+    } catch (error) {
+        const uncertain = !(error instanceof ApiError) || error.status >= 500;
+        let message = uncertain
+            ? 'Admission could not be confirmed. Refresh encounters and check this encounter number before trying again.'
+            : error.message;
+        element('refresh-admission-records').hidden = !(uncertain || error.status === 409);
+        const fieldErrors = { ...error.fields };
+        if (error.status === 409 && error.title === 'Duplicate encounter number') {
+            fieldErrors.encounterNumber = 'This encounter number is already in use. Check the existing record or use a new number.';
+        } else if (error.status === 409 && error.title === 'Active encounter already exists') {
+            message = 'This patient already has an active hospital encounter. Review the existing encounter before admitting again.';
+        } else if (error.status === 409 && error.title === 'Encounter history conflict') {
+            fieldErrors.admittedAt = 'Admission time cannot be before a previous discharge for this patient.';
+        } else if (error.status === 400 && error.title === 'Invalid admission time') {
+            fieldErrors.admittedAt = 'Admission time cannot be in the future.';
+        } else if (error.status === 404) {
+            message = 'This patient record is no longer available. Close and reopen the patient record.';
+        }
+        for (const field of admissionFields) {
+            if (fieldErrors[field]) {
+                showFieldError(field, fieldErrors[field]);
+                firstErrorField ||= field;
+                message = 'Check the highlighted fields and try again.';
+            }
+        }
+        element('admission-error').textContent = message;
+        element('admission-error').hidden = false;
+    } finally {
+        admitting = false;
+        element('admission-fields').disabled = false;
+        element('admission-form').setAttribute('aria-busy', 'false');
+        buttons.forEach((id) => { element(id).disabled = false; });
+        element('save-admission').textContent = 'Save admission';
+    }
+    if (encounter) {
+        hideAdmissionForm();
+        element('admission-notice').textContent = `Admission saved: ${encounter.encounterNumber}. Status: Admitted.`;
+        element('admission-notice').hidden = false;
+        element('admission-notice').focus();
+        encountersPage = 0;
+        loadPatientEncounters();
+    } else {
+        element(firstErrorField || 'admission-error').focus();
+    }
+});
 
 const encounterStatuses = {
     ADMITTED: 'Admitted', IN_DEPARTMENT: 'In department',

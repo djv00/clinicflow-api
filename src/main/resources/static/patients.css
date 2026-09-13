@@ -114,6 +114,12 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .patient-encounters { margin-bottom: 24px; border-top: 1px solid var(--line); padding-top: 20px; }
 .patient-encounters h3 { margin: 0 0 5px; font-size: 17px; }
 .patient-encounters > .muted { margin: 0 0 18px; }
+.encounters-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.admission-form { padding: 20px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 6px; background: #fafcfc; }
+.admission-form h4 { margin: 0; font-size: 16px; }
+.admission-form .dialog-intro { margin: 8px 0 20px; }
+.admission-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; }
+#refresh-admission-records { margin-right: auto; }
 #encounters-table th, #encounters-table td { padding: 12px; width: 25%; }
 #encounters-table td { font-size: 13px; font-weight: 400; }
 .encounter-status { display: inline-block; padding: 3px 8px; border-radius: 4px; background: #eff2f4; color: #425b68; }

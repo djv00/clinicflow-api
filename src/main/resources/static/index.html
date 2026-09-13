@@ -145,8 +145,42 @@
         <div><dt>Date of birth</dt><dd id="detail-birth-date"></dd></div>
     </dl>
     <section id="patient-encounters" class="patient-encounters" aria-labelledby="encounters-title" hidden>
-        <h3 id="encounters-title">Hospital encounters</h3>
+        <div class="encounters-heading">
+            <h3 id="encounters-title">Hospital encounters</h3>
+            <button id="admit-patient" class="button primary" type="button"
+                    aria-expanded="false" aria-controls="admission-form">Admit patient</button>
+        </div>
         <p class="muted">Newest admission first. Times are shown in your local time.</p>
+        <p id="admission-notice" class="message success" role="status" tabindex="-1" hidden></p>
+        <form id="admission-form" class="admission-form" aria-labelledby="admission-title" hidden>
+            <h4 id="admission-title">New hospital admission</h4>
+            <p class="dialog-intro">Both fields are required. Department and bed assignment is a separate step.</p>
+            <p id="admission-error" class="message error" role="alert" tabindex="-1" hidden></p>
+            <fieldset id="admission-fields">
+                <legend class="sr-only">Admission details</legend>
+                <div class="name-fields">
+                    <div class="field">
+                        <label for="encounterNumber">Encounter number</label>
+                        <input id="encounterNumber" name="encounterNumber" required maxlength="50"
+                               autocomplete="off" aria-describedby="encounter-number-hint encounterNumber-error">
+                        <p id="encounter-number-hint" class="field-hint">Use a new, unique number for this hospital stay.</p>
+                        <p id="encounterNumber-error" class="field-error" hidden></p>
+                    </div>
+                    <div class="field">
+                        <label for="admittedAt">Admission time</label>
+                        <input id="admittedAt" name="admittedAt" type="datetime-local" required
+                               aria-describedby="admission-time-hint admittedAt-error">
+                        <p id="admission-time-hint" class="field-hint"></p>
+                        <p id="admittedAt-error" class="field-error" hidden></p>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="admission-actions">
+                <button id="refresh-admission-records" class="button secondary" type="button" hidden>Refresh encounters</button>
+                <button id="cancel-admission" class="button secondary" type="button">Cancel</button>
+                <button id="save-admission" class="button primary" type="submit">Save admission</button>
+            </div>
+        </form>
         <p id="encounters-state" role="status">Loading encounters…</p>
         <button id="retry-encounters" class="button secondary" type="button" hidden>Retry encounters</button>
         <div id="encounters-table-region" class="table-region" hidden>

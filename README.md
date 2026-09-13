@@ -62,17 +62,24 @@ application after pulling or building changes to the page.
 The patient directory supports name or medical record number search, pagination,
 registration, and viewing patient details with paginated hospital encounter
 history. The history includes cancelled admissions and current encounter states.
-Registration errors appear in the form;
-a successful registration filters the directory by the new medical record number.
+A successful registration filters the directory by the new medical record number.
 Use **Clear** to return to all patients. The default and demo H2 databases start
 without patients and are cleared when the application stops.
 
+To admit a registered patient, open **View record**, select **Admit patient**, and
+enter a unique encounter number and an admission time. Time defaults to the current
+minute in the browser's local time zone and is sent as a UTC instant. A successful
+admission refreshes the encounter history on its first page. Duplicate numbers,
+active encounters, and conflicting admission times are shown in the form. If the
+save result cannot be confirmed, use **Refresh encounters** to check the record
+before retrying; the page does not retry a write automatically.
+
 The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packaged
-with the Spring Boot application. The page calls the existing REST/JSON patient
+with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
-It stores no patient records in browser storage. Inpatient workflows are still
-available through the API and demo script. The page displays encounters but does
-not yet provide admission, transfer, or discharge actions.
+It stores no patient records in browser storage. Department entry, transfer,
+discharge, and correction actions remain available through the API and demo
+script; their workbench controls are the next slices.
 
 For a browser check, register a fictional patient, search by name, open the record,
 and try the same medical record number again to see the duplicate warning. Search
