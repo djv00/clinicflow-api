@@ -1,5 +1,5 @@
 import { element, ApiError, request, clearFieldError, showFieldError, localDateTimeValue,
-    encounterStatuses, formatEncounterTime } from './workbench.js';
+    encounterStatuses, formatEncounterTime, loadPlacementDetails } from './workbench.js';
 
 const fields = ['departmentId', 'wardId', 'bedId', 'startedAt'];
 const dialog = element('department-dialog');
@@ -87,11 +87,7 @@ async function loadBeds(previous = '') {
 }
 
 async function loadCurrentPlacement(location, controller) {
-    const [department, ward, bed] = await Promise.all([
-        request(`./api/v1/departments/${encodeURIComponent(location.departmentId)}`, {}, controller),
-        request(`./api/v1/wards/${encodeURIComponent(location.wardId)}`, {}, controller),
-        location.bedId ? request(`./api/v1/beds/${encodeURIComponent(location.bedId)}`, {}, controller) : null
-    ]);
+    const { department, ward, bed } = await loadPlacementDetails(location, controller);
     if (controller !== lookupController) return;
     currentBed = bed;
     const inactive = (value) => value.active ? '' : ' (inactive)';

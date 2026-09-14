@@ -51,3 +51,12 @@ const encounterTimeFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
 });
 export const formatEncounterTime = (value) => value ? encounterTimeFormat.format(new Date(value)) : '—';
+
+export async function loadPlacementDetails(location, controller) {
+    const [department, ward, bed] = await Promise.all([
+        request(`./api/v1/departments/${encodeURIComponent(location.departmentId)}`, {}, controller),
+        request(`./api/v1/wards/${encodeURIComponent(location.wardId)}`, {}, controller),
+        location.bedId ? request(`./api/v1/beds/${encodeURIComponent(location.bedId)}`, {}, controller) : null
+    ]);
+    return { department, ward, bed };
+}

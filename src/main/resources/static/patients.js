@@ -1,6 +1,7 @@
 import { element, ApiError, request, clearFieldError, showFieldError, localDateTimeValue,
     encounterStatuses, formatEncounterTime } from './workbench.js';
 import { openDepartmentAdmission, openEncounterTransfer } from './encounter-placement.js';
+import { openEncounterDischarge } from './encounter-discharge.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -347,6 +348,20 @@ element('admission-form').addEventListener('submit', async (event) => {
     }
 });
 
+function openEncounterAction(encounter, openAction) {
+    if (admitting) return;
+    hideAdmissionForm();
+    const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
+    openAction(encounter, patient, (notice) => {
+        if (notice) {
+            element('admission-notice').textContent = notice;
+            element('admission-notice').hidden = false;
+            element('admission-notice').focus();
+        }
+        loadPatientEncounters();
+    });
+}
+
 async function loadPatientEncounters() {
     encountersController?.abort();
     const controller = new AbortController();
@@ -392,20 +407,18 @@ async function loadPatientEncounters() {
                 enter.textContent = transfer ? 'Transfer' : 'Enter department';
                 enter.setAttribute('aria-label', `${enter.textContent} for ${encounter.encounterNumber}`);
                 enter.addEventListener('click', () => {
-                    if (admitting) return;
-                    hideAdmissionForm();
-                    const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
-                    const openPlacement = transfer ? openEncounterTransfer : openDepartmentAdmission;
-                    openPlacement(encounter, patient, (notice) => {
-                        if (notice) {
-                            element('admission-notice').textContent = notice;
-                            element('admission-notice').hidden = false;
-                            element('admission-notice').focus();
-                        }
-                        loadPatientEncounters();
-                    });
+                    openEncounterAction(encounter, transfer ? openEncounterTransfer : openDepartmentAdmission);
                 });
                 actions.append(enter);
+                if (transfer) {
+                    const discharge = document.createElement('button');
+                    discharge.type = 'button';
+                    discharge.className = 'row-action';
+                    discharge.textContent = 'Discharge';
+                    discharge.setAttribute('aria-label', `Discharge for ${encounter.encounterNumber}`);
+                    discharge.addEventListener('click', () => openEncounterAction(encounter, openEncounterDischarge));
+                    actions.append(discharge);
+                }
             } else {
                 actions.textContent = '—';
             }

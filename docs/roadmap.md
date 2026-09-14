@@ -14,16 +14,15 @@ history. Business rules are implemented in one Spring Boot backend.
 | Core patient flow | Implemented | Registration, admission, department entry, transfer, discharge, admission cancellation, discharge cancellation, and timeline APIs. |
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
-| Inpatient workbench | In progress | Admission, department entry, and transfer are connected to the page, with current placement details, active destination choices, and optional bed assignment. Discharge and correction actions still require API calls or the demo script. |
+| Inpatient workbench | In progress | Admission, department entry, transfer, and discharge are connected to the page, with current placement details, active destination choices, and optional bed assignment. Correction actions still require API calls or the demo script. |
 | Authentication and roles | Planned | No login or server-identified operator yet. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Complete the inpatient workbench.** Admission, department entry, and transfer from the
+1. **Complete the inpatient workbench.** Admission, department entry, transfer, and discharge from the
    patient record are implemented, reusing the existing endpoints and conflict rules.
-   Next add discharge actions, an inpatient list, and readable
-   encounter history. Add correction
+   Next add readable encounter history and an inpatient list. Add correction
    actions with the same rules already enforced by the backend.
 2. **Add authenticated operations.** Define the small set of operator roles,
    protect both pages and APIs, and record the operator from the authenticated
@@ -34,8 +33,8 @@ history. Business rules are implemented in one Spring Boot backend.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The next slice is discharge from the patient record, showing the current placement
-and validating the discharge time before closing the hospital stay.
+The next slice is a readable encounter timeline, showing placement changes and
+discharge records from the patient workbench.
 
 ## Later extensions
 
@@ -63,3 +62,6 @@ or certificate modules are outside this delivery sequence.
 - Transfer checks cover retaining the current bed, changing wards, releasing a bed,
   unchanged destinations, transfer time validation, occupied-bed conflicts, changed
   source placements, and recovery after a saved transfer's response is lost.
+- Discharge checks cover bed and no-bed stays, time validation, changed placements,
+  already discharged encounters, failed reads, duplicate-submit prevention, response
+  loss, and the persisted location closure, bed release, and discharge record.

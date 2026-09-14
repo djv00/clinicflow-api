@@ -87,6 +87,14 @@ only the department changes; **No bed assigned** releases the previous bed.
 Transfer time must be on or after the current placement's start and no later than
 now. The previous placement ends and the new placement starts at the same instant.
 
+Select **Discharge** for an encounter that is **In department**. Review the current
+placement and enter a discharge time on or after that placement's start and no
+later than now. Saving closes the hospital stay, ends the current placement, and
+releases any assigned bed. The patient record then shows **Discharged** and its
+discharge time; transfer and discharge actions are no longer offered for that stay.
+If the result cannot be confirmed, select **Refresh encounter** before retrying.
+An encounter already discharged is shown with its recorded discharge time.
+
 Use **Refresh availability** after a conflict or an unconfirmed save. This checks
 the encounter again and reloads the location choices; a bed that became occupied
 must be reselected. Availability is advisory until the backend saves the entry.
@@ -100,7 +108,7 @@ The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packag
 with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
 After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
-It stores no patient records in browser storage. Discharge and correction
+It stores no patient records in browser storage. Correction
 actions remain available through the API and demo
 script; their workbench controls are the next slices.
 

@@ -123,6 +123,8 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 #encounters-table th, #encounters-table td { padding: 12px; width: 20%; }
 #encounters-table td { font-size: 13px; font-weight: 400; }
 #encounters-table { min-width: 740px; }
+#encounters-table .row-action { display: block; }
+#encounters-table .row-action + .row-action { margin-top: 6px; }
 .placement-summary { margin: 22px 0; }
 .placement-summary div { margin-bottom: 12px; }
 .placement-summary dd { font-size: 14px; }
@@ -130,7 +132,7 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .current-placement h3, #destination-heading { font-size: 16px; margin: 0 0 16px; }
 .current-placement .placement-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0; }
 .current-placement .placement-summary div { margin: 0; }
-#department-dialog { width: min(660px, calc(100% - 32px)); }
+#department-dialog, #discharge-dialog { width: min(660px, calc(100% - 32px)); }
 #department-fields select { display: block; width: 100%; min-width: 0; min-height: 42px; margin-top: 7px; padding: 9px 12px; }
 .placement-retry { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
 .information { color: #344b58; background: #f3f7f9; border: 1px solid var(--line); }
@@ -155,6 +157,6 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
     .name-fields { grid-template-columns: 1fr; gap: 0; }
     .patient-details { grid-template-columns: 1fr; }
     .current-placement .placement-summary { grid-template-columns: 1fr; }
-    #department-form .dialog-actions { flex-wrap: wrap; }
+    #department-form .dialog-actions, #discharge-form .dialog-actions { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }
