@@ -318,5 +318,55 @@
         </div>
     </form>
 </dialog>
+<dialog id="timeline-dialog" aria-labelledby="timeline-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Hospital encounter</p><h2 id="timeline-title">Encounter timeline</h2></div>
+        <button id="close-timeline" class="close-button" type="button" aria-label="Close timeline">×</button>
+    </div>
+    <dl class="placement-summary history-summary">
+        <div><dt>Patient</dt><dd id="timeline-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="timeline-encounter-number" class="record-number"></dd></div>
+    </dl>
+    <p id="timeline-time-zone" class="muted"></p>
+    <p id="timeline-loading" role="status">Loading encounter timeline…</p>
+    <p id="timeline-error" class="message error" role="alert" hidden></p>
+    <p id="timeline-reference-warning" class="message information" role="status" hidden>Some location names could not be loaded. Recorded times and statuses are still shown. Refresh the timeline to retry.</p>
+    <div id="timeline-content" hidden>
+        <dl class="placement-summary history-summary">
+            <div><dt>Current status</dt><dd id="timeline-status"></dd></div>
+            <div><dt>Hospital admission</dt><dd id="timeline-admitted-at"></dd></div>
+            <div><dt id="timeline-ended-label">Discharged</dt><dd id="timeline-ended-at"></dd></div>
+            <div id="timeline-admission-cancellation" hidden><dt>Cancellation operator (recorded)</dt><dd id="timeline-admission-operator"></dd></div>
+        </dl>
+        <section class="history-section" aria-labelledby="timeline-locations-title">
+            <h3 id="timeline-locations-title">Location history</h3>
+            <p class="muted">Department, ward, and bed periods, earliest start first. Entries with the same time do not establish operation order.</p>
+            <p id="timeline-locations-empty">No department placement recorded for this encounter.</p>
+            <div id="timeline-locations-table-region" class="table-region" role="region" aria-label="Location history table" tabindex="0" hidden>
+                <table class="history-table">
+                    <caption class="sr-only">Department, ward, and bed history for this encounter</caption>
+                    <thead><tr><th scope="col">From</th><th scope="col">Until</th><th scope="col">Department / ward</th><th scope="col">Bed</th><th scope="col">Record</th></tr></thead>
+                    <tbody id="timeline-location-rows"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="history-section" aria-labelledby="timeline-discharges-title">
+            <h3 id="timeline-discharges-title">Discharge history</h3>
+            <p id="timeline-correction-note" class="message information" hidden>A cancelled discharge does not end the hospital stay. Care continues from the original discharge time; the cancellation time records when the correction was made.</p>
+            <p id="timeline-discharges-empty">No discharge recorded for this encounter.</p>
+            <div id="timeline-discharges-table-region" class="table-region" role="region" aria-label="Discharge history table" tabindex="0" hidden>
+                <table class="history-table">
+                    <caption class="sr-only">Discharge and cancellation history for this encounter</caption>
+                    <thead><tr><th scope="col">Discharge time</th><th scope="col">Record status</th><th scope="col">Placement at discharge</th><th scope="col">Cancellation</th></tr></thead>
+                    <tbody id="timeline-discharge-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="dialog-actions">
+        <button id="refresh-timeline" class="button secondary" type="button">Refresh timeline</button>
+        <button id="done-timeline" class="button primary" type="button">Done</button>
+    </div>
+</dialog>
 </body>
 </html>

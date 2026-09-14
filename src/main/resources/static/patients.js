@@ -2,6 +2,7 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
     encounterStatuses, formatEncounterTime } from './workbench.js';
 import { openDepartmentAdmission, openEncounterTransfer } from './encounter-placement.js';
 import { openEncounterDischarge } from './encounter-discharge.js';
+import { openEncounterTimeline } from './encounter-timeline.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -399,6 +400,13 @@ async function loadPatientEncounters() {
             ended.textContent = formatEncounterTime(encounter.status === 'ADMISSION_CANCELLED'
                 ? encounter.admissionCancelledAt : encounter.dischargedAt);
             const actions = document.createElement('td');
+            const timeline = document.createElement('button');
+            timeline.type = 'button';
+            timeline.className = 'row-action';
+            timeline.textContent = 'Timeline';
+            timeline.setAttribute('aria-label', `Timeline for ${encounter.encounterNumber}`);
+            timeline.addEventListener('click', () => openEncounterAction(encounter, openEncounterTimeline));
+            actions.append(timeline);
             if (encounter.status === 'ADMITTED' || encounter.status === 'IN_DEPARTMENT') {
                 const transfer = encounter.status === 'IN_DEPARTMENT';
                 const enter = document.createElement('button');
@@ -419,8 +427,6 @@ async function loadPatientEncounters() {
                     discharge.addEventListener('click', () => openEncounterAction(encounter, openEncounterDischarge));
                     actions.append(discharge);
                 }
-            } else {
-                actions.textContent = '—';
             }
             row.append(number, status, admitted, ended, actions);
             fragment.append(row);

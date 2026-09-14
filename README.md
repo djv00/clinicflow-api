@@ -95,6 +95,17 @@ discharge time; transfer and discharge actions are no longer offered for that st
 If the result cannot be confirmed, select **Refresh encounter** before retrying.
 An encounter already discharged is shown with its recorded discharge time.
 
+Select **Timeline** for any encounter, including discharged and cancelled stays.
+The view shows admission and cancellation details, department/ward/bed periods,
+and discharge records. **Current** identifies an open placement. Cancelled
+discharges retain their original time and recorded cancellation operator; restored
+care is identified separately from ordinary placement periods. Cancellation time
+is the correction's operation time, while care continues from the original
+discharge time. Equal-time and zero-duration records remain visible.
+Inactive location names are retained. If names cannot be loaded, the recorded
+history remains readable with an availability message; use **Refresh timeline**
+to retry. Original timestamps are available on the displayed times' tooltips.
+
 Use **Refresh availability** after a conflict or an unconfirmed save. This checks
 the encounter again and reloads the location choices; a bed that became occupied
 must be reselected. Availability is advisory until the backend saves the entry.
