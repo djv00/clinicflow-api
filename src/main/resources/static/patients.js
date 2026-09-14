@@ -1,6 +1,6 @@
 import { element, ApiError, request, clearFieldError, showFieldError, localDateTimeValue,
     encounterStatuses, formatEncounterTime } from './workbench.js';
-import { openDepartmentAdmission } from './department-admission.js';
+import { openDepartmentAdmission, openEncounterTransfer } from './encounter-placement.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -384,17 +384,19 @@ async function loadPatientEncounters() {
             ended.textContent = formatEncounterTime(encounter.status === 'ADMISSION_CANCELLED'
                 ? encounter.admissionCancelledAt : encounter.dischargedAt);
             const actions = document.createElement('td');
-            if (encounter.status === 'ADMITTED') {
+            if (encounter.status === 'ADMITTED' || encounter.status === 'IN_DEPARTMENT') {
+                const transfer = encounter.status === 'IN_DEPARTMENT';
                 const enter = document.createElement('button');
                 enter.type = 'button';
                 enter.className = 'row-action';
-                enter.textContent = 'Enter department';
-                enter.setAttribute('aria-label', `Enter department for ${encounter.encounterNumber}`);
+                enter.textContent = transfer ? 'Transfer' : 'Enter department';
+                enter.setAttribute('aria-label', `${enter.textContent} for ${encounter.encounterNumber}`);
                 enter.addEventListener('click', () => {
                     if (admitting) return;
                     hideAdmissionForm();
                     const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
-                    openDepartmentAdmission(encounter, patient, (notice) => {
+                    const openPlacement = transfer ? openEncounterTransfer : openDepartmentAdmission;
+                    openPlacement(encounter, patient, (notice) => {
                         if (notice) {
                             element('admission-notice').textContent = notice;
                             element('admission-notice').hidden = false;

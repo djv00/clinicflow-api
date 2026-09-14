@@ -3,7 +3,14 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
 
 const fields = ['departmentId', 'wardId', 'bedId', 'startedAt'];
 const dialog = element('department-dialog');
+const workflows = {
+    admission: { title: 'Enter department', label: 'Department entry', status: 'ADMITTED', path: 'department-admissions', timeField: 'startedAt' },
+    transfer: { title: 'Transfer patient', label: 'Transfer', status: 'IN_DEPARTMENT', path: 'transfers', timeField: 'transferredAt' }
+};
+let workflow = workflows.admission;
 let encounter;
+let currentLocation;
+let currentBed;
 let onClose;
 let notice;
 let lookupController;
@@ -21,7 +28,7 @@ function updateControls() {
     element('retry-beds').disabled = saving;
     for (const id of ['close-department', 'cancel-department']) element(id).disabled = saving;
     element('department-form').setAttribute('aria-busy', String(loading || saving));
-    element('save-department').textContent = saving ? 'Saving…' : 'Save department entry';
+    element('save-department').textContent = saving ? 'Saving…' : `Save ${workflow.label.toLowerCase()}`;
 }
 
 function setOptions(id, placeholder, entries, label, previous = '') {
@@ -54,10 +61,15 @@ async function loadBeds(previous = '') {
         const params = new URLSearchParams({ wardId, active: true, occupied: false });
         const beds = await request(`./api/v1/beds?${params}`, {}, controller);
         if (controller !== bedController) return;
+        // The patient's own active bed can be retained when only the department changes.
+        if (currentBed?.active && currentBed.wardId === wardId && !beds.some((bed) => bed.id === currentBed.id)) {
+            beds.unshift(currentBed);
+        }
         // Changing wards or refreshing availability must never retain a stale bed.
         const choices = [{ id: 'none', bedNumber: 'No bed assigned' }, ...beds];
         setOptions('bedId', 'Select a bed assignment', choices,
-            (bed) => bed.id === 'none' ? bed.bedNumber : `Bed ${bed.bedNumber}`, previous);
+            (bed) => bed.id === 'none' ? bed.bedNumber
+                : `Bed ${bed.bedNumber}${bed.id === currentBed?.id ? ' (current bed)' : ''}`, previous);
         bedsReady = true;
         element('bed-availability').textContent = beds.length
             ? 'Availability is checked again when you save. You may also choose No bed assigned.'
@@ -74,6 +86,21 @@ async function loadBeds(previous = '') {
     }
 }
 
+async function loadCurrentPlacement(location, controller) {
+    const [department, ward, bed] = await Promise.all([
+        request(`./api/v1/departments/${encodeURIComponent(location.departmentId)}`, {}, controller),
+        request(`./api/v1/wards/${encodeURIComponent(location.wardId)}`, {}, controller),
+        location.bedId ? request(`./api/v1/beds/${encodeURIComponent(location.bedId)}`, {}, controller) : null
+    ]);
+    if (controller !== lookupController) return;
+    currentBed = bed;
+    const inactive = (value) => value.active ? '' : ' (inactive)';
+    element('current-department').textContent = `${department.departmentName} (${department.departmentCode})${inactive(department)}`;
+    element('current-ward').textContent = `${ward.wardName} (${ward.wardCode})${inactive(ward)}`;
+    element('current-bed').textContent = bed ? `Bed ${bed.bedNumber}${inactive(bed)}` : 'No bed assigned';
+    element('current-started-at').textContent = formatEncounterTime(location.startedAt);
+}
+
 async function loadPlacementOptions() {
     if (saving) return;
     lookupController?.abort();
@@ -82,6 +109,8 @@ async function loadPlacementOptions() {
     const controller = new AbortController();
     lookupController = controller;
     const previous = Object.fromEntries(fields.slice(0, 3).map((field) => [field, element(field).value]));
+    const previousLocationId = currentLocation?.id;
+    currentBed = null;
     fields.forEach(clearFieldError);
     element('department-error').hidden = true;
     lookupsReady = false;
@@ -90,28 +119,43 @@ async function loadPlacementOptions() {
     showLookupState('Checking encounter and loading departments and wards…');
     updateControls();
     try {
-        const [current, departments, wards] = await Promise.all([
-            request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}`, {}, controller),
+        const [record, departments, wards] = await Promise.all([
+            request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}${workflow === workflows.transfer ? '/timeline' : ''}`, {}, controller),
             request('./api/v1/departments?active=true', {}, controller),
             request('./api/v1/wards?active=true', {}, controller)
         ]);
         if (controller !== lookupController) return;
+        const current = record.encounter || record;
         encounter = current;
         element('department-admitted-at').textContent = formatEncounterTime(current.admittedAt);
-        if (current.status !== 'ADMITTED') {
-            showLookupState(`This encounter is now ${encounterStatuses[current.status] || current.status}. Department entry requires an admitted encounter. Close this form to refresh the patient record.`);
+        if (current.status !== workflow.status) {
+            showLookupState(`This encounter is now ${encounterStatuses[current.status] || current.status}. ${workflow.label} requires an encounter with status ${encounterStatuses[workflow.status]}. Close this form to refresh the patient record.`);
             return;
+        }
+        let locationChanged = false;
+        if (workflow === workflows.transfer) {
+            const openLocations = record.locations.filter((location) => location.endedAt === null);
+            if (openLocations.length !== 1) {
+                showLookupState('The current placement could not be established. Refresh availability before transferring.', true);
+                return;
+            }
+            currentLocation = openLocations[0];
+            await loadCurrentPlacement(currentLocation, controller);
+            if (controller !== lookupController) return;
+            locationChanged = !!previousLocationId && previousLocationId !== currentLocation.id;
+            if (locationChanged) for (const field of fields.slice(0, 3)) previous[field] = '';
         }
         setOptions('departmentId', 'Select a department', departments,
             (department) => `${department.departmentName} (${department.departmentCode})`, previous.departmentId);
         setOptions('wardId', 'Select a ward', wards,
             (ward) => `${ward.wardName} (${ward.wardCode})`, previous.wardId);
         lookupsReady = departments.length > 0 && wards.length > 0;
-        showLookupState(lookupsReady ? '' : 'No active departments or wards are available. Department entry cannot be saved until both are available.');
+        showLookupState(!lookupsReady ? 'No active departments or wards are available. Saving requires both.'
+            : locationChanged ? 'The current placement has changed. Review it and choose a destination again before saving.' : '');
     } catch (error) {
         if (controller !== lookupController) return;
         showLookupState(error instanceof ApiError && error.status === 404
-            ? 'This encounter is no longer available. Close and reopen the patient record.'
+            ? 'The encounter or a location reference is no longer available. Close and reopen the patient record.'
             : 'Could not check the encounter or load locations. Use Refresh availability to try again.', true);
     } finally {
         if (controller === lookupController) {
@@ -122,8 +166,11 @@ async function loadPlacementOptions() {
     if (controller === lookupController && lookupsReady) await loadBeds(previous.bedId);
 }
 
-export function openDepartmentAdmission(selected, patient, afterClose) {
+function openPlacement(selected, patient, afterClose, selectedWorkflow) {
+    workflow = selectedWorkflow;
     encounter = selected;
+    currentLocation = null;
+    currentBed = null;
     onClose = afterClose;
     notice = undefined;
     element('department-form').reset();
@@ -135,13 +182,25 @@ export function openDepartmentAdmission(selected, patient, afterClose) {
     element('department-patient').textContent = patient;
     element('department-encounter-number').textContent = selected.encounterNumber;
     element('department-admitted-at').textContent = formatEncounterTime(selected.admittedAt);
+    element('placement-eyebrow').textContent = workflow.label;
+    element('department-title').textContent = workflow.title;
+    element('close-department').setAttribute('aria-label', `Close ${workflow.label.toLowerCase()}`);
+    element('placement-legend').textContent = `${workflow.label} details`;
+    element('placement-time-label').textContent = `${workflow.label} time`;
+    element('startedAt').name = workflow.timeField;
+    element('current-placement').hidden = workflow !== workflows.transfer;
+    for (const id of ['current-department', 'current-ward', 'current-bed', 'current-started-at']) element(id).textContent = 'Loading…';
+    element('destination-heading').hidden = workflow !== workflows.transfer;
     element('startedAt').value = localDateTimeValue(new Date(), true);
-    element('department-time-hint').textContent = `Local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Must be on or after hospital admission and not in the future.`;
+    element('department-time-hint').textContent = `Local time (${Intl.DateTimeFormat().resolvedOptions().timeZone}). Must be on or after ${workflow === workflows.transfer ? 'the current placement start' : 'hospital admission'} and not in the future.`;
     element('bed-availability').textContent = 'Choose a ward to see available beds.';
     element('retry-beds').hidden = true;
     dialog.showModal();
     loadPlacementOptions();
 }
+
+export const openDepartmentAdmission = (selected, patient, afterClose) => openPlacement(selected, patient, afterClose, workflows.admission);
+export const openEncounterTransfer = (selected, patient, afterClose) => openPlacement(selected, patient, afterClose, workflows.transfer);
 
 for (const id of ['close-department', 'cancel-department']) {
     element(id).addEventListener('click', () => { if (!saving) dialog.close(); });
@@ -172,11 +231,11 @@ element('department-form').addEventListener('submit', async (event) => {
     const normalizedTime = enteredTime.length === 16 ? `${enteredTime}:00` : enteredTime;
     let timeError;
     if (Number.isNaN(startedAt.getTime()) || localDateTimeValue(startedAt, true) !== normalizedTime) {
-        timeError = 'Enter a valid local department entry time.';
+        timeError = `Enter a valid local ${workflow.label.toLowerCase()} time.`;
     } else if (startedAt > new Date()) {
-        timeError = 'Department entry time cannot be in the future.';
-    } else if (startedAt < new Date(encounter.admittedAt)) {
-        timeError = 'Department entry time cannot be before hospital admission.';
+        timeError = `${workflow.label} time cannot be in the future.`;
+    } else if (startedAt < new Date(currentLocation?.startedAt || encounter.admittedAt)) {
+        timeError = `${workflow.label} time cannot be before ${currentLocation ? 'the current placement start' : 'hospital admission'}.`;
     }
     if (timeError) {
         showFieldError('startedAt', timeError);
@@ -186,8 +245,15 @@ element('department-form').addEventListener('submit', async (event) => {
     const body = {
         departmentId: element('departmentId').value, wardId: element('wardId').value,
         bedId: element('bedId').value === 'none' ? null : element('bedId').value,
-        startedAt: startedAt.toISOString()
+        [workflow.timeField]: startedAt.toISOString()
     };
+    if (currentLocation && body.departmentId === currentLocation.departmentId
+        && body.wardId === currentLocation.wardId && body.bedId === currentLocation.bedId) {
+        element('department-error').textContent = 'Choose a different department, ward, or bed. The destination is the same as the current placement.';
+        element('department-error').hidden = false;
+        element('department-error').focus();
+        return;
+    }
     const department = element('departmentId').selectedOptions[0].textContent;
     const ward = element('wardId').selectedOptions[0].textContent;
     const bed = element('bedId').selectedOptions[0].textContent;
@@ -196,24 +262,32 @@ element('department-form').addEventListener('submit', async (event) => {
     let saved;
     let firstErrorField;
     try {
-        saved = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/department-admissions`, {
+        if (currentLocation) {
+            const latest = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/timeline`);
+            const openLocations = latest.locations.filter((location) => location.endedAt === null);
+            if (latest.encounter.status !== workflow.status || openLocations.length !== 1 || openLocations[0].id !== currentLocation.id) {
+                throw new ApiError(409, { title: 'Placement changed', detail: 'The current placement changed. Refresh availability and review it before saving.' });
+            }
+        }
+        saved = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/${workflow.path}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
         });
     } catch (error) {
         let message = error instanceof ApiError ? error.message
-            : 'Department entry could not be confirmed. Refresh availability to check the encounter before trying again.';
+            : `${workflow.label} could not be confirmed. Refresh availability to check the encounter before trying again.`;
         if (!(error instanceof ApiError) || error.status >= 500) {
-            message = 'Department entry could not be confirmed. Refresh availability to check the encounter before trying again.';
+            message = `${workflow.label} could not be confirmed. Refresh availability to check the encounter before trying again.`;
         } else if (error.status === 409) {
             message = error.title === 'Encounter history conflict'
-                ? 'The bed has occupancy history after the requested entry time. Check the time or choose another bed, then refresh availability.'
-                : 'The encounter has changed or the bed is no longer available. Refresh availability before trying again.';
+                ? 'The bed has occupancy history after the requested time. Check the time or choose another bed, then refresh availability.'
+                : 'The encounter or placement has changed, or the bed is no longer available. Refresh availability before trying again.';
         } else if (error.status === 404 || error.status === 400 && !Object.keys(error.fields).length) {
-            message = 'Check the entry time and refresh availability. The encounter or selected location may have changed.';
+            message = 'Check the time and refresh availability. The encounter or selected location may have changed.';
         }
         for (const field of fields) {
-            if (error.fields?.[field]) {
-                showFieldError(field, error.fields[field]);
+            const fieldError = error.fields?.[field === 'startedAt' ? workflow.timeField : field];
+            if (fieldError) {
+                showFieldError(field, fieldError);
                 firstErrorField ||= field;
                 message = 'Check the highlighted fields and try again.';
             }
@@ -227,7 +301,7 @@ element('department-form').addEventListener('submit', async (event) => {
         updateControls();
     }
     if (saved) {
-        notice = `Department entry saved for ${encounter.encounterNumber}: ${department} / ${ward} / ${bed}.`;
+        notice = `${workflow.label} saved for ${encounter.encounterNumber}: ${department} / ${ward} / ${bed}.`;
         dialog.close();
     } else {
         element(firstErrorField || 'department-error').focus();

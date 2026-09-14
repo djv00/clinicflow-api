@@ -80,9 +80,19 @@ choose **No bed assigned**. Changing wards clears the bed selection. The entry
 time must be on or after hospital admission and no later than now. Saving updates
 the encounter to **In department** and displays the selected placement.
 
+For an encounter already **In department**, select **Transfer**. Review the current
+department, ward, bed, and start time before choosing the destination. Change at
+least one of department, ward, or bed. An active current bed can be retained when
+only the department changes; **No bed assigned** releases the previous bed.
+Transfer time must be on or after the current placement's start and no later than
+now. The previous placement ends and the new placement starts at the same instant.
+
 Use **Refresh availability** after a conflict or an unconfirmed save. This checks
 the encounter again and reloads the location choices; a bed that became occupied
 must be reselected. Availability is advisory until the backend saves the entry.
+Transfer also checks the current placement before submitting. If a refresh finds
+a different placement, review it and select the destination again. A failed or
+lost response never triggers an automatic retry of the write.
 To try this locally with location choices, start with the `demo` profile described
 below. The default empty H2 database has no departments, wards, or beds.
 
@@ -90,8 +100,8 @@ The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packag
 with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
 After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
-It stores no patient records in browser storage. Transfer,
-discharge, and correction actions remain available through the API and demo
+It stores no patient records in browser storage. Discharge and correction
+actions remain available through the API and demo
 script; their workbench controls are the next slices.
 
 For a browser check, register a fictional patient, search by name, open the record,

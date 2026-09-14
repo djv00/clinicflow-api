@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-13. This describes implemented behaviour and the next delivery
+Updated: 2026-09-14. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -14,15 +14,15 @@ history. Business rules are implemented in one Spring Boot backend.
 | Core patient flow | Implemented | Registration, admission, department entry, transfer, discharge, admission cancellation, discharge cancellation, and timeline APIs. |
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
-| Inpatient workbench | In progress | Admission and department entry are connected to the page, with active location choices and optional bed assignment. Transfer, discharge, and correction actions still require API calls or the demo script. |
+| Inpatient workbench | In progress | Admission, department entry, and transfer are connected to the page, with current placement details, active destination choices, and optional bed assignment. Discharge and correction actions still require API calls or the demo script. |
 | Authentication and roles | Planned | No login or server-identified operator yet. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Complete the inpatient workbench.** Admission and department entry from the
+1. **Complete the inpatient workbench.** Admission, department entry, and transfer from the
    patient record are implemented, reusing the existing endpoints and conflict rules.
-   Next add transfer and discharge actions, an inpatient list, and readable
+   Next add discharge actions, an inpatient list, and readable
    encounter history. Add correction
    actions with the same rules already enforced by the backend.
 2. **Add authenticated operations.** Define the small set of operator roles,
@@ -34,8 +34,8 @@ history. Business rules are implemented in one Spring Boot backend.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The next slice is transfer from an encounter that is already in a department,
-showing its current placement and selecting the destination.
+The next slice is discharge from the patient record, showing the current placement
+and validating the discharge time before closing the hospital stay.
 
 ## Later extensions
 
@@ -60,3 +60,6 @@ or certificate modules are outside this delivery sequence.
 - Department entry checks cover bed and no-bed saves, ward changes, stale bed
   results, occupied-bed conflicts, entry time validation, unavailable dictionaries,
   and rechecking an encounter after an unconfirmed save.
+- Transfer checks cover retaining the current bed, changing wards, releasing a bed,
+  unchanged destinations, transfer time validation, occupied-bed conflicts, changed
+  source placements, and recovery after a saved transfer's response is lost.

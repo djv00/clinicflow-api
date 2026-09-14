@@ -211,7 +211,7 @@
 </dialog>
 <dialog id="department-dialog" aria-labelledby="department-title">
     <div class="dialog-heading">
-        <div><p class="eyebrow">Department entry</p><h2 id="department-title">Enter department</h2></div>
+        <div><p id="placement-eyebrow" class="eyebrow">Department entry</p><h2 id="department-title">Enter department</h2></div>
         <button id="close-department" class="close-button" type="button" aria-label="Close department entry">×</button>
     </div>
     <dl class="placement-summary">
@@ -219,11 +219,21 @@
         <div><dt>Encounter number</dt><dd id="department-encounter-number" class="record-number"></dd></div>
         <div><dt>Hospital admission</dt><dd id="department-admitted-at"></dd></div>
     </dl>
+    <section id="current-placement" class="current-placement" aria-labelledby="current-placement-title" hidden>
+        <h3 id="current-placement-title">Current placement</h3>
+        <dl class="placement-summary">
+            <div><dt>Department</dt><dd id="current-department"></dd></div>
+            <div><dt>Ward</dt><dd id="current-ward"></dd></div>
+            <div><dt>Bed</dt><dd id="current-bed"></dd></div>
+            <div><dt>Since</dt><dd id="current-started-at"></dd></div>
+        </dl>
+    </section>
     <p id="placement-state" role="status"></p>
     <form id="department-form">
         <p id="department-error" class="message error" role="alert" tabindex="-1" hidden></p>
         <fieldset id="department-fields" disabled>
-            <legend class="sr-only">Department entry details</legend>
+            <legend id="placement-legend" class="sr-only">Department entry details</legend>
+            <h3 id="destination-heading" hidden>Destination</h3>
             <div class="name-fields">
                 <div class="field">
                     <label for="departmentId">Department</label>
@@ -249,7 +259,7 @@
                 <p id="bedId-error" class="field-error" hidden></p>
             </div>
             <div class="field">
-                <label for="startedAt">Department entry time</label>
+                <label id="placement-time-label" for="startedAt">Department entry time</label>
                 <input id="startedAt" name="startedAt" type="datetime-local" step="1" required
                        aria-describedby="department-time-hint startedAt-error">
                 <p id="department-time-hint" class="field-hint"></p>
