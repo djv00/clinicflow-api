@@ -85,6 +85,17 @@ active encounters, and conflicting admission times are shown in the form. If the
 save result cannot be confirmed, use **Refresh encounters** to check the record
 before retrying; the page does not retry a write automatically.
 
+For an admission recorded in error, select **Cancel admission** in the history
+table. This is available only for an **Admitted** encounter with no department
+history, including closed placement periods. Review the patient and encounter,
+enter the cancellation time and recorded operator, then **Confirm cancellation**.
+The time must be on or after admission and no later than now. The patient and
+encounter are retained; the stay becomes **Admission cancelled** and leaves the
+inpatient list when the patient record closes. **Back** closes without saving.
+If a save cannot be confirmed, **Refresh encounter** checks the recorded state
+before another attempt. The operator is currently entered by the user; it is not
+an authenticated identity. Discharge cancellation will be connected separately.
+
 For an admitted encounter, select **Enter department** in the history table.
 Choose an active department and ward, then select an available bed or explicitly
 choose **No bed assigned**. Changing wards clears the bed selection. The entry
@@ -130,9 +141,8 @@ The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packag
 with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
 After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
-It stores no patient records in browser storage. Correction
-actions remain available through the API and demo
-script; their workbench controls are the next slices.
+It stores no patient records in browser storage. Discharge cancellation remains
+available through the API and demo script; its workbench control is the next slice.
 
 For a browser check, register a fictional patient, search by name, open the record,
 and try the same medical record number again to see the duplicate warning. Search

@@ -2,6 +2,7 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
     encounterStatuses, formatEncounterTime } from './workbench.js';
 import { openDepartmentAdmission, openEncounterTransfer } from './encounter-placement.js';
 import { openEncounterDischarge } from './encounter-discharge.js';
+import { openAdmissionCancellation } from './encounter-admission-cancellation.js';
 import { openEncounterTimeline } from './encounter-timeline.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
@@ -426,6 +427,14 @@ async function loadPatientEncounters() {
                     discharge.setAttribute('aria-label', `Discharge for ${encounter.encounterNumber}`);
                     discharge.addEventListener('click', () => openEncounterAction(encounter, openEncounterDischarge));
                     actions.append(discharge);
+                } else {
+                    const cancel = document.createElement('button');
+                    cancel.type = 'button';
+                    cancel.className = 'row-action';
+                    cancel.textContent = 'Cancel admission';
+                    cancel.setAttribute('aria-label', `Cancel admission for ${encounter.encounterNumber}`);
+                    cancel.addEventListener('click', () => openEncounterAction(encounter, openAdmissionCancellation));
+                    actions.append(cancel);
                 }
             }
             row.append(number, status, admitted, ended, actions);
