@@ -14,28 +14,24 @@ history. Business rules are implemented in one Spring Boot backend.
 | Core patient flow | Implemented | Registration, admission, department entry, transfer, discharge, admission cancellation, discharge cancellation, and timeline APIs. |
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
-| Inpatient workbench | In progress | Admission, department entry, transfer, discharge, admission cancellation, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. Discharge cancellation still requires API calls or the demo script. |
+| Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
 | Authentication and roles | Planned | No login or server-identified operator yet. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Complete the inpatient workbench.** Admission, department entry, transfer, and discharge from the
-   patient record are implemented, reusing the existing endpoints and conflict rules.
-   Encounter timeline, the inpatient list, and admission cancellation are also
-   available. Next add discharge cancellation with the rules already enforced by the backend.
-2. **Add authenticated operations.** Define the small set of operator roles,
+1. **Add authenticated operations.** Define the small set of operator roles,
    protect both pages and APIs, and record the operator from the authenticated
    identity. Verify permission failures as well as successful workflows.
-3. **Package the demonstration.** Make persistent demo setup repeatable, document
+2. **Package the demonstration.** Make persistent demo setup repeatable, document
    configuration and deployment, and prepare an English walkthrough of the
    workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The next slice is discharge cancellation from the patient record. Restoring care
-can conflict with later encounters and bed history; the form must surface these
-conflicts and recheck an unconfirmed save before allowing another attempt.
+The core workbench flow is connected. The next stage is authentication and role
+checks, starting with login and read access before migrating recorded operators
+to authenticated identities and protecting workflow writes.
 
 ## Later extensions
 
@@ -77,3 +73,9 @@ or certificate modules are outside this delivery sequence.
   saving, failed reads and refresh, changing encounter state, blocked duplicate submissions,
   and recovery after a committed cancellation's response is lost. The cancelled encounter
   remains in the patient record and timeline and leaves the inpatient list.
+- Discharge cancellation page checks cover original placement previews, bed and no-bed
+  restoration, time and operator validation, leaving without saving, occupied beds,
+  intervening bed use, another active stay, failed reads, stale forms, duplicate-submit
+  prevention, and recovery after a committed correction's response is lost. Timeline and
+  inpatient list checks confirm the restored care period. H2 and PostgreSQL tests verify
+  that a stale discharge ID is rejected even when a new discharge has the same timestamp.

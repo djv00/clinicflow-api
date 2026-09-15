@@ -6,6 +6,7 @@ import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
+import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
@@ -223,6 +224,23 @@ class PostgresWorkflowIT {
         });
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isTrue());
+    }
+
+    @Test
+    void refusesAStaleDischargeIdAfterASecondDischarge() {
+        UUID encounterId = admitPatient();
+        enterDepartment(encounterId, createLocations());
+        OffsetDateTime time = ENTERED_AT.plusDays(1);
+        encounterService.dischargeEncounter(encounterId, time);
+        UUID originalId = encounterService.getTimeline(encounterId).discharges().getFirst().id();
+        encounterService.cancelDischarge(encounterId, time.plusHours(1), "first-clerk", originalId);
+        encounterService.dischargeEncounter(encounterId, time);
+        var before = encounterService.getTimeline(encounterId);
+
+        assertThatThrownBy(() -> encounterService.cancelDischarge(
+                encounterId, time.plusHours(2), "stale-clerk", originalId))
+                .isInstanceOf(DischargeRecordConflictException.class);
+        assertThat(encounterService.getTimeline(encounterId)).isEqualTo(before);
     }
 
     @Test

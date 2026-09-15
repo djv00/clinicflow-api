@@ -422,6 +422,14 @@ Content-Type: application/json
 
 Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
 
+Clients reviewing a particular discharge can also send the optional UUID
+`expectedDischargeId`, obtained from the timeline or discharge history. It must
+match the current uncancelled discharge record under the encounter write lock;
+a mismatch returns `409` without changing care or audit. This distinguishes
+repeated discharge/cancellation cycles even when discharge timestamps are equal.
+The workbench always sends it. Omitting it preserves the existing operation on
+the current discharge for API callers and demo scripts.
+
 - The encounter must be `DISCHARGED`, have a matching uncancelled discharge
   record, and have no current location. The patient cannot have another active
   encounter (`ADMITTED` or `IN_DEPARTMENT`).

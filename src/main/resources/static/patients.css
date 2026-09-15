@@ -135,7 +135,7 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 .current-placement h3, #destination-heading { font-size: 16px; margin: 0 0 16px; }
 .current-placement .placement-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0; }
 .current-placement .placement-summary div { margin: 0; }
-#department-dialog, #discharge-dialog, #admission-cancellation-dialog { width: min(660px, calc(100% - 32px)); }
+#department-dialog, #discharge-dialog, #admission-cancellation-dialog, #discharge-cancellation-dialog { width: min(660px, calc(100% - 32px)); }
 #department-fields select { display: block; width: 100%; min-width: 0; min-height: 42px; margin-top: 7px; padding: 9px 12px; }
 .placement-retry { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
 .information { color: #344b58; background: #f3f7f9; border: 1px solid var(--line); }
@@ -190,6 +190,7 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
     .workbench-nav { gap: 12px; }
     .inpatient-filters { grid-template-columns: 1fr; padding: 20px; }
     .current-placement .placement-summary { grid-template-columns: 1fr; }
-    #department-form .dialog-actions, #discharge-form .dialog-actions, #admission-cancellation-form .dialog-actions { flex-wrap: wrap; }
+    #department-form .dialog-actions, #discharge-form .dialog-actions,
+    #admission-cancellation-form .dialog-actions, #discharge-cancellation-form .dialog-actions { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }

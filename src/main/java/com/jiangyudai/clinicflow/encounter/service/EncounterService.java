@@ -358,6 +358,19 @@ public class EncounterService {
             OffsetDateTime cancelledAt,
             String cancelledBy
     ) {
+        return cancelDischarge(encounterId, cancelledAt, cancelledBy, null);
+    }
+
+    /**
+     * When supplied, the expected record prevents a stale form from cancelling a later discharge.
+     */
+    @Transactional
+    public Encounter cancelDischarge(
+            UUID encounterId,
+            OffsetDateTime cancelledAt,
+            String cancelledBy,
+            UUID expectedDischargeId
+    ) {
         UUID patientId = encounterRepository.findPatientIdById(encounterId)
                 .orElseThrow(() -> new EncounterNotFoundException(encounterId));
 
@@ -378,6 +391,9 @@ public class EncounterService {
         EncounterDischarge discharge = encounterDischargeRepository
                 .findByEncounter_IdAndCancelledAtIsNull(encounterId)
                 .orElseThrow(() -> new DischargeRecordConflictException("Current discharge record is missing"));
+        if (expectedDischargeId != null && !expectedDischargeId.equals(discharge.getId())) {
+            throw new DischargeRecordConflictException("The discharge record has changed. Reload it before cancelling.");
+        }
         EncounterLocation previous = discharge.getLocation();
         if (encounter.getDischargedAt() == null
                 || !discharge.getDischargedAt().isEqual(encounter.getDischargedAt())

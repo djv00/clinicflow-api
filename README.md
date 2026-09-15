@@ -94,7 +94,7 @@ encounter are retained; the stay becomes **Admission cancelled** and leaves the
 inpatient list when the patient record closes. **Back** closes without saving.
 If a save cannot be confirmed, **Refresh encounter** checks the recorded state
 before another attempt. The operator is currently entered by the user; it is not
-an authenticated identity. Discharge cancellation will be connected separately.
+an authenticated identity.
 
 For an admitted encounter, select **Enter department** in the history table.
 Choose an active department and ward, then select an available bed or explicitly
@@ -116,6 +116,18 @@ releases any assigned bed. The patient record then shows **Discharged** and its
 discharge time; transfer and discharge actions are no longer offered for that stay.
 If the result cannot be confirmed, select **Refresh encounter** before retrying.
 An encounter already discharged is shown with its recorded discharge time.
+
+For a mistaken discharge, select **Cancel discharge** in the patient record.
+Review the recorded discharge and the department, ward, and optional bed to restore.
+Enter the correction time and recorded operator, then **Confirm cancellation**.
+Care continues from the original discharge time; the correction time is retained
+separately. The original references must be active, and later hospital stays or
+bed use can prevent restoration. The form shows those conflicts and does not
+offer a replacement bed. A genuine readmission requires a new encounter.
+The page sends the reviewed discharge ID so a later discharge cannot be cancelled
+by a stale form. After an unconfirmed save, use **Refresh encounter** to check
+whether the correction was recorded. Closing the patient record refreshes the
+inpatient list. The operator remains user-entered until authentication is added.
 
 Select **Timeline** for any encounter, including discharged and cancelled stays.
 The view shows admission and cancellation details, department/ward/bed periods,
@@ -141,8 +153,8 @@ The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packag
 with the Spring Boot application. The page calls the existing REST/JSON
 endpoints on the same origin; it needs no separate frontend server or Node build.
 After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
-It stores no patient records in browser storage. Discharge cancellation remains
-available through the API and demo script; its workbench control is the next slice.
+It stores no patient records in browser storage. The core admission, placement,
+discharge, correction, and timeline workflows are available from the workbench.
 
 For a browser check, register a fictional patient, search by name, open the record,
 and try the same medical record number again to see the duplicate warning. Search

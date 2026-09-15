@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record CancelDischargeRequest(
         @NotNull(message = "Cancellation time is required")
@@ -14,6 +15,8 @@ public record CancelDischargeRequest(
 
         @NotBlank(message = "Cancellation operator is required")
         @Size(max = 100, message = "Cancellation operator must not exceed 100 characters")
-        String cancelledBy
+        String cancelledBy,
+
+        UUID expectedDischargeId
 ) {
 }

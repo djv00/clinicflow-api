@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -77,7 +78,7 @@ class DischargeCancellationControllerTest {
     @ParameterizedTest
     @MethodSource("businessErrors")
     void mapsBusinessErrors(RuntimeException exception, int code, String title) throws Exception {
-        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("demo-clerk")))
+        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("demo-clerk"), isNull()))
                 .thenThrow(exception);
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
@@ -85,6 +86,15 @@ class DischargeCancellationControllerTest {
                 .andExpect(status().is(code))
                 .andExpect(jsonPath("$.title").value(title))
                 .andExpect(jsonPath("$.detail").value(exception.getMessage()));
+    }
+
+    @Test
+    void rejectsMalformedExpectedDischargeId() throws Exception {
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+                        .contentType("application/json")
+                        .content(REQUEST.replace("}", ", \"expectedDischargeId\": \"not-a-uuid\"}")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(encounterService);
     }
 
     private static Stream<Arguments> invalidRequests() {

@@ -3,6 +3,7 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
 import { openDepartmentAdmission, openEncounterTransfer } from './encounter-placement.js';
 import { openEncounterDischarge } from './encounter-discharge.js';
 import { openAdmissionCancellation } from './encounter-admission-cancellation.js';
+import { openDischargeCancellation } from './encounter-discharge-cancellation.js';
 import { openEncounterTimeline } from './encounter-timeline.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
@@ -408,6 +409,15 @@ async function loadPatientEncounters() {
             timeline.setAttribute('aria-label', `Timeline for ${encounter.encounterNumber}`);
             timeline.addEventListener('click', () => openEncounterAction(encounter, openEncounterTimeline));
             actions.append(timeline);
+            if (encounter.status === 'DISCHARGED') {
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'row-action';
+                cancel.textContent = 'Cancel discharge';
+                cancel.setAttribute('aria-label', `Cancel discharge for ${encounter.encounterNumber}`);
+                cancel.addEventListener('click', () => openEncounterAction(encounter, openDischargeCancellation));
+                actions.append(cancel);
+            }
             if (encounter.status === 'ADMITTED' || encounter.status === 'IN_DEPARTMENT') {
                 const transfer = encounter.status === 'IN_DEPARTMENT';
                 const enter = document.createElement('button');
