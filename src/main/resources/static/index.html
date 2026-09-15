@@ -8,6 +8,7 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="./patients.css">
     <script type="module" src="./patients.js"></script>
+    <script type="module" src="./inpatients.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -16,8 +17,13 @@
         <span class="brand-mark" aria-hidden="true"></span>ClinicFlow
     </a>
     <span class="header-section">Patient administration</span>
+    <nav class="workbench-nav" aria-label="Workbench">
+        <a id="patients-link" href="#patients" aria-current="page">Patients</a>
+        <a id="inpatients-link" href="#inpatients">Inpatients</a>
+    </nav>
 </header>
 <main id="main">
+    <section id="patients-view" aria-label="Patient administration">
     <div class="page-heading">
         <div>
             <p class="eyebrow">Patient directory</p>
@@ -85,6 +91,77 @@
         </div>
     </section>
     <p class="directory-note">Use the medical record number and date of birth to distinguish patients with the same name.</p>
+    </section>
+    <section id="inpatients-view" aria-labelledby="inpatients-title" hidden>
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">Inpatient worklist</p>
+                <h1 id="inpatients-title">Inpatients</h1>
+                <p class="intro">Current hospital stays, including patients awaiting department entry.</p>
+            </div>
+            <button id="refresh-inpatients" class="button secondary" type="button">Refresh list</button>
+        </div>
+        <section class="directory" aria-label="Inpatient list">
+            <form id="inpatient-search-form" class="inpatient-filters" role="search" aria-label="Filter inpatients">
+                <div class="inpatient-search-field">
+                    <label for="inpatient-keyword">Search inpatients</label>
+                    <input id="inpatient-keyword" type="search" maxlength="100" autocomplete="off"
+                           placeholder="Name, medical record number, or encounter number">
+                </div>
+                <div>
+                    <label for="inpatient-status">Status</label>
+                    <select id="inpatient-status">
+                        <option value="">All current stays</option>
+                        <option value="ADMITTED">Awaiting department entry</option>
+                        <option value="IN_DEPARTMENT">In department</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="inpatient-department">Current department</label>
+                    <select id="inpatient-department" disabled><option value="">All departments</option></select>
+                </div>
+                <div>
+                    <label for="inpatient-ward">Current ward</label>
+                    <select id="inpatient-ward" disabled><option value="">All wards</option></select>
+                </div>
+                <div class="inpatient-filter-actions">
+                    <button class="button primary" type="submit">Apply filters</button>
+                    <button id="clear-inpatient-filters" class="button secondary" type="button">Clear filters</button>
+                </div>
+            </form>
+            <div id="inpatient-filter-error" class="message information list-error" role="status" hidden>
+                <p>Some location filters could not be loaded. You can still search by name, number, or status.</p>
+                <button id="retry-inpatient-filters" class="button secondary" type="button">Retry location filters</button>
+            </div>
+            <div class="list-heading">
+                <p id="inpatient-results-summary" role="status">Loading inpatients…</p>
+                <span class="muted">Oldest admission first</span>
+            </div>
+            <div id="inpatient-list-error" class="message error list-error" role="alert" hidden>
+                <p id="inpatient-list-error-text"></p>
+                <button id="retry-inpatients" class="button secondary" type="button">Try again</button>
+            </div>
+            <div id="inpatient-table-region" class="table-region" role="region" aria-label="Inpatient table" tabindex="0" aria-busy="true">
+                <table id="inpatient-table">
+                    <caption class="sr-only">Current hospital stays matching the applied filters</caption>
+                    <thead><tr><th scope="col">Patient</th><th scope="col">Encounter number</th><th scope="col">Status</th><th scope="col">Admitted</th><th scope="col">Current location</th><th scope="col">Actions</th></tr></thead>
+                    <tbody id="inpatient-rows"></tbody>
+                </table>
+                <div id="inpatient-list-state" class="list-state" role="status">Loading inpatients…</div>
+            </div>
+            <div class="pagination">
+                <label for="inpatient-page-size">Inpatients per page
+                    <select id="inpatient-page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option></select>
+                </label>
+                <nav class="page-controls" aria-label="Inpatient pages">
+                    <span id="inpatient-page-summary">Page —</span>
+                    <button id="previous-inpatients" class="button secondary" type="button" disabled>Previous</button>
+                    <button id="next-inpatients" class="button secondary" type="button" disabled>Next</button>
+                </nav>
+            </div>
+        </section>
+        <p class="directory-note">Location filters use current assignments. Discharged and cancelled stays remain available in patient records. Times are shown in your local time.</p>
+    </section>
 </main>
 
 <dialog id="registration-dialog" aria-labelledby="registration-title">

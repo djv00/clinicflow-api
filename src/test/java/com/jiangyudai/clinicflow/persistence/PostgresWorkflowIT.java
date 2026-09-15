@@ -1,6 +1,8 @@
 package com.jiangyudai.clinicflow.persistence;
 
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
+import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
@@ -58,6 +60,8 @@ class PostgresWorkflowIT {
     @Autowired
     private EncounterService encounterService;
     @Autowired
+    private InpatientQueryService inpatientQueryService;
+    @Autowired
     private BedRepository bedRepository;
     @Autowired
     private Flyway flyway;
@@ -101,6 +105,32 @@ class PostgresWorkflowIT {
     void removeTestSchema() {
         // SCHEMA is generated here, never taken from the supplied database URL.
         jdbc.execute("DROP SCHEMA \"" + SCHEMA + "\" CASCADE");
+    }
+
+    @Test
+    void queriesCurrentInpatientsWithOptionalFiltersAndPagination() {
+        String prefix = "LIST-" + UUID.randomUUID().toString().substring(0, 12);
+        Patient waitingPatient = registerPatient();
+        UUID waiting = encounterService.admitPatient(waitingPatient.getId(), prefix + "-1", ADMITTED_AT).getId();
+        UUID placed = encounterService.admitPatient(registerPatient().getId(), prefix + "-2", ADMITTED_AT).getId();
+        Locations locations = createLocations();
+        enterDepartment(placed, locations);
+
+        var first = inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix, null, null, null), 0, 1);
+        assertThat(first.totalElements()).isEqualTo(2);
+        assertThat(first.totalPages()).isEqualTo(2);
+        assertThat(first.items().getFirst().id()).isEqualTo(waiting);
+        assertThat(first.items().getFirst().departmentId()).isNull();
+        var filtered = inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                EncounterStatus.IN_DEPARTMENT, locations.departmentId(), locations.wardId()), 0, 1);
+        assertThat(filtered.totalElements()).isEqualTo(1);
+        assertThat(filtered.items().getFirst().bedId()).isEqualTo(locations.firstBedId());
+        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1));
+        assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
+        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
+        assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                null, null, null), 1, 1).items().getFirst().id()).isEqualTo(placed);
     }
 
     @Test

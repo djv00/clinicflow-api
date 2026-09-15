@@ -66,6 +66,17 @@ A successful registration filters the directory by the new medical record number
 Use **Clear** to return to all patients. The default and demo H2 databases start
 without patients and are cleared when the application stops.
 
+Select **Inpatients** in the header to view current hospital stays. Search by
+patient name, medical record number, or encounter number; combine status,
+current department, and current ward filters with **Apply filters**. The list
+includes patients awaiting department entry and patients without a bed. It excludes
+discharged and cancelled stays and never matches a previous placement.
+Location choices include inactive references so existing care remains searchable.
+Use **View record** to open the same patient details and encounter actions used in
+the patient directory. Closing the record refreshes the worklist; **Refresh list**
+also reloads the applied filters. A removed final row returns to the last available
+page. The list is ordered by admission time, then encounter number, oldest first.
+
 To admit a registered patient, open **View record**, select **Admit patient**, and
 enter a unique encounter number and an admission time. Time defaults to the current
 minute in the browser's local time zone and is sent as a UTC instant. A successful

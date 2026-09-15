@@ -23,6 +23,7 @@ record numbers and current UTC timestamps.
 | GET | `/patients` | 200 | Patient page |
 | GET | `/patients/{id}` | 200 | Patient |
 | GET | `/patients/{patientId}/encounters` | 200 | Encounter page |
+| GET | `/inpatients` | 200 | Current inpatient page |
 | POST | `/encounters` | 201 | Encounter |
 | GET | `/encounters/{id}` | 200 | Encounter |
 | POST | `/encounters/{id}/department-admissions` | 201 | Location |
@@ -136,6 +137,37 @@ An unknown patient returns `404`. An existing patient with no encounters returns
 `200` with empty `items` and zero totals. A page beyond the last returns empty
 `items` while preserving the actual totals. This endpoint lists historical and
 current encounters; it is not a hospital-wide census of current inpatients.
+
+## Current inpatients
+
+```http
+GET /api/v1/inpatients?keyword=demo&status=IN_DEPARTMENT&page=0&size=20
+```
+
+Only `ADMITTED` and `IN_DEPARTMENT` encounters are included. Omit `status` for
+both, or supply one of those values. Other statuses return 400. Optional
+`departmentId` and `wardId` UUID filters match the **open** placement together;
+historical placements do not match. An admitted patient without a placement is
+included when no location filter is supplied. Unknown location IDs return an
+empty page. Deactivated references do not hide existing inpatient care.
+
+`keyword` is a case-insensitive literal fragment of the patient name (first name
+followed by last name), medical record number, or encounter number. Leading and
+trailing whitespace is ignored; the maximum length is 100. `%`, `_`, and `!` are
+literal characters. Pagination defaults to `page=0`, `size=20`; size must be
+1–100 and the page offset must fit JPA's integer range.
+
+The response contains `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Each item contains `id`, `encounterNumber`, `status`, `admittedAt`, `patientId`,
+`firstName`, `lastName`, `medicalRecordNumber`, `dateOfBirth`, and current location
+fields: `departmentId`, `departmentName`, `departmentCode`, `wardId`, `wardName`,
+`wardCode`, `bedId`, and `bedNumber`. Placement fields are null before department
+entry; bed fields are null when no bed is assigned. Items are ordered by
+`admittedAt`, then unique `encounterNumber`, ascending.
+
+This worklist is a read-only overview. Workflow endpoints recheck the encounter
+and its placement when an operation is submitted; a displayed row does not reserve
+a bed or guarantee that another operator has not changed the stay.
 
 ## Hospital admission
 

@@ -28,7 +28,7 @@ function setListState(title, detail = '') {
     element('list-state').hidden = false;
 }
 
-async function loadPatients() {
+export async function loadPatients() {
     const version = ++listVersion;
     listController?.abort();
     listController = new AbortController();
@@ -215,7 +215,7 @@ async function loadPatientDetails() {
     }
 }
 
-function openPatient(id) {
+export function openPatient(id) {
     selectedPatientId = id;
     encountersPage = 0;
     hideAdmissionForm();
