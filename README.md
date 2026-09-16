@@ -14,9 +14,11 @@ PostgreSQL, and Flyway. H2 supports the local demo and regular tests; JUnit,
 Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 
 - [Run the demo](#demo-workflow)
+- [Open the patient workbench](#patient-workbench)
 - [Use PostgreSQL](#postgresql)
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
+- [Current progress and next steps](docs/roadmap.md)
 
 ## Workflow
 
@@ -50,6 +52,115 @@ The API starts on port 8080. By default, it uses an in-memory H2 database that i
 cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
+
+### Patient workbench
+
+After starting the application, open [http://localhost:8080/](http://localhost:8080/).
+If you set another server port, use that port in the browser. Restart the
+application after pulling or building changes to the page.
+
+The patient directory supports name or medical record number search, pagination,
+registration, and viewing patient details with paginated hospital encounter
+history. The history includes cancelled admissions and current encounter states.
+A successful registration filters the directory by the new medical record number.
+Use **Clear** to return to all patients. The default and demo H2 databases start
+without patients and are cleared when the application stops.
+
+Select **Inpatients** in the header to view current hospital stays. Search by
+patient name, medical record number, or encounter number; combine status,
+current department, and current ward filters with **Apply filters**. The list
+includes patients awaiting department entry and patients without a bed. It excludes
+discharged and cancelled stays and never matches a previous placement.
+Location choices include inactive references so existing care remains searchable.
+Use **View record** to open the same patient details and encounter actions used in
+the patient directory. Closing the record refreshes the worklist; **Refresh list**
+also reloads the applied filters. A removed final row returns to the last available
+page. The list is ordered by admission time, then encounter number, oldest first.
+
+To admit a registered patient, open **View record**, select **Admit patient**, and
+enter a unique encounter number and an admission time. Time defaults to the current
+minute in the browser's local time zone and is sent as a UTC instant. A successful
+admission refreshes the encounter history on its first page. Duplicate numbers,
+active encounters, and conflicting admission times are shown in the form. If the
+save result cannot be confirmed, use **Refresh encounters** to check the record
+before retrying; the page does not retry a write automatically.
+
+For an admission recorded in error, select **Cancel admission** in the history
+table. This is available only for an **Admitted** encounter with no department
+history, including closed placement periods. Review the patient and encounter,
+enter the cancellation time and recorded operator, then **Confirm cancellation**.
+The time must be on or after admission and no later than now. The patient and
+encounter are retained; the stay becomes **Admission cancelled** and leaves the
+inpatient list when the patient record closes. **Back** closes without saving.
+If a save cannot be confirmed, **Refresh encounter** checks the recorded state
+before another attempt. The operator is currently entered by the user; it is not
+an authenticated identity.
+
+For an admitted encounter, select **Enter department** in the history table.
+Choose an active department and ward, then select an available bed or explicitly
+choose **No bed assigned**. Changing wards clears the bed selection. The entry
+time must be on or after hospital admission and no later than now. Saving updates
+the encounter to **In department** and displays the selected placement.
+
+For an encounter already **In department**, select **Transfer**. Review the current
+department, ward, bed, and start time before choosing the destination. Change at
+least one of department, ward, or bed. An active current bed can be retained when
+only the department changes; **No bed assigned** releases the previous bed.
+Transfer time must be on or after the current placement's start and no later than
+now. The previous placement ends and the new placement starts at the same instant.
+
+Select **Discharge** for an encounter that is **In department**. Review the current
+placement and enter a discharge time on or after that placement's start and no
+later than now. Saving closes the hospital stay, ends the current placement, and
+releases any assigned bed. The patient record then shows **Discharged** and its
+discharge time; transfer and discharge actions are no longer offered for that stay.
+If the result cannot be confirmed, select **Refresh encounter** before retrying.
+An encounter already discharged is shown with its recorded discharge time.
+
+For a mistaken discharge, select **Cancel discharge** in the patient record.
+Review the recorded discharge and the department, ward, and optional bed to restore.
+Enter the correction time and recorded operator, then **Confirm cancellation**.
+Care continues from the original discharge time; the correction time is retained
+separately. The original references must be active, and later hospital stays or
+bed use can prevent restoration. The form shows those conflicts and does not
+offer a replacement bed. A genuine readmission requires a new encounter.
+The page sends the reviewed discharge ID so a later discharge cannot be cancelled
+by a stale form. After an unconfirmed save, use **Refresh encounter** to check
+whether the correction was recorded. Closing the patient record refreshes the
+inpatient list. The operator remains user-entered until authentication is added.
+
+Select **Timeline** for any encounter, including discharged and cancelled stays.
+The view shows admission and cancellation details, department/ward/bed periods,
+and discharge records. **Current** identifies an open placement. Cancelled
+discharges retain their original time and recorded cancellation operator; restored
+care is identified separately from ordinary placement periods. Cancellation time
+is the correction's operation time, while care continues from the original
+discharge time. Equal-time and zero-duration records remain visible.
+Inactive location names are retained. If names cannot be loaded, the recorded
+history remains readable with an availability message; use **Refresh timeline**
+to retry. Original timestamps are available on the displayed times' tooltips.
+
+Use **Refresh availability** after a conflict or an unconfirmed save. This checks
+the encounter again and reloads the location choices; a bed that became occupied
+must be reselected. Availability is advisory until the backend saves the entry.
+Transfer also checks the current placement before submitting. If a refresh finds
+a different placement, review it and select the destination again. A failed or
+lost response never triggers an automatic retry of the write.
+To try this locally with location choices, start with the `demo` profile described
+below. The default empty H2 database has no departments, wards, or beds.
+
+The HTML, CSS, and JavaScript live in `src/main/resources/static` and are packaged
+with the Spring Boot application. The page calls the existing REST/JSON
+endpoints on the same origin; it needs no separate frontend server or Node build.
+After rebuilding and restarting, use **Ctrl+F5** if the browser still shows an older page.
+It stores no patient records in browser storage. The core admission, placement,
+discharge, correction, and timeline workflows are available from the workbench.
+
+For a browser check, register a fictional patient, search by name, open the record,
+and try the same medical record number again to see the duplicate warning. Search
+for an unmatched name to check the empty state. With more than 10 patients, select
+10 rows per page and use **Next** and **Previous**. Stop the local server and search
+to check the retry message, then restart and select **Try again**.
 
 ### PostgreSQL
 
@@ -103,9 +214,10 @@ and use the Maven profile:
 
 Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
 application's `postgres` profile and Flyway migrations, and verify migration
-re-entry, discharge cancellation, rollback after SQL has been flushed, and two
-admissions competing for one bed. The concurrency test checks PostgreSQL's lock
-wait information before allowing the winning transaction to commit.
+re-entry, patient search and pagination, discharge cancellation, rollback after
+SQL has been flushed, and two admissions competing for one bed. The concurrency
+test checks PostgreSQL's lock wait information before allowing the winning
+transaction to commit.
 
 Without Docker, the same tests can use a dedicated PostgreSQL test database:
 
@@ -222,14 +334,15 @@ unique constraints, and history indexes are defined in the
 ```
 
 The default build runs unit, controller, and H2 integration tests. Coverage includes
-request validation, state transitions, optional beds, backdated operations,
-cancellation history, transaction rollback, and concurrent workflow changes.
+request validation, patient search and pagination, state transitions, optional
+beds, backdated operations, cancellation history, transaction rollback, and
+concurrent workflow changes.
 
 The [PostgreSQL test profile](#postgresql-integration-tests) adds checks for
-Flyway migration re-entry, discharge cancellation and bed restoration, rollback
-after SQL has been flushed, and two admissions competing for a bed. These tests
-exercise PostgreSQL directly; the broader H2 suite still runs separately within
-the same build.
+Flyway migration re-entry, literal patient search and pagination, discharge
+cancellation and bed restoration, rollback after SQL has been flushed, and two
+admissions competing for a bed. These tests exercise PostgreSQL directly; the
+broader H2 suite still runs separately within the same build.
 
 [CI](#continuous-integration) runs both groups with Java 21 and PostgreSQL 17.
 Test configuration and expected behaviour are in
@@ -237,8 +350,10 @@ Test configuration and expected behaviour are in
 
 ## Current scope
 
-Patient and encounter details are retrieved by ID. Patient search, paginated
-inpatient lists, and reference-data maintenance endpoints are not implemented.
+Patients can be listed and searched by name or medical record number, with
+pagination. Patient records also show their encounters with pagination. Patient
+and encounter details are retrieved by ID. A hospital-wide inpatient list and
+reference-data maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
 Authentication and role-based access are not implemented. Cancellation operators
@@ -246,7 +361,8 @@ are supplied by the caller; these fields do not identify an authenticated user.
 The timeline contains location and discharge history, not a complete audit of all
 system activity.
 
-The project currently covers inpatient flow through REST/JSON APIs. Physician
-assignment, outpatient scheduling, clinical orders, billing, and a frontend are
-outside the implemented scope. The next business increments are patient lookup
-and inpatient lists, followed by authenticated operations.
+The project currently covers inpatient flow through REST/JSON APIs and provides
+a patient directory and registration page. Physician assignment, outpatient
+scheduling, clinical orders, billing, and inpatient workflow screens are outside
+the implemented scope. The next business increments are inpatient lists and
+their workbench screens, followed by authenticated operations.

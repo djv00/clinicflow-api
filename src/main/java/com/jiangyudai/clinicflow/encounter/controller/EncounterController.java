@@ -115,7 +115,7 @@ public class EncounterController {
             @Valid @RequestBody CancelDischargeRequest request
     ) {
         return EncounterResponse.from(encounterService.cancelDischarge(
-                encounterId, request.cancelledAt(), request.cancelledBy()
+                encounterId, request.cancelledAt(), request.cancelledBy(), request.expectedDischargeId()
         ));
     }
 

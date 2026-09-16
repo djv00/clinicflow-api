@@ -1,9 +1,12 @@
 package com.jiangyudai.clinicflow.patient.service;
 
+import com.jiangyudai.clinicflow.patient.dto.PatientPageResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.repository.PatientRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +15,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Applies patient registration rules before patient data is stored.
+ * Handles patient registration and lookup.
  *
  * @author Jiangyu Dai
  */
@@ -58,6 +61,22 @@ public class PatientService {
     public Patient getPatient(UUID id) {
         return patientRepository.findById(id)
                 .orElseThrow(() -> new PatientNotFoundException(id));
+    }
+
+    /**
+     * Finds patients by a literal name or medical record number fragment.
+     */
+    public PatientPageResponse searchPatients(String keyword, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size,
+                Sort.by("lastName", "firstName", "medicalRecordNumber"));
+        String search = keyword == null ? "" : keyword.strip();
+        if (search.isEmpty()) {
+            return PatientPageResponse.from(patientRepository.findAll(pageable));
+        }
+
+        // Escape LIKE metacharacters so user input remains a literal fragment.
+        String pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        return PatientPageResponse.from(patientRepository.search(pattern, pageable));
     }
 
     /**

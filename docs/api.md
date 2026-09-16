@@ -20,7 +20,10 @@ record numbers and current UTC timestamps.
 | Method | Path after `/api/v1` | Success | Response |
 | --- | --- | --- | --- |
 | POST | `/patients` | 201 | Patient |
+| GET | `/patients` | 200 | Patient page |
 | GET | `/patients/{id}` | 200 | Patient |
+| GET | `/patients/{patientId}/encounters` | 200 | Encounter page |
+| GET | `/inpatients` | 200 | Current inpatient page |
 | POST | `/encounters` | 201 | Encounter |
 | GET | `/encounters/{id}` | 200 | Encounter |
 | POST | `/encounters/{id}/department-admissions` | 201 | Location |
@@ -58,6 +61,113 @@ The medical record number is required and limited to 50 characters; first and
 last names are required and limited to 100 characters each. Date of birth must
 be a date in the past. Invalid fields return `400`; an already registered
 medical record number returns `409`; an unknown patient ID returns `404`.
+
+## Patient search
+
+```http
+GET /api/v1/patients?keyword=demo&page=0&size=20
+```
+
+| Parameter | Default | Behaviour |
+| --- | --- | --- |
+| `keyword` | Omitted | Up to 100 characters. Case-insensitive substring of the medical record number or `firstName lastName`. |
+| `page` | `0` | Zero-based page number, at least 0. |
+| `size` | `20` | Number of patients per page, from 1 to 100. |
+
+Leading and trailing whitespace is removed from the keyword. An omitted or
+blank keyword lists all patients, still paginated. Search treats `%`, `_`, `!`,
+and backslash as ordinary characters; they do not act as wildcards. URL-encode
+query values when constructing a request.
+
+Results are ordered by `lastName`, then `firstName`, then `medicalRecordNumber`,
+all ascending. The unique record number gives patients with identical names a
+consistent order. Sorting uses the stored values and the database's collation.
+
+For a database containing only the patient registered above:
+
+```json
+{
+  "items": [
+    {
+      "id": "<patientId>",
+      "medicalRecordNumber": "DEMO-DOC-001",
+      "firstName": "Demo",
+      "lastName": "Patient",
+      "dateOfBirth": "1990-05-14"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+`totalElements` counts matching patients across all pages. A page beyond the last
+returns `200` with an empty `items` array and the actual totals. No matches return
+`totalElements: 0` and `totalPages: 0`.
+
+Invalid pagination or an overlong keyword returns `400` with an `errors` field
+map. The requested offset (`page * size`) must fit within JPA's signed 32-bit
+offset range; exceeding it returns an `errors.pageOffsetValid` validation error.
+
+## Patient encounter history
+
+```http
+GET /api/v1/patients/<patientId>/encounters?page=0&size=20
+```
+
+Lists only that patient's encounters, including current stays, discharged stays,
+and cancelled admissions. Sort order is `admittedAt` descending, followed by
+`encounterNumber` descending to keep equal admission times in a consistent order.
+
+The response contains `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Each item has the same fields as `GET /api/v1/encounters/{id}`: `id`,
+`encounterNumber`, `patientId`, `status`, `admittedAt`, `dischargedAt`,
+`admissionCancelledAt`, and `admissionCancelledBy`. These describe the current
+encounter state; discharge corrections remain available in the timeline and
+discharge-history endpoints. Cancelling a discharge clears the encounter's
+`dischargedAt` and restores `IN_DEPARTMENT` without creating a new encounter.
+
+`page` defaults to 0 and must be non-negative. `size` defaults to 20 and must be
+between 1 and 100. Invalid parameters, an invalid UUID, or an offset beyond the
+signed 32-bit JPA range return `400`.
+
+An unknown patient returns `404`. An existing patient with no encounters returns
+`200` with empty `items` and zero totals. A page beyond the last returns empty
+`items` while preserving the actual totals. This endpoint lists historical and
+current encounters; it is not a hospital-wide census of current inpatients.
+
+## Current inpatients
+
+```http
+GET /api/v1/inpatients?keyword=demo&status=IN_DEPARTMENT&page=0&size=20
+```
+
+Only `ADMITTED` and `IN_DEPARTMENT` encounters are included. Omit `status` for
+both, or supply one of those values. Other statuses return 400. Optional
+`departmentId` and `wardId` UUID filters match the **open** placement together;
+historical placements do not match. An admitted patient without a placement is
+included when no location filter is supplied. Unknown location IDs return an
+empty page. Deactivated references do not hide existing inpatient care.
+
+`keyword` is a case-insensitive literal fragment of the patient name (first name
+followed by last name), medical record number, or encounter number. Leading and
+trailing whitespace is ignored; the maximum length is 100. `%`, `_`, and `!` are
+literal characters. Pagination defaults to `page=0`, `size=20`; size must be
+1–100 and the page offset must fit JPA's integer range.
+
+The response contains `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Each item contains `id`, `encounterNumber`, `status`, `admittedAt`, `patientId`,
+`firstName`, `lastName`, `medicalRecordNumber`, `dateOfBirth`, and current location
+fields: `departmentId`, `departmentName`, `departmentCode`, `wardId`, `wardName`,
+`wardCode`, `bedId`, and `bedNumber`. Placement fields are null before department
+entry; bed fields are null when no bed is assigned. Items are ordered by
+`admittedAt`, then unique `encounterNumber`, ascending.
+
+This worklist is a read-only overview. Workflow endpoints recheck the encounter
+and its placement when an operation is submitted; a displayed row does not reserve
+a bed or guarantee that another operator has not changed the stay.
 
 ## Hospital admission
 
@@ -311,6 +421,14 @@ Content-Type: application/json
 ```
 
 Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
+
+Clients reviewing a particular discharge can also send the optional UUID
+`expectedDischargeId`, obtained from the timeline or discharge history. It must
+match the current uncancelled discharge record under the encounter write lock;
+a mismatch returns `409` without changing care or audit. This distinguishes
+repeated discharge/cancellation cycles even when discharge timestamps are equal.
+The workbench always sends it. Omitting it preserves the existing operation on
+the current discharge for API callers and demo scripts.
 
 - The encounter must be `DISCHARGED`, have a matching uncancelled discharge
   record, and have no current location. The patient cannot have another active

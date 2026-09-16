@@ -151,6 +151,51 @@ class DischargeCancellationIntegrationTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void cancelsTheExpectedRecordWithOrWithoutABed(boolean withBed) throws Exception {
+        CancellationData data = createData(withBed);
+        UUID dischargeId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId())
+                        .contentType("application/json")
+                        .content(request(CANCELLED_AT, "first-clerk").replace("}",
+                                ", \"expectedDischargeId\": \"" + dischargeId + "\"}")))
+                .andExpect(status().isOk());
+        assertRestored(data);
+    }
+
+    @Test
+    void rejectsAnOldRecordAfterCancellationAndRedischargeAtTheSameTime() throws Exception {
+        CancellationData data = createData(false);
+        UUID originalId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
+        cancel(data);
+        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT);
+        var before = encounterService.getTimeline(data.encounterId());
+
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId())
+                        .contentType("application/json")
+                        .content(request(CANCELLED_AT.plusHours(1), "stale-clerk").replace("}",
+                                ", \"expectedDischargeId\": \"" + originalId + "\"}")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The discharge record has changed. Reload it before cancelling."));
+
+        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
+    }
+
+    @Test
+    void rejectsARecordBelongingToAnotherEncounterWithoutChangingCare() throws Exception {
+        CancellationData data = createData(true);
+        CancellationData other = createData(false);
+        UUID otherId = encounterService.getDischarges(other.encounterId()).getFirst().getId();
+        var before = encounterService.getTimeline(data.encounterId());
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId())
+                        .contentType("application/json")
+                        .content(request(CANCELLED_AT, "stale-clerk").replace("}",
+                                ", \"expectedDischargeId\": \"" + otherId + "\"}")))
+                .andExpect(status().isConflict());
+        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
+    }
+
     @Test
     void restoresTheExplicitDischargeLocationWhenTransferAndDischargeShareATimestamp() {
         CancellationData data = createData(true);

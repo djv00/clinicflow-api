@@ -1,12 +1,15 @@
 package com.jiangyudai.clinicflow.patient.controller;
 
 import com.jiangyudai.clinicflow.patient.dto.CreatePatientRequest;
+import com.jiangyudai.clinicflow.patient.dto.PatientPageResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
+import com.jiangyudai.clinicflow.patient.dto.PatientSearchRequest;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,6 +47,11 @@ public class PatientController {
         );
 
         return PatientResponse.from(patient);
+    }
+
+    @GetMapping
+    public PatientPageResponse searchPatients(@Valid @ModelAttribute PatientSearchRequest request) {
+        return patientService.searchPatients(request.keyword(), request.page(), request.size());
     }
 
     @GetMapping("/{id}")

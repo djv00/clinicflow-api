@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterPageResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
@@ -15,6 +16,8 @@ import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.service.LocationService;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -355,6 +358,19 @@ public class EncounterService {
             OffsetDateTime cancelledAt,
             String cancelledBy
     ) {
+        return cancelDischarge(encounterId, cancelledAt, cancelledBy, null);
+    }
+
+    /**
+     * When supplied, the expected record prevents a stale form from cancelling a later discharge.
+     */
+    @Transactional
+    public Encounter cancelDischarge(
+            UUID encounterId,
+            OffsetDateTime cancelledAt,
+            String cancelledBy,
+            UUID expectedDischargeId
+    ) {
         UUID patientId = encounterRepository.findPatientIdById(encounterId)
                 .orElseThrow(() -> new EncounterNotFoundException(encounterId));
 
@@ -375,6 +391,9 @@ public class EncounterService {
         EncounterDischarge discharge = encounterDischargeRepository
                 .findByEncounter_IdAndCancelledAtIsNull(encounterId)
                 .orElseThrow(() -> new DischargeRecordConflictException("Current discharge record is missing"));
+        if (expectedDischargeId != null && !expectedDischargeId.equals(discharge.getId())) {
+            throw new DischargeRecordConflictException("The discharge record has changed. Reload it before cancelling.");
+        }
         EncounterLocation previous = discharge.getLocation();
         if (encounter.getDischargedAt() == null
                 || !discharge.getDischargedAt().isEqual(encounter.getDischargedAt())
@@ -437,6 +456,16 @@ public class EncounterService {
     public Encounter getEncounter(UUID id) {
         return encounterRepository.findById(id)
                 .orElseThrow(() -> new EncounterNotFoundException(id));
+    }
+
+    /**
+     * Lists all encounters for an existing patient, including cancelled admissions.
+     */
+    public EncounterPageResponse getPatientEncounters(UUID patientId, int page, int size) {
+        patientService.getPatient(patientId);
+        PageRequest pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "admittedAt", "encounterNumber"));
+        return EncounterPageResponse.from(encounterRepository.findAllByPatient_Id(patientId, pageable));
     }
 
     private void checkBedHistory(UUID bedId, OffsetDateTime startedAt) {

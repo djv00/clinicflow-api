@@ -1,13 +1,18 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
+import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
+import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.repository.BedRepository;
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import jakarta.persistence.EntityManager;
@@ -29,6 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -54,6 +60,8 @@ class PostgresWorkflowIT {
     private PatientService patientService;
     @Autowired
     private EncounterService encounterService;
+    @Autowired
+    private InpatientQueryService inpatientQueryService;
     @Autowired
     private BedRepository bedRepository;
     @Autowired
@@ -101,6 +109,32 @@ class PostgresWorkflowIT {
     }
 
     @Test
+    void queriesCurrentInpatientsWithOptionalFiltersAndPagination() {
+        String prefix = "LIST-" + UUID.randomUUID().toString().substring(0, 12);
+        Patient waitingPatient = registerPatient();
+        UUID waiting = encounterService.admitPatient(waitingPatient.getId(), prefix + "-1", ADMITTED_AT).getId();
+        UUID placed = encounterService.admitPatient(registerPatient().getId(), prefix + "-2", ADMITTED_AT).getId();
+        Locations locations = createLocations();
+        enterDepartment(placed, locations);
+
+        var first = inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix, null, null, null), 0, 1);
+        assertThat(first.totalElements()).isEqualTo(2);
+        assertThat(first.totalPages()).isEqualTo(2);
+        assertThat(first.items().getFirst().id()).isEqualTo(waiting);
+        assertThat(first.items().getFirst().departmentId()).isNull();
+        var filtered = inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                EncounterStatus.IN_DEPARTMENT, locations.departmentId(), locations.wardId()), 0, 1);
+        assertThat(filtered.totalElements()).isEqualTo(1);
+        assertThat(filtered.items().getFirst().bedId()).isEqualTo(locations.firstBedId());
+        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1));
+        assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
+        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
+        assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
+                null, null, null), 1, 1).items().getFirst().id()).isEqualTo(placed);
+    }
+
+    @Test
     void migratesAnEmptyPostgresSchemaAndDoesNotReapplyIt() throws Exception {
         try (var connection = jdbc.getDataSource().getConnection()) {
             assertThat(connection.getMetaData().getDatabaseProductName()).isEqualTo("PostgreSQL");
@@ -115,6 +149,50 @@ class PostgresWorkflowIT {
                 Integer.class)).isEqualTo(1);
         assertThat(patientService.getPatient(patient.getId()).getMedicalRecordNumber())
                 .isEqualTo(patient.getMedicalRecordNumber());
+    }
+
+    @Test
+    void searchesPatientsWithLiteralKeywordsAndStablePages() {
+        String prefix = "SEARCH-" + UUID.randomUUID().toString().substring(0, 12);
+        LocalDate dateOfBirth = LocalDate.of(1990, 5, 14);
+        Patient second = patientService.createPatient(prefix + "B", "Test", "Zulu", dateOfBirth);
+        Patient first = patientService.createPatient(prefix + "%_!\\", prefix, "O'Neil", dateOfBirth);
+
+        var page = patientService.searchPatients(prefix.toLowerCase(Locale.ROOT), 0, 1);
+        assertThat(page.items()).extracting(PatientResponse::id).containsExactly(first.getId());
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(patientService.searchPatients(prefix, 1, 1).items())
+                .extracting(PatientResponse::id).containsExactly(second.getId());
+        assertThat(patientService.searchPatients(prefix, 2, 1).items()).isEmpty();
+        assertThat(patientService.searchPatients(prefix + "%_!\\", 0, 20).items())
+                .extracting(PatientResponse::id).containsExactly(first.getId());
+        assertThat(patientService.searchPatients("  " + prefix + " o'neil  ", 0, 20).items())
+                .extracting(PatientResponse::id).containsExactly(first.getId());
+    }
+
+    @Test
+    void paginatesPatientEncountersWithoutIncludingAnotherPatient() {
+        Patient patient = registerPatient();
+        String prefix = "HISTORY-" + UUID.randomUUID().toString().substring(0, 12);
+        var first = encounterService.admitPatient(patient.getId(), prefix + "-1", ADMITTED_AT);
+        encounterService.cancelAdmission(first.getId(), ADMITTED_AT.plusHours(1), "test-clerk");
+        var second = encounterService.admitPatient(patient.getId(), prefix + "-2", ADMITTED_AT);
+        encounterService.cancelAdmission(second.getId(), ADMITTED_AT.plusHours(1), "test-clerk");
+        var third = encounterService.admitPatient(patient.getId(), prefix + "-3", ADMITTED_AT.plusDays(1));
+        encounterService.admitPatient(registerPatient().getId(), prefix + "-OTHER", ADMITTED_AT.plusDays(2));
+
+        var page = encounterService.getPatientEncounters(patient.getId(), 0, 2);
+        assertThat(page.items()).extracting(EncounterResponse::id).containsExactly(third.getId(), second.getId());
+        assertThat(page.totalElements()).isEqualTo(3);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(encounterService.getPatientEncounters(patient.getId(), 1, 2).items())
+                .singleElement().satisfies(item -> {
+                    assertThat(item.id()).isEqualTo(first.getId());
+                    assertThat(item.status()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
+                    assertThat(item.admissionCancelledBy()).isEqualTo("test-clerk");
+                });
+        assertThat(encounterService.getPatientEncounters(patient.getId(), 2, 2).items()).isEmpty();
     }
 
     @Test
@@ -146,6 +224,23 @@ class PostgresWorkflowIT {
         });
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isTrue());
+    }
+
+    @Test
+    void refusesAStaleDischargeIdAfterASecondDischarge() {
+        UUID encounterId = admitPatient();
+        enterDepartment(encounterId, createLocations());
+        OffsetDateTime time = ENTERED_AT.plusDays(1);
+        encounterService.dischargeEncounter(encounterId, time);
+        UUID originalId = encounterService.getTimeline(encounterId).discharges().getFirst().id();
+        encounterService.cancelDischarge(encounterId, time.plusHours(1), "first-clerk", originalId);
+        encounterService.dischargeEncounter(encounterId, time);
+        var before = encounterService.getTimeline(encounterId);
+
+        assertThatThrownBy(() -> encounterService.cancelDischarge(
+                encounterId, time.plusHours(2), "stale-clerk", originalId))
+                .isInstanceOf(DischargeRecordConflictException.class);
+        assertThat(encounterService.getTimeline(encounterId)).isEqualTo(before);
     }
 
     @Test

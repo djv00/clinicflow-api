@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Patients · ClinicFlow</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./patients.css">
+    <script type="module" src="./patients.js"></script>
+    <script type="module" src="./inpatients.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header">
+    <a class="brand" href="./" aria-label="ClinicFlow home">
+        <span class="brand-mark" aria-hidden="true"></span>ClinicFlow
+    </a>
+    <span class="header-section">Patient administration</span>
+    <nav class="workbench-nav" aria-label="Workbench">
+        <a id="patients-link" href="#patients" aria-current="page">Patients</a>
+        <a id="inpatients-link" href="#inpatients">Inpatients</a>
+    </nav>
+</header>
+<main id="main">
+    <section id="patients-view" aria-label="Patient administration">
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Patient directory</p>
+            <h1>Patients</h1>
+            <p class="intro">Find an existing patient or register a new record.</p>
+        </div>
+        <button id="register-patient" class="button primary" type="button">
+            <span aria-hidden="true">+</span> Register patient
+        </button>
+    </div>
+
+    <noscript><p class="message error">Enable JavaScript to search and register patients.</p></noscript>
+    <p id="notice" class="message success" role="status" hidden></p>
+
+    <section class="directory" aria-label="Patient directory">
+        <form id="search-form" class="search-bar" role="search">
+            <div class="search-field">
+                <label for="keyword">Search patients</label>
+                <input id="keyword" name="keyword" type="search" maxlength="100"
+                       placeholder="Name or medical record number" autocomplete="off">
+            </div>
+            <button class="button primary" type="submit">Search</button>
+            <button id="clear-search" class="button secondary" type="button">Clear</button>
+        </form>
+
+        <div class="list-heading">
+            <p id="results-summary" role="status">Loading patients…</p>
+            <span class="muted">Sorted by last name, then first name</span>
+        </div>
+        <div id="list-error" class="message error list-error" role="alert" hidden>
+            <p id="list-error-text"></p>
+            <button id="retry-list" class="button secondary" type="button">Try again</button>
+        </div>
+        <div id="table-region" class="table-region" aria-busy="true">
+            <table>
+                <caption class="sr-only">Patients matching the current search</caption>
+                <thead>
+                <tr>
+                    <th scope="col">Patient name</th>
+                    <th scope="col">Medical record number</th>
+                    <th scope="col">Date of birth</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                </tr>
+                </thead>
+                <tbody id="patient-rows"></tbody>
+            </table>
+            <div id="list-state" class="list-state" role="status">
+                <p id="list-state-title">Loading patients…</p>
+                <p id="list-state-detail" class="muted"></p>
+            </div>
+        </div>
+        <div class="pagination">
+            <label for="page-size">Rows per page
+                <select id="page-size">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                </select>
+            </label>
+            <nav class="page-controls" aria-label="Patient pages">
+                <span id="page-summary">Page —</span>
+                <button id="previous-page" class="button secondary" type="button" disabled>Previous</button>
+                <button id="next-page" class="button secondary" type="button" disabled>Next</button>
+            </nav>
+        </div>
+    </section>
+    <p class="directory-note">Use the medical record number and date of birth to distinguish patients with the same name.</p>
+    </section>
+    <section id="inpatients-view" aria-labelledby="inpatients-title" hidden>
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">Inpatient worklist</p>
+                <h1 id="inpatients-title">Inpatients</h1>
+                <p class="intro">Current hospital stays, including patients awaiting department entry.</p>
+            </div>
+            <button id="refresh-inpatients" class="button secondary" type="button">Refresh list</button>
+        </div>
+        <section class="directory" aria-label="Inpatient list">
+            <form id="inpatient-search-form" class="inpatient-filters" role="search" aria-label="Filter inpatients">
+                <div class="inpatient-search-field">
+                    <label for="inpatient-keyword">Search inpatients</label>
+                    <input id="inpatient-keyword" type="search" maxlength="100" autocomplete="off"
+                           placeholder="Name, medical record number, or encounter number">
+                </div>
+                <div>
+                    <label for="inpatient-status">Status</label>
+                    <select id="inpatient-status">
+                        <option value="">All current stays</option>
+                        <option value="ADMITTED">Awaiting department entry</option>
+                        <option value="IN_DEPARTMENT">In department</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="inpatient-department">Current department</label>
+                    <select id="inpatient-department" disabled><option value="">All departments</option></select>
+                </div>
+                <div>
+                    <label for="inpatient-ward">Current ward</label>
+                    <select id="inpatient-ward" disabled><option value="">All wards</option></select>
+                </div>
+                <div class="inpatient-filter-actions">
+                    <button class="button primary" type="submit">Apply filters</button>
+                    <button id="clear-inpatient-filters" class="button secondary" type="button">Clear filters</button>
+                </div>
+            </form>
+            <div id="inpatient-filter-error" class="message information list-error" role="status" hidden>
+                <p>Some location filters could not be loaded. You can still search by name, number, or status.</p>
+                <button id="retry-inpatient-filters" class="button secondary" type="button">Retry location filters</button>
+            </div>
+            <div class="list-heading">
+                <p id="inpatient-results-summary" role="status">Loading inpatients…</p>
+                <span class="muted">Oldest admission first</span>
+            </div>
+            <div id="inpatient-list-error" class="message error list-error" role="alert" hidden>
+                <p id="inpatient-list-error-text"></p>
+                <button id="retry-inpatients" class="button secondary" type="button">Try again</button>
+            </div>
+            <div id="inpatient-table-region" class="table-region" role="region" aria-label="Inpatient table" tabindex="0" aria-busy="true">
+                <table id="inpatient-table">
+                    <caption class="sr-only">Current hospital stays matching the applied filters</caption>
+                    <thead><tr><th scope="col">Patient</th><th scope="col">Encounter number</th><th scope="col">Status</th><th scope="col">Admitted</th><th scope="col">Current location</th><th scope="col">Actions</th></tr></thead>
+                    <tbody id="inpatient-rows"></tbody>
+                </table>
+                <div id="inpatient-list-state" class="list-state" role="status">Loading inpatients…</div>
+            </div>
+            <div class="pagination">
+                <label for="inpatient-page-size">Inpatients per page
+                    <select id="inpatient-page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option></select>
+                </label>
+                <nav class="page-controls" aria-label="Inpatient pages">
+                    <span id="inpatient-page-summary">Page —</span>
+                    <button id="previous-inpatients" class="button secondary" type="button" disabled>Previous</button>
+                    <button id="next-inpatients" class="button secondary" type="button" disabled>Next</button>
+                </nav>
+            </div>
+        </section>
+        <p class="directory-note">Location filters use current assignments. Discharged and cancelled stays remain available in patient records. Times are shown in your local time.</p>
+    </section>
+</main>
+
+<dialog id="registration-dialog" aria-labelledby="registration-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Patient registration</p><h2 id="registration-title">Register patient</h2></div>
+        <button id="close-registration" class="close-button" type="button" aria-label="Close registration">×</button>
+    </div>
+    <p class="dialog-intro">All fields are required. Check for an existing record before registering.</p>
+    <form id="registration-form">
+        <p id="registration-error" class="message error" role="alert" hidden></p>
+        <fieldset id="registration-fields">
+            <legend class="sr-only">Patient details</legend>
+            <div class="field">
+                <label for="medicalRecordNumber">Medical record number</label>
+                <input id="medicalRecordNumber" name="medicalRecordNumber" required maxlength="50"
+                       autocomplete="off" aria-describedby="medicalRecordNumber-error">
+                <p id="medicalRecordNumber-error" class="field-error" hidden></p>
+            </div>
+            <div class="name-fields">
+                <div class="field">
+                    <label for="firstName">First name</label>
+                    <input id="firstName" name="firstName" required maxlength="100"
+                           autocomplete="off" aria-describedby="firstName-error">
+                    <p id="firstName-error" class="field-error" hidden></p>
+                </div>
+                <div class="field">
+                    <label for="lastName">Last name</label>
+                    <input id="lastName" name="lastName" required maxlength="100"
+                           autocomplete="off" aria-describedby="lastName-error">
+                    <p id="lastName-error" class="field-error" hidden></p>
+                </div>
+            </div>
+            <div class="field birth-field">
+                <label for="dateOfBirth">Date of birth</label>
+                <input id="dateOfBirth" name="dateOfBirth" type="date" required
+                       aria-describedby="birth-hint dateOfBirth-error">
+                <p id="birth-hint" class="field-hint">Must be a date in the past.</p>
+                <p id="dateOfBirth-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <div class="dialog-actions">
+            <button id="cancel-registration" class="button secondary" type="button">Cancel</button>
+            <button id="save-patient" class="button primary" type="submit">Save patient</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="patient-dialog" aria-labelledby="patient-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Patient record</p><h2 id="patient-title">Patient details</h2></div>
+        <button id="close-patient" class="close-button" type="button" aria-label="Close patient record">×</button>
+    </div>
+    <p id="patient-status" role="status">Loading patient…</p>
+    <dl id="patient-details" class="patient-details" hidden>
+        <div><dt>Medical record number</dt><dd id="detail-record-number"></dd></div>
+        <div><dt>First name</dt><dd id="detail-first-name"></dd></div>
+        <div><dt>Last name</dt><dd id="detail-last-name"></dd></div>
+        <div><dt>Date of birth</dt><dd id="detail-birth-date"></dd></div>
+    </dl>
+    <section id="patient-encounters" class="patient-encounters" aria-labelledby="encounters-title" hidden>
+        <div class="encounters-heading">
+            <h3 id="encounters-title">Hospital encounters</h3>
+            <button id="admit-patient" class="button primary" type="button"
+                    aria-expanded="false" aria-controls="admission-form">Admit patient</button>
+        </div>
+        <p class="muted">Newest admission first. Times are shown in your local time.</p>
+        <p id="admission-notice" class="message success" role="status" tabindex="-1" hidden></p>
+        <form id="admission-form" class="admission-form" aria-labelledby="admission-title" hidden>
+            <h4 id="admission-title">New hospital admission</h4>
+            <p class="dialog-intro">Both fields are required. Department and bed assignment is a separate step.</p>
+            <p id="admission-error" class="message error" role="alert" tabindex="-1" hidden></p>
+            <fieldset id="admission-fields">
+                <legend class="sr-only">Admission details</legend>
+                <div class="name-fields">
+                    <div class="field">
+                        <label for="encounterNumber">Encounter number</label>
+                        <input id="encounterNumber" name="encounterNumber" required maxlength="50"
+                               autocomplete="off" aria-describedby="encounter-number-hint encounterNumber-error">
+                        <p id="encounter-number-hint" class="field-hint">Use a new, unique number for this hospital stay.</p>
+                        <p id="encounterNumber-error" class="field-error" hidden></p>
+                    </div>
+                    <div class="field">
+                        <label for="admittedAt">Admission time</label>
+                        <input id="admittedAt" name="admittedAt" type="datetime-local" required
+                               aria-describedby="admission-time-hint admittedAt-error">
+                        <p id="admission-time-hint" class="field-hint"></p>
+                        <p id="admittedAt-error" class="field-error" hidden></p>
+                    </div>
+                </div>
+            </fieldset>
+            <div class="admission-actions">
+                <button id="refresh-admission-records" class="button secondary" type="button" hidden>Refresh encounters</button>
+                <button id="cancel-admission" class="button secondary" type="button">Cancel</button>
+                <button id="save-admission" class="button primary" type="submit">Save admission</button>
+            </div>
+        </form>
+        <p id="encounters-state" role="status">Loading encounters…</p>
+        <button id="retry-encounters" class="button secondary" type="button" hidden>Retry encounters</button>
+        <div id="encounters-table-region" class="table-region" hidden>
+            <table id="encounters-table">
+                <caption class="sr-only">Hospital encounters for this patient</caption>
+                <thead><tr>
+                    <th scope="col">Encounter number</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Admitted</th>
+                    <th scope="col">Discharged / cancelled</th>
+                    <th scope="col">Actions</th>
+                </tr></thead>
+                <tbody id="encounter-rows"></tbody>
+            </table>
+        </div>
+        <nav class="encounter-pagination" aria-label="Hospital encounter pages">
+            <span id="encounters-page-summary" role="status"></span>
+            <div class="page-controls">
+                <button id="previous-encounters" class="button secondary" type="button" disabled>Previous encounters</button>
+                <button id="next-encounters" class="button secondary" type="button" disabled>Next encounters</button>
+            </div>
+        </nav>
+    </section>
+    <div class="dialog-actions">
+        <button id="retry-patient" class="button secondary" type="button" hidden>Try again</button>
+        <button id="done-patient" class="button primary" type="button">Done</button>
+    </div>
+</dialog>
+<dialog id="department-dialog" aria-labelledby="department-title">
+    <div class="dialog-heading">
+        <div><p id="placement-eyebrow" class="eyebrow">Department entry</p><h2 id="department-title">Enter department</h2></div>
+        <button id="close-department" class="close-button" type="button" aria-label="Close department entry">×</button>
+    </div>
+    <dl class="placement-summary">
+        <div><dt>Patient</dt><dd id="department-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="department-encounter-number" class="record-number"></dd></div>
+        <div><dt>Hospital admission</dt><dd id="department-admitted-at"></dd></div>
+    </dl>
+    <section id="current-placement" class="current-placement" aria-labelledby="current-placement-title" hidden>
+        <h3 id="current-placement-title">Current placement</h3>
+        <dl class="placement-summary">
+            <div><dt>Department</dt><dd id="current-department"></dd></div>
+            <div><dt>Ward</dt><dd id="current-ward"></dd></div>
+            <div><dt>Bed</dt><dd id="current-bed"></dd></div>
+            <div><dt>Since</dt><dd id="current-started-at"></dd></div>
+        </dl>
+    </section>
+    <p id="placement-state" role="status"></p>
+    <form id="department-form">
+        <p id="department-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <fieldset id="department-fields" disabled>
+            <legend id="placement-legend" class="sr-only">Department entry details</legend>
+            <h3 id="destination-heading" hidden>Destination</h3>
+            <div class="name-fields">
+                <div class="field">
+                    <label for="departmentId">Department</label>
+                    <select id="departmentId" name="departmentId" required aria-describedby="departmentId-error">
+                        <option value="" disabled selected>Select a department</option>
+                    </select>
+                    <p id="departmentId-error" class="field-error" hidden></p>
+                </div>
+                <div class="field">
+                    <label for="wardId">Ward</label>
+                    <select id="wardId" name="wardId" required aria-describedby="wardId-error">
+                        <option value="" disabled selected>Select a ward</option>
+                    </select>
+                    <p id="wardId-error" class="field-error" hidden></p>
+                </div>
+            </div>
+            <div class="field">
+                <label for="bedId">Bed assignment</label>
+                <select id="bedId" name="bedId" required aria-describedby="bed-availability bedId-error" disabled>
+                    <option value="" disabled selected>Select a bed assignment</option>
+                </select>
+                <p id="bed-availability" class="field-hint" role="status">Choose a ward to see available beds.</p>
+                <p id="bedId-error" class="field-error" hidden></p>
+            </div>
+            <div class="field">
+                <label id="placement-time-label" for="startedAt">Department entry time</label>
+                <input id="startedAt" name="startedAt" type="datetime-local" step="1" required
+                       aria-describedby="department-time-hint startedAt-error">
+                <p id="department-time-hint" class="field-hint"></p>
+                <p id="startedAt-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <div class="placement-retry">
+            <button id="refresh-placement" class="button secondary" type="button">Refresh availability</button>
+            <button id="retry-beds" class="button secondary" type="button" hidden>Retry beds</button>
+        </div>
+        <div class="dialog-actions">
+            <button id="cancel-department" class="button secondary" type="button">Cancel</button>
+            <button id="save-department" class="button primary" type="submit" disabled>Save department entry</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="discharge-dialog" aria-labelledby="discharge-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Hospital discharge</p><h2 id="discharge-title">Discharge patient</h2></div>
+        <button id="close-discharge" class="close-button" type="button" aria-label="Close discharge">×</button>
+    </div>
+    <dl class="placement-summary">
+        <div><dt>Patient</dt><dd id="discharge-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="discharge-encounter-number" class="record-number"></dd></div>
+        <div><dt>Hospital admission</dt><dd id="discharge-admitted-at"></dd></div>
+    </dl>
+    <section id="discharge-placement" class="current-placement" aria-labelledby="discharge-placement-title">
+        <h3 id="discharge-placement-title">Current placement</h3>
+        <dl class="placement-summary">
+            <div><dt>Department</dt><dd id="discharge-department"></dd></div>
+            <div><dt>Ward</dt><dd id="discharge-ward"></dd></div>
+            <div><dt>Bed</dt><dd id="discharge-bed"></dd></div>
+            <div><dt>Since</dt><dd id="discharge-started-at"></dd></div>
+        </dl>
+    </section>
+    <p id="discharge-state" role="status"></p>
+    <form id="discharge-form">
+        <p id="discharge-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <fieldset id="discharge-fields" disabled>
+            <legend class="sr-only">Discharge details</legend>
+            <div class="field">
+                <label for="dischargedAt">Discharge time</label>
+                <input id="dischargedAt" name="dischargedAt" type="datetime-local" step="1" required
+                       aria-describedby="discharge-time-hint dischargedAt-error">
+                <p id="discharge-time-hint" class="field-hint"></p>
+                <p id="dischargedAt-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <p class="dialog-intro">Saving closes this hospital stay and releases its current bed. The encounter and location history are retained.</p>
+        <div class="placement-retry">
+            <button id="refresh-discharge" class="button secondary" type="button">Refresh encounter</button>
+        </div>
+        <div class="dialog-actions">
+            <button id="cancel-discharge" class="button secondary" type="button">Cancel</button>
+            <button id="save-discharge" class="button primary" type="submit" disabled>Save discharge</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="admission-cancellation-dialog" aria-labelledby="admission-cancellation-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Admission correction</p><h2 id="admission-cancellation-title">Cancel admission</h2></div>
+        <button id="close-admission-cancellation" class="close-button" type="button" aria-label="Close admission cancellation">×</button>
+    </div>
+    <dl class="placement-summary">
+        <div><dt>Patient</dt><dd id="cancellation-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="cancellation-encounter-number" class="record-number"></dd></div>
+        <div><dt>Hospital admission</dt><dd id="cancellation-admitted-at"></dd></div>
+    </dl>
+    <p class="dialog-intro">Use this for an admission recorded in error, before any department entry. The patient record and encounter history are retained.</p>
+    <p id="admission-cancellation-state" role="status"></p>
+    <form id="admission-cancellation-form">
+        <p id="admission-cancellation-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <fieldset id="admission-cancellation-fields" disabled>
+            <legend class="sr-only">Admission cancellation details</legend>
+            <div class="field">
+                <label for="admissionCancelledAt">Cancellation time</label>
+                <input id="admissionCancelledAt" name="cancelledAt" type="datetime-local" step="1" required
+                       aria-describedby="cancellation-time-hint admissionCancelledAt-error">
+                <p id="cancellation-time-hint" class="field-hint"></p>
+                <p id="admissionCancelledAt-error" class="field-error" hidden></p>
+            </div>
+            <div class="field">
+                <label for="admissionCancelledBy">Recorded operator</label>
+                <input id="admissionCancelledBy" name="cancelledBy" type="text" maxlength="100" required
+                       aria-describedby="cancellation-operator-hint admissionCancelledBy-error">
+                <p id="cancellation-operator-hint" class="field-hint">Name or staff identifier to record with this correction.</p>
+                <p id="admissionCancelledBy-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <div class="placement-retry">
+            <button id="refresh-admission-cancellation" class="button secondary" type="button">Refresh encounter</button>
+        </div>
+        <div class="dialog-actions">
+            <button id="dismiss-admission-cancellation" class="button secondary" type="button">Back</button>
+            <button id="save-admission-cancellation" class="button primary" type="submit" disabled>Confirm cancellation</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="discharge-cancellation-dialog" aria-labelledby="discharge-cancellation-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Discharge correction</p><h2 id="discharge-cancellation-title">Cancel discharge</h2></div>
+        <button id="close-discharge-cancellation" class="close-button" type="button" aria-label="Close discharge cancellation">×</button>
+    </div>
+    <dl class="placement-summary">
+        <div><dt>Patient</dt><dd id="restoration-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="restoration-encounter-number" class="record-number"></dd></div>
+        <div><dt>Recorded discharge</dt><dd id="restoration-discharged-at"></dd></div>
+    </dl>
+    <section id="restoration-placement" class="current-placement" aria-labelledby="restoration-placement-title" hidden>
+        <h3 id="restoration-placement-title">Placement to restore</h3>
+        <dl class="placement-summary">
+            <div><dt>Department</dt><dd id="restoration-department"></dd></div>
+            <div><dt>Ward</dt><dd id="restoration-ward"></dd></div>
+            <div><dt>Bed</dt><dd id="restoration-bed"></dd></div>
+            <div><dt>Care continues from</dt><dd id="restoration-effective-at"></dd></div>
+        </dl>
+    </section>
+    <p class="dialog-intro">Correct a discharge recorded in error. Care continues from the original discharge time; the cancellation time records when this correction was made. A genuine readmission needs a new encounter.</p>
+    <p id="discharge-cancellation-state" role="status"></p>
+    <form id="discharge-cancellation-form">
+        <p id="discharge-cancellation-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <fieldset id="discharge-cancellation-fields" disabled>
+            <legend class="sr-only">Discharge cancellation details</legend>
+            <div class="field">
+                <label for="dischargeCancelledAt">Cancellation time</label>
+                <input id="dischargeCancelledAt" name="cancelledAt" type="datetime-local" step="1" required
+                       aria-describedby="discharge-cancellation-time-hint dischargeCancelledAt-error">
+                <p id="discharge-cancellation-time-hint" class="field-hint"></p>
+                <p id="dischargeCancelledAt-error" class="field-error" hidden></p>
+            </div>
+            <div class="field">
+                <label for="dischargeCancelledBy">Recorded operator</label>
+                <input id="dischargeCancelledBy" name="cancelledBy" type="text" maxlength="100" required
+                       aria-describedby="discharge-cancellation-operator-hint dischargeCancelledBy-error">
+                <p id="discharge-cancellation-operator-hint" class="field-hint">Name or staff identifier to record with this correction.</p>
+                <p id="dischargeCancelledBy-error" class="field-error" hidden></p>
+            </div>
+        </fieldset>
+        <p class="dialog-intro">The original placement must still be available. Later hospital stays or bed use may prevent restoration. A replacement bed cannot be selected here.</p>
+        <div class="placement-retry">
+            <button id="refresh-discharge-cancellation" class="button secondary" type="button">Refresh encounter</button>
+        </div>
+        <div class="dialog-actions">
+            <button id="dismiss-discharge-cancellation" class="button secondary" type="button">Back</button>
+            <button id="save-discharge-cancellation" class="button primary" type="submit" disabled>Confirm cancellation</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="timeline-dialog" aria-labelledby="timeline-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Hospital encounter</p><h2 id="timeline-title">Encounter timeline</h2></div>
+        <button id="close-timeline" class="close-button" type="button" aria-label="Close timeline">×</button>
+    </div>
+    <dl class="placement-summary history-summary">
+        <div><dt>Patient</dt><dd id="timeline-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="timeline-encounter-number" class="record-number"></dd></div>
+    </dl>
+    <p id="timeline-time-zone" class="muted"></p>
+    <p id="timeline-loading" role="status">Loading encounter timeline…</p>
+    <p id="timeline-error" class="message error" role="alert" hidden></p>
+    <p id="timeline-reference-warning" class="message information" role="status" hidden>Some location names could not be loaded. Recorded times and statuses are still shown. Refresh the timeline to retry.</p>
+    <div id="timeline-content" hidden>
+        <dl class="placement-summary history-summary">
+            <div><dt>Current status</dt><dd id="timeline-status"></dd></div>
+            <div><dt>Hospital admission</dt><dd id="timeline-admitted-at"></dd></div>
+            <div><dt id="timeline-ended-label">Discharged</dt><dd id="timeline-ended-at"></dd></div>
+            <div id="timeline-admission-cancellation" hidden><dt>Cancellation operator (recorded)</dt><dd id="timeline-admission-operator"></dd></div>
+        </dl>
+        <section class="history-section" aria-labelledby="timeline-locations-title">
+            <h3 id="timeline-locations-title">Location history</h3>
+            <p class="muted">Department, ward, and bed periods, earliest start first. Entries with the same time do not establish operation order.</p>
+            <p id="timeline-locations-empty">No department placement recorded for this encounter.</p>
+            <div id="timeline-locations-table-region" class="table-region" role="region" aria-label="Location history table" tabindex="0" hidden>
+                <table class="history-table">
+                    <caption class="sr-only">Department, ward, and bed history for this encounter</caption>
+                    <thead><tr><th scope="col">From</th><th scope="col">Until</th><th scope="col">Department / ward</th><th scope="col">Bed</th><th scope="col">Record</th></tr></thead>
+                    <tbody id="timeline-location-rows"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="history-section" aria-labelledby="timeline-discharges-title">
+            <h3 id="timeline-discharges-title">Discharge history</h3>
+            <p id="timeline-correction-note" class="message information" hidden>A cancelled discharge does not end the hospital stay. Care continues from the original discharge time; the cancellation time records when the correction was made.</p>
+            <p id="timeline-discharges-empty">No discharge recorded for this encounter.</p>
+            <div id="timeline-discharges-table-region" class="table-region" role="region" aria-label="Discharge history table" tabindex="0" hidden>
+                <table class="history-table">
+                    <caption class="sr-only">Discharge and cancellation history for this encounter</caption>
+                    <thead><tr><th scope="col">Discharge time</th><th scope="col">Record status</th><th scope="col">Placement at discharge</th><th scope="col">Cancellation</th></tr></thead>
+                    <tbody id="timeline-discharge-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="dialog-actions">
+        <button id="refresh-timeline" class="button secondary" type="button">Refresh timeline</button>
+        <button id="done-timeline" class="button primary" type="button">Done</button>
+    </div>
+</dialog>
+</body>
+</html>
