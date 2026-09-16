@@ -66,6 +66,8 @@ To choose credentials, set `SPRING_SECURITY_USER_NAME` and
 application (or the IDE run configuration). Do not commit credentials. These
 settings apply to the default, `demo`, and `postgres` profiles. A generated
 development password is not a deployment account setup.
+The operator username must be nonblank and at most 100 characters so it fits
+the cancellation audit fields; invalid configuration fails at startup.
 
 | Role | Access |
 | --- | --- |
@@ -91,8 +93,8 @@ are not kept in browser storage. Writes, including login and logout, require a
 CSRF token. An expired session returns the page to sign-in without retrying a
 business write. For HTTPS deployment set `SERVER_SERVLET_SESSION_COOKIE_SECURE=true`.
 
-Recording the authenticated operator in business audit fields is the next slice.
-Cancellation operators are still entered manually.
+Admission and discharge cancellations record the authenticated username.
+Clients provide the cancellation time, and cannot choose the recorded operator.
 See [session API usage](docs/api.md#authentication) for Postman and script access.
 
 ### Patient workbench
@@ -131,13 +133,12 @@ before retrying; the page does not retry a write automatically.
 For an admission recorded in error, select **Cancel admission** in the history
 table. This is available only for an **Admitted** encounter with no department
 history, including closed placement periods. Review the patient and encounter,
-enter the cancellation time and recorded operator, then **Confirm cancellation**.
+enter the cancellation time, then **Confirm cancellation**.
 The time must be on or after admission and no later than now. The patient and
 encounter are retained; the stay becomes **Admission cancelled** and leaves the
 inpatient list when the patient record closes. **Back** closes without saving.
 If a save cannot be confirmed, **Refresh encounter** checks the recorded state
-before another attempt. The operator is currently entered by the user; it is not
-an authenticated identity.
+before another attempt. The backend records the signed-in account as the operator.
 
 For an admitted encounter, select **Enter department** in the history table.
 Choose an active department and ward, then select an available bed or explicitly
@@ -162,7 +163,7 @@ An encounter already discharged is shown with its recorded discharge time.
 
 For a mistaken discharge, select **Cancel discharge** in the patient record.
 Review the recorded discharge and the department, ward, and optional bed to restore.
-Enter the correction time and recorded operator, then **Confirm cancellation**.
+Enter the correction time, then **Confirm cancellation**.
 Care continues from the original discharge time; the correction time is retained
 separately. The original references must be active, and later hospital stays or
 bed use can prevent restoration. The form shows those conflicts and does not
@@ -170,7 +171,7 @@ offer a replacement bed. A genuine readmission requires a new encounter.
 The page sends the reviewed discharge ID so a later discharge cannot be cancelled
 by a stale form. After an unconfirmed save, use **Refresh encounter** to check
 whether the correction was recorded. Closing the patient record refreshes the
-inpatient list. The operator remains user-entered until authentication is added.
+inpatient list. The timeline shows the signed-in account recorded by the backend.
 
 Select **Timeline** for any encounter, including discharged and cancelled stays.
 The view shows admission and cancellation details, department/ward/bed periods,
@@ -400,17 +401,19 @@ Test configuration and expected behaviour are in
 
 Patients can be listed and searched by name or medical record number, with
 pagination. Patient records also show their encounters with pagination. Patient
-and encounter details are retrieved by ID. A hospital-wide inpatient list and
-reference-data maintenance endpoints are not implemented.
+and encounter details are retrieved by ID. The hospital-wide inpatient list supports
+search, status and current-location filters, and pagination. Reference-data
+maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
-Authentication and role-based access are not implemented. Cancellation operators
-are supplied by the caller; these fields do not identify an authenticated user.
+Session authentication and viewer/operator roles protect the workbench and APIs.
+Cancellation operators come from the authenticated account. Accounts are currently
+configured in memory; persistent account provisioning remains to be implemented.
 The timeline contains location and discharge history, not a complete audit of all
 system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs and provides
-a patient directory and registration page. Physician assignment, outpatient
-scheduling, clinical orders, billing, and inpatient workflow screens are outside
-the implemented scope. The next business increments are inpatient lists and
-their workbench screens, followed by authenticated operations.
+connected patient and inpatient workbench pages for the full workflow. Physician
+assignment, outpatient scheduling, clinical orders, and billing are outside the
+implemented scope. The next delivery work is persistent account provisioning,
+repeatable demo setup, deployment, and an interview walkthrough.

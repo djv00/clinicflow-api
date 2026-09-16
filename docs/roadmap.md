@@ -15,24 +15,23 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | In progress | Session login/logout, configured operator and optional viewer accounts, API role checks, page action visibility, and CSRF protection are implemented. Server-identified business audit operators and persistent account provisioning remain. |
+| Authentication and roles | Implemented for local use | Session login/logout, configured operator and optional viewer accounts, API role checks, page action visibility, CSRF protection, and authenticated cancellation operators. Persistent account provisioning remains for deployment. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Complete authenticated operations.** Login and role checks protect the workflow.
-   Next record the operator from the authenticated identity, and define persistent
-   account provisioning before deployment.
+1. **Prepare persistent accounts.** Login, role checks, and authenticated cancellation
+   operators are connected. Next implement persistent account provisioning before
+   deployment.
 2. **Package the demonstration.** Make persistent demo setup repeatable, document
    configuration and deployment, and prepare an English walkthrough of the
    workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The core workbench flow, session login, and viewer/operator permissions are
-connected. The next slice replaces caller-entered cancellation operators with
-authenticated identities. The current configured accounts are for local use;
-persistent account provisioning remains part of the deployment work.
+The core workbench flow, session login, viewer/operator permissions, and
+authenticated cancellation operators are connected. The current configured
+accounts are for local use; persistent account provisioning is the next slice.
 
 ## Later extensions
 
@@ -70,12 +69,12 @@ or certificate modules are outside this delivery sequence.
   optional beds, inactive references, literal search, pagination, and workflow changes.
   Browser checks cover filtering, patient record actions, refreshed results, failed reads,
   and stale requests. PostgreSQL checks include the joined worklist query and page count.
-- Admission cancellation page checks cover time and operator validation, leaving without
+- Admission cancellation page checks cover time validation, leaving without
   saving, failed reads and refresh, changing encounter state, blocked duplicate submissions,
   and recovery after a committed cancellation's response is lost. The cancelled encounter
   remains in the patient record and timeline and leaves the inpatient list.
 - Discharge cancellation page checks cover original placement previews, bed and no-bed
-  restoration, time and operator validation, leaving without saving, occupied beds,
+  restoration, time validation, leaving without saving, occupied beds,
   intervening bed use, another active stay, failed reads, stale forms, duplicate-submit
   prevention, and recovery after a committed correction's response is lost. Timeline and
   inpatient list checks confirm the restored care period. H2 and PostgreSQL tests verify
@@ -96,5 +95,13 @@ or certificate modules are outside this delivery sequence.
   discharged, and cancelled states, timeline access, inpatient filtering, and
   operator action visibility. A failed session-permissions request keeps editing
   hidden in the directory and patient record; reloading restores operator access.
-  This slice passed 355 regular tests, 8 PostgreSQL tests, and the authenticated
+  The role slice passed 355 regular tests, 8 PostgreSQL tests, and the authenticated
   demo workflow.
+- Authenticated cancellation checks cover missing/forged request operators,
+  different signed-in operators, canonical account names after real login,
+  persisted timeline values, and repeated cancellations preserving the original
+  audit. Operator account names are checked against the audit field length at
+  startup. Browser checks confirm both forms save without an operator input,
+  admission-time validation still works, and discharge restoration shows the
+  authenticated operator in the timeline. This slice passed 357 regular tests,
+  8 PostgreSQL tests, and the updated authenticated demo workflow.

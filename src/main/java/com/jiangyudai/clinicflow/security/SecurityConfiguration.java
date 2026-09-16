@@ -44,6 +44,9 @@ public class SecurityConfiguration {
             @Value("${clinicflow.security.viewer.username:viewer}") String viewerUsername,
             @Value("${clinicflow.security.viewer.password:}") String viewerPassword) {
         var account = properties.getUser();
+        Assert.hasText(account.getName(), "Operator username is required");
+        Assert.isTrue(account.getName().length() <= 100,
+                "Operator username must not exceed 100 characters for business audit records");
         if (account.isPasswordGenerated()) {
             log.warn("Using generated development password for {}: {}. Configure SPRING_SECURITY_USER_PASSWORD before deployment.",
                     account.getName(), account.getPassword());

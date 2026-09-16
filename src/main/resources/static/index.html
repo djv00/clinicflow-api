@@ -426,13 +426,7 @@
                 <p id="cancellation-time-hint" class="field-hint"></p>
                 <p id="admissionCancelledAt-error" class="field-error" hidden></p>
             </div>
-            <div class="field">
-                <label for="admissionCancelledBy">Recorded operator</label>
-                <input id="admissionCancelledBy" name="cancelledBy" type="text" maxlength="100" required
-                       aria-describedby="cancellation-operator-hint admissionCancelledBy-error">
-                <p id="cancellation-operator-hint" class="field-hint">Name or staff identifier to record with this correction.</p>
-                <p id="admissionCancelledBy-error" class="field-error" hidden></p>
-            </div>
+            <p class="field-hint">Your signed-in account will be recorded as the operator.</p>
         </fieldset>
         <div class="placement-retry">
             <button id="refresh-admission-cancellation" class="button secondary" type="button">Refresh encounter</button>
@@ -475,13 +469,7 @@
                 <p id="discharge-cancellation-time-hint" class="field-hint"></p>
                 <p id="dischargeCancelledAt-error" class="field-error" hidden></p>
             </div>
-            <div class="field">
-                <label for="dischargeCancelledBy">Recorded operator</label>
-                <input id="dischargeCancelledBy" name="cancelledBy" type="text" maxlength="100" required
-                       aria-describedby="discharge-cancellation-operator-hint dischargeCancelledBy-error">
-                <p id="discharge-cancellation-operator-hint" class="field-hint">Name or staff identifier to record with this correction.</p>
-                <p id="dischargeCancelledBy-error" class="field-error" hidden></p>
-            </div>
+            <p class="field-hint">Your signed-in account will be recorded as the operator.</p>
         </fieldset>
         <p class="dialog-intro">The original placement must still be available. Later hospital stays or bed use may prevent restoration. A replacement bed cannot be selected here.</p>
         <div class="placement-retry">

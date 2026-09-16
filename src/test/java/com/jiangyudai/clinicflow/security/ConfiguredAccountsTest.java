@@ -42,6 +42,32 @@ class ConfiguredAccountsTest {
                 " ", "viewer-password")).isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void operatorUsernameMustFitBusinessAuditRecords() {
+        var properties = properties();
+        properties.getUser().setName("a".repeat(101));
+        assertThatThrownBy(() -> configuration.userDetailsService(properties, configuration.passwordEncoder(), "viewer", ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Operator username must not exceed 100 characters for business audit records");
+    }
+
+    @Test
+    void operatorUsernameCanUseTheFullAuditFieldLength() {
+        var properties = properties();
+        String username = "a".repeat(100);
+        properties.getUser().setName(username);
+        var users = configuration.userDetailsService(properties, configuration.passwordEncoder(), "viewer", "");
+        assertThat(users.loadUserByUsername(username).getUsername()).isEqualTo(username);
+    }
+
+    @Test
+    void operatorUsernameCannotBeBlank() {
+        var properties = properties();
+        properties.getUser().setName(" ");
+        assertThatThrownBy(() -> configuration.userDetailsService(properties, configuration.passwordEncoder(), "viewer", ""))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("Operator username is required");
+    }
+
     private SecurityProperties properties() {
         var properties = new SecurityProperties();
         properties.getUser().setName("operator");

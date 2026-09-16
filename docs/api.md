@@ -48,7 +48,10 @@ validation or services. Missing/invalid CSRF tokens instead return `403` with
 title `Request not allowed`. Permission denial does not sign the user out.
 Both roles can inspect their session and sign out.
 
-Accounts are still configured in memory and `cancelledBy` remains caller-supplied.
+Accounts are still configured in memory. Admission and discharge cancellations
+record the authenticated username; they no longer accept an operator as input.
+A legacy `cancelledBy` request property is ignored and cannot override that identity.
+Existing historical operator values are retained.
 Account configuration is in the [README](../README.md#sign-in).
 The workbench uses an HttpOnly session cookie
 and fetches a CSRF token before writes, following Spring Security's
@@ -426,8 +429,7 @@ POST /api/v1/encounters/{id}/admission-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-01T14:30:00-04:00",
-  "cancelledBy": "demo-clerk"
+  "cancelledAt": "2025-09-01T14:30:00-04:00"
 }
 ```
 
@@ -438,8 +440,8 @@ and `admissionCancelledBy`. These two fields are null before cancellation.
   encounter must be `ADMITTED` with no location history, including closed records.
 - The cancellation time is required, must include an offset, cannot be in the
   future, and cannot precede admission. Equal times are allowed.
-- The operator is required and limited to 100 characters. It is a caller-supplied
-  identifier; authentication and user lookup are not implemented yet.
+- `admissionCancelledBy` is the authenticated operator's username, recorded by
+  the server. No operator field is required in the request.
 - Cancellation retains the encounter and its original number. The patient can
   have a new admission with a new encounter number afterwards.
 - Repeated cancellation returns `409` and preserves the original cancellation
@@ -457,8 +459,7 @@ POST /api/v1/encounters/{id}/discharge-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-03T15:00:00-04:00",
-  "cancelledBy": "demo-clerk"
+  "cancelledAt": "2025-09-03T15:00:00-04:00"
 }
 ```
 
@@ -480,8 +481,8 @@ the current discharge for API callers and demo scripts.
   Same-instant admissions are treated as conflicts because their order is ambiguous.
   An `ADMISSION_CANCELLED` record does not block correction of the earlier discharge.
 - The cancellation time must include an offset, be at or after discharge, and
-  not be in the future. The operator is required and limited to 100 characters;
-  as with admission cancellation, it is supplied by the caller.
+  not be in the future. The discharge record's `cancelledBy` is the authenticated
+  operator's username, recorded by the server.
 - Effective care continues at the department, ward, and optional bed referenced
   by that discharge. These references must still be active. The bed must be free
   now and have no conflicting occupancy since the original discharge, including

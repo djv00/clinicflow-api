@@ -167,6 +167,32 @@ class SessionSecurityIntegrationTest {
         assertThat(session.isInvalid()).isTrue();
     }
 
+    @Test
+    void cancellationRecordsTheLoggedInIdentityInsteadOfTheRequestOperator() throws Exception {
+        MockHttpSession session = login(csrf(null), "TEST-OPERATOR", "test-password");
+        Csrf token = csrf(session);
+        MvcResult patient = mvc.perform(post("/api/v1/patients").session(session).header(token.header(), token.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(patient()))
+                .andExpect(status().isCreated()).andReturn();
+        String patientId = mapper.readTree(patient.getResponse().getContentAsString()).get("id").asText();
+        MvcResult admission = mvc.perform(post("/api/v1/encounters").session(session).header(token.header(), token.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"patientId":"%s","encounterNumber":"AUTH-%s","admittedAt":"2025-09-01T09:00:00-04:00"}
+                                """.formatted(patientId, UUID.randomUUID())))
+                .andExpect(status().isCreated()).andReturn();
+        String encounterId = mapper.readTree(admission.getResponse().getContentAsString()).get("id").asText();
+        mvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", encounterId)
+                        .session(session).header(token.header(), token.token())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"cancelledAt":"2025-09-01T10:00:00-04:00","cancelledBy":"forged-operator"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.admissionCancelledBy").value("test-operator"));
+        mvc.perform(get("/api/v1/encounters/{id}/timeline", encounterId).session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.encounter.admissionCancelledBy").value("test-operator"));
+    }
+
     private Csrf csrf(MockHttpSession session) throws Exception {
         var request = get("/api/auth/csrf");
         if (session != null) request.session(session);

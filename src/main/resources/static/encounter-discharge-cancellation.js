@@ -2,7 +2,7 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
     encounterStatuses, formatEncounterTime, loadPlacementDetails } from './workbench.js';
 
 const dialog = element('discharge-cancellation-dialog');
-const fields = { cancelledAt: 'dischargeCancelledAt', cancelledBy: 'dischargeCancelledBy' };
+const fields = { cancelledAt: 'dischargeCancelledAt' };
 let encounter;
 let discharge;
 let onClose;
@@ -157,7 +157,6 @@ element('discharge-cancellation-form').addEventListener('submit', async (event) 
     const enteredTime = element('dischargeCancelledAt').value;
     const cancelledAt = new Date(enteredTime);
     const normalizedTime = enteredTime.length === 16 ? `${enteredTime}:00` : enteredTime;
-    const cancelledBy = element('dischargeCancelledBy').value.trim();
     let timeError;
     if (Number.isNaN(cancelledAt.getTime()) || localDateTimeValue(cancelledAt, true) !== normalizedTime) {
         timeError = 'Enter a valid local cancellation time.';
@@ -169,11 +168,6 @@ element('discharge-cancellation-form').addEventListener('submit', async (event) 
     if (timeError) {
         showFieldError('dischargeCancelledAt', timeError);
         element('dischargeCancelledAt').focus();
-        return;
-    }
-    if (!cancelledBy || cancelledBy.length > 100) {
-        showFieldError('dischargeCancelledBy', !cancelledBy ? 'Recorded operator is required.' : 'Recorded operator must not exceed 100 characters.');
-        element('dischargeCancelledBy').focus();
         return;
     }
     saving = true;
@@ -188,7 +182,7 @@ element('discharge-cancellation-form').addEventListener('submit', async (event) 
         }
         saved = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/discharge-cancellations`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cancelledAt: cancelledAt.toISOString(), cancelledBy, expectedDischargeId: discharge.id })
+            body: JSON.stringify({ cancelledAt: cancelledAt.toISOString(), expectedDischargeId: discharge.id })
         });
     } catch (error) {
         let message = cancellationError(error);
@@ -208,7 +202,7 @@ element('discharge-cancellation-form').addEventListener('submit', async (event) 
         updateControls();
     }
     if (saved) {
-        notice = `Discharge cancelled for ${saved.encounterNumber}. Care restored from ${formatEncounterTime(discharge.dischargedAt)}; recorded operator: ${cancelledBy}.`;
+        notice = `Discharge cancelled for ${saved.encounterNumber}. Care restored from ${formatEncounterTime(discharge.dischargedAt)}. The correction is recorded in the timeline.`;
         dialog.close();
     } else {
         element(firstErrorField || 'discharge-cancellation-error').focus();

@@ -39,7 +39,7 @@ class AdmissionCancellationControllerTest {
             "22222222-2222-2222-2222-222222222222"
     );
     private static final String REQUEST = """
-            {"cancelledAt": "2025-09-03T10:00:00-04:00", "cancelledBy": "demo-clerk"}
+            {"cancelledAt": "2025-09-03T10:00:00-04:00"}
             """;
 
     @Autowired
@@ -48,12 +48,11 @@ class AdmissionCancellationControllerTest {
     private EncounterService encounterService;
 
     @Test
-    void requiresTimeAndOperator() throws Exception {
+    void requiresCancellationTime() throws Exception {
         mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.cancelledAt").value("Cancellation time is required"))
-                .andExpect(jsonPath("$.errors.cancelledBy").value("Cancellation operator is required"));
+                .andExpect(jsonPath("$.errors.cancelledAt").value("Cancellation time is required"));
 
         verifyNoInteractions(encounterService);
     }
@@ -74,7 +73,7 @@ class AdmissionCancellationControllerTest {
     void requiresAValidTimestampWithOffset(String time) throws Exception {
         mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
-                        .content("{\"cancelledAt\": \"" + time + "\", \"cancelledBy\": \"demo-clerk\"}"))
+                        .content("{\"cancelledAt\": \"" + time + "\"}"))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(encounterService);
@@ -83,7 +82,7 @@ class AdmissionCancellationControllerTest {
     @ParameterizedTest
     @MethodSource("businessErrors")
     void mapsBusinessErrors(RuntimeException exception, int code, String title) throws Exception {
-        when(encounterService.cancelAdmission(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("demo-clerk")))
+        when(encounterService.cancelAdmission(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("test-operator")))
                 .thenThrow(exception);
 
         mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", ENCOUNTER_ID).with(csrf())
@@ -95,11 +94,8 @@ class AdmissionCancellationControllerTest {
 
     private static Stream<Arguments> invalidRequests() {
         return Stream.of(
-                Arguments.of("{\"cancelledAt\": null, \"cancelledBy\": \"demo-clerk\"}", "cancelledAt"),
-                Arguments.of(REQUEST.replace("2025-09-03T10:00:00-04:00", OffsetDateTime.now().plusDays(1).toString()), "cancelledAt"),
-                Arguments.of(REQUEST.replace("\"demo-clerk\"", "null"), "cancelledBy"),
-                Arguments.of(REQUEST.replace("demo-clerk", "   "), "cancelledBy"),
-                Arguments.of(REQUEST.replace("demo-clerk", "a".repeat(101)), "cancelledBy")
+                Arguments.of("{\"cancelledAt\": null}", "cancelledAt"),
+                Arguments.of(REQUEST.replace("2025-09-03T10:00:00-04:00", OffsetDateTime.now().plusDays(1).toString()), "cancelledAt")
         );
     }
 

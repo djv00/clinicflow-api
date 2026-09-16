@@ -67,6 +67,7 @@ try {
 
 try {
     $demoCsrf = Invoke-RestMethod -Uri "$BaseUrl/api/auth/csrf" -WebSession $demoSession -TimeoutSec 15
+    $account = Invoke-RestMethod -Uri "$BaseUrl/api/auth/session" -WebSession $demoSession -TimeoutSec 15
     Write-Host '1. Look up demo departments, wards, and available beds.'
     $departments = Invoke-Api GET '/departments?active=true'
     $wards = Invoke-Api GET '/wards?active=true'
@@ -92,9 +93,9 @@ try {
     }
     $cancelledAdmission = Invoke-Api POST "/encounters/$($cancelledAdmission.id)/admission-cancellations" @{
         cancelledAt = Get-EventTime
-        cancelledBy = 'demo-clerk'
     }
     Assert-Demo ($cancelledAdmission.status -eq 'ADMISSION_CANCELLED') 'Admission was not cancelled.'
+    Assert-Demo ($cancelledAdmission.admissionCancelledBy -ceq $account.username) 'Admission cancellation did not record the signed-in operator.'
     $cancelledTimeline = Invoke-Api GET "/encounters/$($cancelledAdmission.id)/timeline"
     Assert-Demo ($cancelledTimeline.locations.Count -eq 0 -and $cancelledTimeline.discharges.Count -eq 0) 'Cancelled admission should have no location or discharge history.'
 
@@ -131,7 +132,6 @@ try {
     Assert-BedOccupancy $secondBed.id $false
     $restored = Invoke-Api POST "$encounterPath/discharge-cancellations" @{
         cancelledAt = Get-EventTime
-        cancelledBy = 'demo-clerk'
     }
     Assert-Demo ($restored.status -eq 'IN_DEPARTMENT' -and $null -eq $restored.dischargedAt) 'Discharge cancellation did not restore the encounter.'
     Assert-BedOccupancy $secondBed.id $true
@@ -140,7 +140,7 @@ try {
     Assert-Demo ($restoredTimeline.discharges.Count -eq 1 -and $currentLocations.Count -eq 1) 'Expected one discharge audit and one current location.'
     $audit = $restoredTimeline.discharges[0]
     Assert-Demo ($audit.locationId -eq $secondLocation.id -and $audit.restoredLocationId -eq $currentLocations[0].id) 'Discharge audit does not link the original and restored locations.'
-    Assert-Demo ($audit.cancelledBy -eq 'demo-clerk' -and $null -ne $audit.cancelledAt) 'Missing discharge cancellation audit.'
+    Assert-Demo ($audit.cancelledBy -ceq $account.username -and $null -ne $audit.cancelledAt) 'Discharge cancellation did not record the signed-in operator.'
     Assert-Demo ([DateTimeOffset]$currentLocations[0].startedAt -eq [DateTimeOffset]$discharged.dischargedAt) 'Restored location must continue from the original discharge time.'
 
     Write-Host '6. Discharge again and inspect the completed encounter timeline.'
