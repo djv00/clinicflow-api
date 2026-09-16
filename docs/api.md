@@ -26,7 +26,8 @@ keep the cookie jar enabled for the following sequence:
    form fields `username` and `password`, and the returned CSRF header. Success
    is `204`; wrong credentials return a generic `401` problem response. The
    session identifier changes on successful authentication; retain the new cookie.
-3. `GET /api/auth/session` returns the signed-in `username`. Anonymous requests
+3. `GET /api/auth/session` returns the signed-in `username` and `roles`, for example
+   `{"username":"viewer","roles":["VIEWER"]}`. Anonymous requests
    receive `401` JSON, not an HTML redirect.
 4. Obtain a fresh token from `/api/auth/csrf` after login. Add that header and the
    session cookie to POST requests in the examples below. GET requests only need
@@ -40,12 +41,21 @@ be rejected by CSRF protection first. An expired session requires signing in
 again. Clients must not automatically replay an unconfirmed business write.
 Authentication responses and protected pages use no-store cache headers.
 
-The first slice has one configured in-memory operator account, with no role
-separation yet. `cancelledBy` remains caller-supplied. Account configuration is in
-the [README](../README.md#sign-in). The workbench uses an HttpOnly session cookie
+Business reads (`GET` and `HEAD` under `/api/v1`) require `VIEWER` or `OPERATOR`.
+All other methods under `/api/v1` require `OPERATOR`. A viewer write with a valid
+CSRF token returns `403` with title `Access denied` before reaching business
+validation or services. Missing/invalid CSRF tokens instead return `403` with
+title `Request not allowed`. Permission denial does not sign the user out.
+Both roles can inspect their session and sign out.
+
+Accounts are still configured in memory and `cancelledBy` remains caller-supplied.
+Account configuration is in the [README](../README.md#sign-in).
+The workbench uses an HttpOnly session cookie
 and fetches a CSRF token before writes, following Spring Security's
 [CSRF integration](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
 and [logout handling](https://docs.spring.io/spring-security/reference/servlet/authentication/logout.html).
+Role rules use Spring Security's
+[request authorization](https://docs.spring.io/spring-security/reference/servlet/authorization/authorize-http-requests.html).
 
 ## Endpoints
 

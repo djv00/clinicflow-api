@@ -4,6 +4,7 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
 import org.springframework.context.annotation.Bean;
@@ -17,8 +18,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.savedrequest.NullRequestCache;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -36,14 +40,24 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    UserDetailsService userDetailsService(SecurityProperties properties, PasswordEncoder encoder) {
+    UserDetailsService userDetailsService(SecurityProperties properties, PasswordEncoder encoder,
+            @Value("${clinicflow.security.viewer.username:viewer}") String viewerUsername,
+            @Value("${clinicflow.security.viewer.password:}") String viewerPassword) {
         var account = properties.getUser();
         if (account.isPasswordGenerated()) {
             log.warn("Using generated development password for {}: {}. Configure SPRING_SECURITY_USER_PASSWORD before deployment.",
                     account.getName(), account.getPassword());
         }
-        return new InMemoryUserDetailsManager(User.withUsername(account.getName())
+        var users = new InMemoryUserDetailsManager(User.withUsername(account.getName())
                 .password(encoder.encode(account.getPassword())).roles("OPERATOR").build());
+        if (StringUtils.hasText(viewerPassword)) {
+            Assert.hasText(viewerUsername, "Viewer username is required when a viewer password is configured");
+            Assert.isTrue(!viewerUsername.equalsIgnoreCase(account.getName()),
+                    "Viewer and operator usernames must be different");
+            users.createUser(User.withUsername(viewerUsername)
+                    .password(encoder.encode(viewerPassword)).roles("VIEWER").build());
+        }
+        return users;
     }
 
     @Bean
@@ -54,6 +68,9 @@ public class SecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/login.html", "/login.js", "/session.js", "/patients.css",
                                 "/api/auth/csrf", "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole("VIEWER", "OPERATOR")
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/**").hasAnyRole("VIEWER", "OPERATOR")
+                        .requestMatchers("/api/v1/**").hasRole("OPERATOR")
                         .anyRequest().authenticated())
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))
                 .formLogin(form -> form.loginPage("/login.html").loginProcessingUrl("/api/auth/login")
@@ -72,8 +89,15 @@ public class SecurityConfiguration {
                                 loginEntryPoint.commence(request, response, exception);
                             }
                         })
-                        .accessDeniedHandler((request, response, exception) -> writeProblem(mapper, response, 403,
-                                "Request not allowed", "Your session or security token is no longer valid. Reload the page and try again.")));
+                        .accessDeniedHandler((request, response, exception) -> {
+                            if (exception instanceof CsrfException) {
+                                writeProblem(mapper, response, 403, "Request not allowed",
+                                        "Your session or security token is no longer valid. Reload the page and try again.");
+                            } else {
+                                writeProblem(mapper, response, 403, "Access denied",
+                                        "Your account does not have permission to perform this action.");
+                            }
+                        }));
         return http.build();
     }
 

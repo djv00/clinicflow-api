@@ -24,19 +24,21 @@
     </nav>
     <div class="account-controls">
         <span id="signed-in-user" class="muted" aria-label="Signed-in user"></span>
+        <span id="account-role" class="muted" aria-label="Account access"></span>
         <button id="sign-out" class="button secondary" type="button">Sign out</button>
     </div>
 </header>
 <main id="main">
     <p id="account-error" class="message error" role="alert" hidden></p>
+    <p id="read-only-notice" class="message information" hidden>Read-only access. You can view patients, hospital stays, and timelines. Contact an operator to register patients or make changes.</p>
     <section id="patients-view" aria-label="Patient administration">
     <div class="page-heading">
         <div>
             <p class="eyebrow">Patient directory</p>
             <h1>Patients</h1>
-            <p class="intro">Find an existing patient or register a new record.</p>
+            <p class="intro">Find a patient and review their hospital history.</p>
         </div>
-        <button id="register-patient" class="button primary" type="button">
+        <button id="register-patient" class="button primary" type="button" hidden>
             <span aria-hidden="true">+</span> Register patient
         </button>
     </div>
@@ -230,7 +232,7 @@
     <section id="patient-encounters" class="patient-encounters" aria-labelledby="encounters-title" hidden>
         <div class="encounters-heading">
             <h3 id="encounters-title">Hospital encounters</h3>
-            <button id="admit-patient" class="button primary" type="button"
+            <button id="admit-patient" class="button primary" type="button" hidden
                     aria-expanded="false" aria-controls="admission-form">Admit patient</button>
         </div>
         <p class="muted">Newest admission first. Times are shown in your local time.</p>

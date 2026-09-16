@@ -26,7 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:session-security-it;DB_CLOSE_ON_EXIT=FALSE",
         "spring.security.user.name=test-operator",
-        "spring.security.user.password=test-password"
+        "spring.security.user.password=test-password",
+        "clinicflow.security.viewer.username=test-viewer",
+        "clinicflow.security.viewer.password=viewer-password"
 })
 @AutoConfigureMockMvc
 class SessionSecurityIntegrationTest {
@@ -96,6 +98,7 @@ class SessionSecurityIntegrationTest {
         assertThat(session.getId()).isNotEqualTo(anonymousSessionId);
         mvc.perform(get("/api/auth/session").session(session))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.username").value("test-operator"))
+                .andExpect(jsonPath("$.roles[0]").value("OPERATOR"))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(header().string("Cache-Control", containsString("no-store")));
         mvc.perform(get("/").session(session)).andExpect(status().isOk())
@@ -144,6 +147,26 @@ class SessionSecurityIntegrationTest {
         assertThat(encoder.matches("test-password", encoded)).isTrue();
     }
 
+    @Test
+    void viewerCanSignInReadAndSignOutButCannotRegisterPatients() throws Exception {
+        MockHttpSession session = login(csrf(null), "test-viewer", "viewer-password");
+        mvc.perform(get("/api/auth/session").session(session))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.username").value("test-viewer"))
+                .andExpect(jsonPath("$.roles[0]").value("VIEWER"));
+        mvc.perform(get("/").session(session)).andExpect(status().isOk());
+        for (String path : new String[]{"/patients", "/inpatients", "/departments", "/wards", "/beds"}) {
+            mvc.perform(get("/api/v1" + path).session(session)).andExpect(status().isOk());
+        }
+        Csrf token = csrf(session);
+        mvc.perform(post("/api/v1/patients").session(session).header(token.header(), token.token())
+                        .contentType(MediaType.APPLICATION_JSON).content(patient()))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").value("Access denied"));
+        mvc.perform(get("/api/auth/session").session(session)).andExpect(status().isOk());
+        mvc.perform(post("/api/auth/logout").session(session).header(token.header(), token.token()))
+                .andExpect(status().isNoContent());
+        assertThat(session.isInvalid()).isTrue();
+    }
+
     private Csrf csrf(MockHttpSession session) throws Exception {
         var request = get("/api/auth/csrf");
         if (session != null) request.session(session);
@@ -155,9 +178,13 @@ class SessionSecurityIntegrationTest {
     }
 
     private MockHttpSession login(Csrf csrf) throws Exception {
+        return login(csrf, "test-operator", "test-password");
+    }
+
+    private MockHttpSession login(Csrf csrf, String username, String password) throws Exception {
         MvcResult result = mvc.perform(post("/api/auth/login").session(csrf.session())
-                        .header(csrf.header(), csrf.token()).param("username", "test-operator")
-                        .param("password", "test-password"))
+                        .header(csrf.header(), csrf.token()).param("username", username)
+                        .param("password", password))
                 .andExpect(status().isNoContent()).andReturn();
         return (MockHttpSession) result.getRequest().getSession(false);
     }

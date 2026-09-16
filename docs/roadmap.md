@@ -15,24 +15,24 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | In progress | Session login/logout, a configured operator account, page/API authentication, and CSRF protection are implemented. Role separation and server-identified business audit operators remain. |
+| Authentication and roles | In progress | Session login/logout, configured operator and optional viewer accounts, API role checks, page action visibility, and CSRF protection are implemented. Server-identified business audit operators and persistent account provisioning remain. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Complete authenticated operations.** Login protects both pages and APIs.
-   Next define the small set of operator roles and record the operator from the
-   authenticated identity. Verify permission failures as well as successful workflows.
+1. **Complete authenticated operations.** Login and role checks protect the workflow.
+   Next record the operator from the authenticated identity, and define persistent
+   account provisioning before deployment.
 2. **Package the demonstration.** Make persistent demo setup repeatable, document
    configuration and deployment, and prepare an English walkthrough of the
    workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The core workbench flow and session login are connected. The next slice is role
-checks for reads and workflow writes, followed by replacing caller-entered
-operators with authenticated identities. The current single-account setup is
-for local use; persistent account provisioning remains part of that work.
+The core workbench flow, session login, and viewer/operator permissions are
+connected. The next slice replaces caller-entered cancellation operators with
+authenticated identities. The current configured accounts are for local use;
+persistent account provisioning remains part of the deployment work.
 
 ## Later extensions
 
@@ -88,3 +88,13 @@ or certificate modules are outside this delivery sequence.
 - Browser checks cover incorrect credentials, successful sign-in, patient registration,
   inactivity expiry, sign-out, and a second tab attempting to use the signed-out session.
   The authenticated demo script completes the inpatient workflow and signs out.
+- Role checks cover all seven business POST endpoints, other write methods,
+  an unrecognised role, distinct CSRF/permission failures, and a real viewer login,
+  reads, forbidden registration, and logout. Account configuration checks cover
+  optional viewer activation, BCrypt, and duplicate/blank usernames.
+- Browser role checks cover read-only records in admitted, in-department,
+  discharged, and cancelled states, timeline access, inpatient filtering, and
+  operator action visibility. A failed session-permissions request keeps editing
+  hidden in the directory and patient record; reloading restores operator access.
+  This slice passed 355 regular tests, 8 PostgreSQL tests, and the authenticated
+  demo workflow.

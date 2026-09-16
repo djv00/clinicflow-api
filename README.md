@@ -55,10 +55,10 @@ endpoints are not available yet.
 
 ### Sign in
 
-The workbench and business APIs require a signed-in session. The first security
-slice provides one configured operator account held in memory; it does not yet
-include user management or different permission levels. Its password is encoded
-with BCrypt. By default, the username is `operator` and a generated development
+The workbench and business APIs require a signed-in session. Accounts are
+configured at startup and held in memory; user management and persistent account
+provisioning are not implemented yet. Passwords are encoded with BCrypt.
+By default, the operator username is `operator` and a generated development
 password is printed once during startup. That password changes on restart.
 
 To choose credentials, set `SPRING_SECURITY_USER_NAME` and
@@ -67,6 +67,23 @@ application (or the IDE run configuration). Do not commit credentials. These
 settings apply to the default, `demo`, and `postgres` profiles. A generated
 development password is not a deployment account setup.
 
+| Role | Access |
+| --- | --- |
+| `VIEWER` | Search patients and inpatients; view patient records, encounter history, timelines, and location dictionaries. |
+| `OPERATOR` | All viewer access, plus registration, admission, department entry, transfer, discharge, and both cancellation workflows. |
+
+To enable a separate read-only account, set `CLINICFLOW_VIEWER_PASSWORD` before
+starting the application. Its username defaults to `viewer`; optionally set
+`CLINICFLOW_VIEWER_USERNAME`. Without a nonblank password this account does not
+exist. The viewer and operator usernames must differ, ignoring case. Both account
+configurations apply to all database profiles and require a restart to change.
+
+The header shows the signed-in account's access level. Read-only users can open
+records and timelines, but do not see editing actions. Those actions also stay
+hidden if account permissions cannot be loaded. The API independently rejects
+viewer writes with `403`, including requests made outside the workbench. Use the
+operator account for the demo workflow script.
+
 Open the workbench, sign in, and use **Sign out** in the header when finished.
 Sessions expire after 30 minutes of inactivity and are lost on server restart.
 The session cookie is HttpOnly and SameSite=Lax; credentials and session tokens
@@ -74,8 +91,8 @@ are not kept in browser storage. Writes, including login and logout, require a
 CSRF token. An expired session returns the page to sign-in without retrying a
 business write. For HTTPS deployment set `SERVER_SERVLET_SESSION_COOKIE_SECURE=true`.
 
-Role-based access and recording the authenticated operator in business audit
-fields are subsequent slices. Cancellation operators are still entered manually.
+Recording the authenticated operator in business audit fields is the next slice.
+Cancellation operators are still entered manually.
 See [session API usage](docs/api.md#authentication) for Postman and script access.
 
 ### Patient workbench
