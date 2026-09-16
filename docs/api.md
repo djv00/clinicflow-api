@@ -15,6 +15,38 @@ reference endpoints when using another database. The
 [demo script](../scripts/demo-workflow.ps1) runs the complete workflow with new
 record numbers and current UTC timestamps.
 
+## Authentication
+
+Business APIs require a server-side login session. In Postman or an HTTP client,
+keep the cookie jar enabled for the following sequence:
+
+1. `GET /api/auth/csrf` returns `headerName` and `token` and creates an anonymous
+   session cookie. Retain the cookie and token together.
+2. `POST /api/auth/login` with `Content-Type: application/x-www-form-urlencoded`,
+   form fields `username` and `password`, and the returned CSRF header. Success
+   is `204`; wrong credentials return a generic `401` problem response. The
+   session identifier changes on successful authentication; retain the new cookie.
+3. `GET /api/auth/session` returns the signed-in `username`. Anonymous requests
+   receive `401` JSON, not an HTML redirect.
+4. Obtain a fresh token from `/api/auth/csrf` after login. Add that header and the
+   session cookie to POST requests in the examples below. GET requests only need
+   the session cookie. Login and logout invalidate the previous CSRF token.
+5. `POST /api/auth/logout` with the cookie and CSRF header returns `204`,
+   invalidates the session, and clears the session cookie. GET does not sign out.
+
+Missing or invalid CSRF tokens return `403`. An unauthenticated business request
+with a valid token returns `401`; an unauthenticated write without a token may
+be rejected by CSRF protection first. An expired session requires signing in
+again. Clients must not automatically replay an unconfirmed business write.
+Authentication responses and protected pages use no-store cache headers.
+
+The first slice has one configured in-memory operator account, with no role
+separation yet. `cancelledBy` remains caller-supplied. Account configuration is in
+the [README](../README.md#sign-in). The workbench uses an HttpOnly session cookie
+and fetches a CSRF token before writes, following Spring Security's
+[CSRF integration](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
+and [logout handling](https://docs.spring.io/spring-security/reference/servlet/authentication/logout.html).
+
 ## Endpoints
 
 | Method | Path after `/api/v1` | Success | Response |

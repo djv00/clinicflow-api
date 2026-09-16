@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:inpatients-it;DB_CLOSE_ON_EXIT=FALSE")
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class InpatientQueryIntegrationTest {
     private static final String PATH = "/api/v1/inpatients";
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");

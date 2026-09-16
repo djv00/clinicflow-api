@@ -14,9 +14,12 @@ import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
+import com.jiangyudai.clinicflow.security.SecurityConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -26,12 +29,15 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EncounterController.class)
+@Import(SecurityConfiguration.class)
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterControllerTest {
 
     private static final UUID PATIENT_ID = UUID.fromString(
@@ -87,7 +93,7 @@ class EncounterControllerTest {
                 any(OffsetDateTime.class)
         )).thenReturn(encounter);
 
-        mockMvc.perform(post("/api/v1/encounters")
+        mockMvc.perform(post("/api/v1/encounters").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -122,7 +128,7 @@ class EncounterControllerTest {
 
     @Test
     void rejectsMissingPatientId() throws Exception {
-        mockMvc.perform(post("/api/v1/encounters")
+        mockMvc.perform(post("/api/v1/encounters").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -137,7 +143,7 @@ class EncounterControllerTest {
 
     @Test
     void rejectsFutureAdmissionTime() throws Exception {
-        mockMvc.perform(post("/api/v1/encounters")
+        mockMvc.perform(post("/api/v1/encounters").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -159,7 +165,7 @@ class EncounterControllerTest {
                 any(OffsetDateTime.class)
         )).thenThrow(new ActiveEncounterExistsException(PATIENT_ID));
 
-        mockMvc.perform(post("/api/v1/encounters")
+        mockMvc.perform(post("/api/v1/encounters").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -201,7 +207,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validDepartmentAdmissionJson()))
                 .andExpect(status().isCreated())
@@ -231,7 +237,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -265,7 +271,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validDepartmentAdmissionJson()))
                 .andExpect(status().isNotFound())
@@ -296,7 +302,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -338,7 +344,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithBed()))
                 .andExpect(status().isCreated())
@@ -383,7 +389,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithoutBed()))
                 .andExpect(status().isCreated())
@@ -414,7 +420,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -437,7 +443,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("""
                         {
@@ -475,7 +481,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithBed()))
                 .andExpect(status().isBadRequest())
@@ -498,7 +504,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithBed()))
                 .andExpect(status().isConflict())
@@ -520,7 +526,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithBed()))
                 .andExpect(status().isConflict())
@@ -544,7 +550,7 @@ class EncounterControllerTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
                         ENCOUNTER_ID
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content(validTransferJsonWithBed()))
                 .andExpect(status().isNotFound())

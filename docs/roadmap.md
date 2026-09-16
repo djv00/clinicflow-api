@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-15. This describes implemented behaviour and the next delivery
+Updated: 2026-09-16. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -15,23 +15,24 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | Planned | No login or server-identified operator yet. |
+| Authentication and roles | In progress | Session login/logout, a configured operator account, page/API authentication, and CSRF protection are implemented. Role separation and server-identified business audit operators remain. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Add authenticated operations.** Define the small set of operator roles,
-   protect both pages and APIs, and record the operator from the authenticated
-   identity. Verify permission failures as well as successful workflows.
+1. **Complete authenticated operations.** Login protects both pages and APIs.
+   Next define the small set of operator roles and record the operator from the
+   authenticated identity. Verify permission failures as well as successful workflows.
 2. **Package the demonstration.** Make persistent demo setup repeatable, document
    configuration and deployment, and prepare an English walkthrough of the
    workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The core workbench flow is connected. The next stage is authentication and role
-checks, starting with login and read access before migrating recorded operators
-to authenticated identities and protecting workflow writes.
+The core workbench flow and session login are connected. The next slice is role
+checks for reads and workflow writes, followed by replacing caller-entered
+operators with authenticated identities. The current single-account setup is
+for local use; persistent account provisioning remains part of that work.
 
 ## Later extensions
 
@@ -79,3 +80,11 @@ or certificate modules are outside this delivery sequence.
   prevention, and recovery after a committed correction's response is lost. Timeline and
   inpatient list checks confirm the restored care period. H2 and PostgreSQL tests verify
   that a stale discharge ID is rejected even when a new discharge has the same timestamp.
+- Session security checks cover anonymous reads/writes, wrong credentials, login and
+  business-write CSRF checks, session fixation protection, token rotation, authenticated
+  reads/writes, logout invalidation, no-store responses, and password hashing. Existing
+  business API tests now provide an authenticated test user and CSRF tokens while
+  keeping the security filters enabled.
+- Browser checks cover incorrect credentials, successful sign-in, patient registration,
+  inactivity expiry, sign-out, and a second tab attempting to use the signed-out session.
+  The authenticated demo script completes the inpatient workflow and signs out.

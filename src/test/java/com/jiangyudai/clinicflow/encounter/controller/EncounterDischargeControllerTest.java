@@ -4,11 +4,14 @@ import com.jiangyudai.clinicflow.encounter.exception.CurrentEncounterLocationNot
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import com.jiangyudai.clinicflow.security.SecurityConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -19,11 +22,14 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EncounterController.class)
+@Import(SecurityConfiguration.class)
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterDischargeControllerTest {
 
     private static final UUID ENCOUNTER_ID = UUID.fromString(
@@ -43,7 +49,7 @@ class EncounterDischargeControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"{}", "{\"dischargedAt\": null}"})
     void rejectsMissingTime(String request) throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
                         .content(request))
                 .andExpect(status().isBadRequest())
@@ -54,7 +60,7 @@ class EncounterDischargeControllerTest {
 
     @Test
     void rejectsFutureTime() throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {"dischargedAt": "%s"}
@@ -69,7 +75,7 @@ class EncounterDischargeControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"not-a-date", "2025-09-03T10:00:00"})
     void rejectsTimeWithoutAValidOffset(String time) throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
                         .content("{\"dischargedAt\": \"" + time + "\"}"))
                 .andExpect(status().isBadRequest());
@@ -84,7 +90,7 @@ class EncounterDischargeControllerTest {
         )))
                 .thenThrow(new EncounterNotFoundException(ENCOUNTER_ID));
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content(REQUEST))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Encounter not found"));
@@ -97,7 +103,7 @@ class EncounterDischargeControllerTest {
         )))
                 .thenThrow(new CurrentEncounterLocationNotFoundException(ENCOUNTER_ID));
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content(REQUEST))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Encounter location conflict"));
@@ -112,7 +118,7 @@ class EncounterDischargeControllerTest {
                         "Discharge time cannot be before the current location start time"
                 ));
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content(REQUEST))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid discharge time"))

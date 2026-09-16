@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class AdmissionCancellationIntegrationTest {
 
     @Autowired
@@ -79,7 +82,7 @@ class AdmissionCancellationIntegrationTest {
 
         MvcResult result = mockMvc.perform(post(
                         "/api/v1/encounters/{id}/admission-cancellations", data.encounterId()
-                ).contentType("application/json").content(request(data.cancelledAt(), "first-clerk")))
+                ).with(csrf()).contentType("application/json").content(request(data.cancelledAt(), "first-clerk")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(data.encounterId().toString()))
                 .andExpect(jsonPath("$.encounterNumber").value(data.encounterNumber()))
@@ -92,7 +95,7 @@ class AdmissionCancellationIntegrationTest {
         String cancelledAt = JsonPath.read(result.getResponse().getContentAsString(), "$.admissionCancelledAt");
         assertThat(OffsetDateTime.parse(cancelledAt).toInstant()).isEqualTo(data.cancelledAt().toInstant());
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", data.encounterId())
+        mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
                         .content(request(data.cancelledAt().plusMinutes(1), "second-clerk")))
                 .andExpect(status().isConflict());

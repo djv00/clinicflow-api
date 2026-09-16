@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,6 +30,7 @@ import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class DepartmentAdmissionIntegrationTest {
 
     @Autowired
@@ -365,7 +368,7 @@ class DepartmentAdmissionIntegrationTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         data.encounterId()
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("""
                             {
@@ -424,7 +427,7 @@ class DepartmentAdmissionIntegrationTest {
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
                         second.encounterId()
-                )
+                ).with(csrf())
                         .contentType("application/json")
                         .content("""
                             {

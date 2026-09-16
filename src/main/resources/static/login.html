@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Sign in · ClinicFlow</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./patients.css">
+    <script type="module" src="./login.js"></script>
+</head>
+<body>
+<header class="app-header">
+    <a class="brand" href="./" aria-label="ClinicFlow home">
+        <span class="brand-mark" aria-hidden="true"></span>ClinicFlow
+    </a>
+    <span class="header-section">Patient administration</span>
+</header>
+<main class="login-main">
+    <section class="login-card" aria-labelledby="login-title">
+        <p class="eyebrow">Staff access</p>
+        <h1 id="login-title">Sign in</h1>
+        <p class="dialog-intro">Use your account to open the patient workbench.</p>
+        <noscript><p class="message error">Enable JavaScript to sign in.</p></noscript>
+        <p id="login-notice" class="message information" role="status" hidden></p>
+        <p id="login-error" class="message error" role="alert" tabindex="-1" hidden></p>
+        <form id="login-form" method="post" action="./api/auth/login">
+            <fieldset id="login-fields">
+                <legend class="sr-only">Account credentials</legend>
+                <div class="field">
+                    <label for="username">Username</label>
+                    <input id="username" name="username" autocomplete="username" required autofocus>
+                </div>
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                </div>
+                <button id="sign-in" class="button primary" type="submit">Sign in</button>
+            </fieldset>
+        </form>
+    </section>
+</main>
+</body>
+</html>

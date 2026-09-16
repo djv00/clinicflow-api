@@ -21,6 +21,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -36,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -45,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterHistoryIntegrationTest {
 
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T08:00:00-04:00");
@@ -79,7 +82,7 @@ class EncounterHistoryIntegrationTest {
         HistoryData data = dischargedPatient();
         String number = "ENC-" + UUID.randomUUID();
 
-        mockMvc.perform(post("/api/v1/encounters").contentType("application/json").content("""
+        mockMvc.perform(post("/api/v1/encounters").with(csrf()).contentType("application/json").content("""
                         {"patientId": "%s", "encounterNumber": "%s", "admittedAt": "%s"}
                         """.formatted(data.patientId(), number, DISCHARGED_AT.plusHours(hoursFromDischarge))))
                 .andExpect(status().isConflict())
@@ -119,7 +122,7 @@ class EncounterHistoryIntegrationTest {
         HistoryData data = dischargedPatient();
         UUID other = newEncounter(ADMITTED_AT.minusDays(1));
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/department-admissions", other)
+        mockMvc.perform(post("/api/v1/encounters/{id}/department-admissions", other).with(csrf())
                         .contentType("application/json").content("""
                                 {"departmentId": "%s", "wardId": "%s", "bedId": "%s", "startedAt": "%s"}
                                 """.formatted(data.departmentId(), data.wardId(), data.bedId(),

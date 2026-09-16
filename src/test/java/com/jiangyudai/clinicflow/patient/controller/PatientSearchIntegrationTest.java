@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:patient-search-it;DB_CLOSE_ON_EXIT=FALSE")
 @AutoConfigureMockMvc
 @Transactional
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class PatientSearchIntegrationTest {
 
     @Autowired

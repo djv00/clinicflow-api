@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./patients.css">
     <script type="module" src="./patients.js"></script>
     <script type="module" src="./inpatients.js"></script>
+    <script type="module" src="./account.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -21,8 +22,13 @@
         <a id="patients-link" href="#patients" aria-current="page">Patients</a>
         <a id="inpatients-link" href="#inpatients">Inpatients</a>
     </nav>
+    <div class="account-controls">
+        <span id="signed-in-user" class="muted" aria-label="Signed-in user"></span>
+        <button id="sign-out" class="button secondary" type="button">Sign out</button>
+    </div>
 </header>
 <main id="main">
+    <p id="account-error" class="message error" role="alert" hidden></p>
     <section id="patients-view" aria-label="Patient administration">
     <div class="page-heading">
         <div>

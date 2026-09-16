@@ -9,7 +9,7 @@ next one in a single transaction. Two admissions competing for the same bed
 cannot both succeed. Cancelling a mistaken discharge restores care only if the
 patient's later encounters and the bed's intervening history allow it.
 
-Built with Java 21, Spring Boot, Spring MVC, Spring Data JPA/Hibernate,
+Built with Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA/Hibernate,
 PostgreSQL, and Flyway. H2 supports the local demo and regular tests; JUnit,
 Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 
@@ -53,9 +53,35 @@ cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
 
+### Sign in
+
+The workbench and business APIs require a signed-in session. The first security
+slice provides one configured operator account held in memory; it does not yet
+include user management or different permission levels. Its password is encoded
+with BCrypt. By default, the username is `operator` and a generated development
+password is printed once during startup. That password changes on restart.
+
+To choose credentials, set `SPRING_SECURITY_USER_NAME` and
+`SPRING_SECURITY_USER_PASSWORD` in the environment of the process starting the
+application (or the IDE run configuration). Do not commit credentials. These
+settings apply to the default, `demo`, and `postgres` profiles. A generated
+development password is not a deployment account setup.
+
+Open the workbench, sign in, and use **Sign out** in the header when finished.
+Sessions expire after 30 minutes of inactivity and are lost on server restart.
+The session cookie is HttpOnly and SameSite=Lax; credentials and session tokens
+are not kept in browser storage. Writes, including login and logout, require a
+CSRF token. An expired session returns the page to sign-in without retrying a
+business write. For HTTPS deployment set `SERVER_SERVLET_SESSION_COOKIE_SECURE=true`.
+
+Role-based access and recording the authenticated operator in business audit
+fields are subsequent slices. Cancellation operators are still entered manually.
+See [session API usage](docs/api.md#authentication) for Postman and script access.
+
 ### Patient workbench
 
-After starting the application, open [http://localhost:8080/](http://localhost:8080/).
+After starting the application, open [http://localhost:8080/](http://localhost:8080/)
+and sign in with the configured account or the generated development password.
 If you set another server port, use that port in the browser. Restart the
 application after pulling or building changes to the page.
 
@@ -286,6 +312,11 @@ powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\demo-wor
 
 `RemoteSigned` applies only to this process and does not change the saved
 PowerShell execution policy.
+
+The script prompts for sign-in credentials, maintains a session and CSRF token,
+and signs out when the walkthrough ends. In an existing PowerShell session you
+can pass `-Credential (Get-Credential)` instead of entering a password in command
+history. Use the same credentials as the browser.
 
 The script queries reference IDs, registers a fictional patient, cancels an
 admission before department entry, then admits the patient again. It enters the
