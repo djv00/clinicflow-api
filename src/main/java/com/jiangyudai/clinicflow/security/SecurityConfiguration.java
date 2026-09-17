@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.security.autoconfigure.SecurityProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.User;
@@ -40,6 +41,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    @Profile("!postgres")
     UserDetailsService userDetailsService(SecurityProperties properties, PasswordEncoder encoder,
             @Value("${clinicflow.security.viewer.username:viewer}") String viewerUsername,
             @Value("${clinicflow.security.viewer.password:}") String viewerPassword) {
