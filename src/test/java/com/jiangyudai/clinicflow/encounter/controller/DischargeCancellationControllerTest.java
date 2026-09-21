@@ -4,6 +4,7 @@ import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictExce
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeCancellationException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import com.jiangyudai.clinicflow.security.SecurityConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -11,6 +12,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,18 +26,21 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EncounterController.class)
+@Import(SecurityConfiguration.class)
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class DischargeCancellationControllerTest {
 
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "22222222-2222-2222-2222-222222222222"
     );
     private static final String REQUEST = """
-            {"cancelledAt": "2025-09-03T10:00:00-04:00", "cancelledBy": "demo-clerk"}
+            {"cancelledAt": "2025-09-03T10:00:00-04:00"}
             """;
 
     @Autowired
@@ -43,12 +49,11 @@ class DischargeCancellationControllerTest {
     private EncounterService encounterService;
 
     @Test
-    void requiresTimeAndOperator() throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+    void requiresCancellationTime() throws Exception {
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors.cancelledAt").value("Cancellation time is required"))
-                .andExpect(jsonPath("$.errors.cancelledBy").value("Cancellation operator is required"));
+                .andExpect(jsonPath("$.errors.cancelledAt").value("Cancellation time is required"));
 
         verifyNoInteractions(encounterService);
     }
@@ -56,7 +61,7 @@ class DischargeCancellationControllerTest {
     @ParameterizedTest
     @MethodSource("invalidRequests")
     void rejectsInvalidRequestBeforeCallingService(String request, String field) throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content(request))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors." + field).exists());
@@ -67,9 +72,9 @@ class DischargeCancellationControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"not-a-date", "2025-09-03T10:00:00"})
     void requiresAValidTimestampWithOffset(String time) throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
-                        .content("{\"cancelledAt\": \"" + time + "\", \"cancelledBy\": \"demo-clerk\"}"))
+                        .content("{\"cancelledAt\": \"" + time + "\"}"))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(encounterService);
@@ -78,10 +83,10 @@ class DischargeCancellationControllerTest {
     @ParameterizedTest
     @MethodSource("businessErrors")
     void mapsBusinessErrors(RuntimeException exception, int code, String title) throws Exception {
-        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("demo-clerk"), isNull()))
+        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("test-operator"), isNull()))
                 .thenThrow(exception);
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json").content(REQUEST))
                 .andExpect(status().is(code))
                 .andExpect(jsonPath("$.title").value(title))
@@ -90,7 +95,7 @@ class DischargeCancellationControllerTest {
 
     @Test
     void rejectsMalformedExpectedDischargeId() throws Exception {
-        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID)
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
                         .content(REQUEST.replace("}", ", \"expectedDischargeId\": \"not-a-uuid\"}")))
                 .andExpect(status().isBadRequest());
@@ -99,11 +104,8 @@ class DischargeCancellationControllerTest {
 
     private static Stream<Arguments> invalidRequests() {
         return Stream.of(
-                Arguments.of("{\"cancelledAt\": null, \"cancelledBy\": \"demo-clerk\"}", "cancelledAt"),
-                Arguments.of(REQUEST.replace("2025-09-03T10:00:00-04:00", OffsetDateTime.now().plusDays(1).toString()), "cancelledAt"),
-                Arguments.of(REQUEST.replace("\"demo-clerk\"", "null"), "cancelledBy"),
-                Arguments.of(REQUEST.replace("demo-clerk", "   "), "cancelledBy"),
-                Arguments.of(REQUEST.replace("demo-clerk", "a".repeat(101)), "cancelledBy")
+                Arguments.of("{\"cancelledAt\": null}", "cancelledAt"),
+                Arguments.of(REQUEST.replace("2025-09-03T10:00:00-04:00", OffsetDateTime.now().plusDays(1).toString()), "cancelledAt")
         );
     }
 

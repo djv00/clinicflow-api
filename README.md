@@ -9,7 +9,7 @@ next one in a single transaction. Two admissions competing for the same bed
 cannot both succeed. Cancelling a mistaken discharge restores care only if the
 patient's later encounters and the bed's intervening history allow it.
 
-Built with Java 21, Spring Boot, Spring MVC, Spring Data JPA/Hibernate,
+Built with Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA/Hibernate,
 PostgreSQL, and Flyway. H2 supports the local demo and regular tests; JUnit,
 Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 
@@ -53,9 +53,72 @@ cleared on shutdown. Default startup does not load reference data, so location
 list queries return empty arrays. Reference-data creation and maintenance
 endpoints are not available yet.
 
+### Sign in
+
+The workbench and business APIs require a signed-in session. Passwords are
+encoded with BCrypt. The default and `demo` profiles keep accounts in memory;
+the `postgres` profile stores accounts, roles, and password hashes in the database.
+User management and password reset endpoints are not implemented yet.
+For the default and `demo` profiles, the operator username is `operator` and a
+generated development password is printed once during startup unless configured.
+That generated password changes on restart.
+
+To choose credentials, set `SPRING_SECURITY_USER_NAME` and
+`SPRING_SECURITY_USER_PASSWORD` in the environment of the process starting the
+application (or the IDE run configuration). Do not commit credentials. These
+settings configure local accounts or initialize a missing PostgreSQL operator.
+PostgreSQL startup requires an explicit password when that operator does not
+already exist; it never saves a generated development password.
+The operator username must be nonblank and at most 100 characters so it fits
+the cancellation audit fields; invalid configuration fails at startup.
+
+| Role | Access |
+| --- | --- |
+| `VIEWER` | Search patients and inpatients; view patient records, encounter history, timelines, and location dictionaries. |
+| `OPERATOR` | All viewer access, plus registration, admission, department entry, transfer, discharge, and both cancellation workflows. |
+
+To enable a separate read-only account, set `CLINICFLOW_VIEWER_PASSWORD` before
+starting the application. Its username defaults to `viewer`; optionally set
+`CLINICFLOW_VIEWER_USERNAME`. A nonblank password creates a missing viewer account.
+The viewer and operator usernames must differ, ignoring case. In-memory account
+configuration changes take effect on restart.
+
+For PostgreSQL, startup only creates missing configured accounts. Existing
+passwords, roles, canonical usernames, and enabled states are preserved, even if
+the bootstrap environment values change. Removing the viewer password does not
+delete an existing viewer. After initialization, bootstrap passwords can be removed
+from the environment; keep the configured operator username so startup finds the
+same account. Changing that username to a new value provisions another operator
+and requires an initial password. Reusing an account with a different role fails
+startup instead of changing its permissions. Initialization is transactional.
+Run initial provisioning with one application instance.
+
+Database usernames are unique ignoring case; successful login returns the stored
+username for audit records. Both persistent account usernames are limited to 100
+characters. Changing bootstrap passwords is not a password-reset mechanism, and
+disabling an account prevents new sign-ins without revoking an existing session.
+
+The header shows the signed-in account's access level. Read-only users can open
+records and timelines, but do not see editing actions. Those actions also stay
+hidden if account permissions cannot be loaded. The API independently rejects
+viewer writes with `403`, including requests made outside the workbench. Use the
+operator account for the demo workflow script.
+
+Open the workbench, sign in, and use **Sign out** in the header when finished.
+Sessions expire after 30 minutes of inactivity and are lost on server restart.
+The session cookie is HttpOnly and SameSite=Lax; credentials and session tokens
+are not kept in browser storage. Writes, including login and logout, require a
+CSRF token. An expired session returns the page to sign-in without retrying a
+business write. For HTTPS deployment set `SERVER_SERVLET_SESSION_COOKIE_SECURE=true`.
+
+Admission and discharge cancellations record the authenticated username.
+Clients provide the cancellation time, and cannot choose the recorded operator.
+See [session API usage](docs/api.md#authentication) for Postman and script access.
+
 ### Patient workbench
 
-After starting the application, open [http://localhost:8080/](http://localhost:8080/).
+After starting the application, open [http://localhost:8080/](http://localhost:8080/)
+and sign in with the configured account or the generated development password.
 If you set another server port, use that port in the browser. Restart the
 application after pulling or building changes to the page.
 
@@ -88,13 +151,12 @@ before retrying; the page does not retry a write automatically.
 For an admission recorded in error, select **Cancel admission** in the history
 table. This is available only for an **Admitted** encounter with no department
 history, including closed placement periods. Review the patient and encounter,
-enter the cancellation time and recorded operator, then **Confirm cancellation**.
+enter the cancellation time, then **Confirm cancellation**.
 The time must be on or after admission and no later than now. The patient and
 encounter are retained; the stay becomes **Admission cancelled** and leaves the
 inpatient list when the patient record closes. **Back** closes without saving.
 If a save cannot be confirmed, **Refresh encounter** checks the recorded state
-before another attempt. The operator is currently entered by the user; it is not
-an authenticated identity.
+before another attempt. The backend records the signed-in account as the operator.
 
 For an admitted encounter, select **Enter department** in the history table.
 Choose an active department and ward, then select an available bed or explicitly
@@ -119,7 +181,7 @@ An encounter already discharged is shown with its recorded discharge time.
 
 For a mistaken discharge, select **Cancel discharge** in the patient record.
 Review the recorded discharge and the department, ward, and optional bed to restore.
-Enter the correction time and recorded operator, then **Confirm cancellation**.
+Enter the correction time, then **Confirm cancellation**.
 Care continues from the original discharge time; the correction time is retained
 separately. The original references must be active, and later hospital stays or
 bed use can prevent restoration. The form shows those conflicts and does not
@@ -127,7 +189,7 @@ offer a replacement bed. A genuine readmission requires a new encounter.
 The page sends the reviewed discharge ID so a later discharge cannot be cancelled
 by a stale form. After an unconfirmed save, use **Refresh encounter** to check
 whether the correction was recorded. Closing the patient record refreshes the
-inpatient list. The operator remains user-entered until authentication is added.
+inpatient list. The timeline shows the signed-in account recorded by the backend.
 
 Select **Timeline** for any encounter, including discharged and cancelled stays.
 The view shows admission and cancellation details, department/ward/bed periods,
@@ -173,6 +235,7 @@ to run the application:
 
 ```powershell
 $env:DB_PASSWORD = 'choose-a-local-password'
+$env:SPRING_SECURITY_USER_PASSWORD = 'choose-an-initial-operator-password'
 docker compose up -d --wait postgres
 .\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
 ```
@@ -190,17 +253,54 @@ owned by an application user, then set these variables before starting the profi
 $env:DB_URL = 'jdbc:postgresql://localhost:5432/clinicflow'
 $env:DB_USERNAME = 'clinicflow'
 $env:DB_PASSWORD = 'your-database-password'
+$env:SPRING_SECURITY_USER_PASSWORD = 'choose-an-initial-operator-password'
 .\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
 ```
 
 `DB_URL` and `DB_USERNAME` default to the values shown above; `DB_PASSWORD` is
 required. Keep actual credentials outside the repository. Use `postgres` and
-`demo` separately: the demo dictionary is only loaded into the disposable H2
-database. PostgreSQL starts without patient or reference data.
+`demo` separately: `demo` initializes a disposable H2 database. PostgreSQL starts
+without patients or reference data unless the optional demo-location setup below
+is enabled.
 
 The first migration matches the existing patient-flow entities, including foreign
-keys, unique constraints and history indexes. Add a new versioned migration for
+keys, unique constraints and history indexes. The second adds persistent accounts
+without changing patient-flow tables. Add a new versioned migration for
 later schema changes instead of editing a migration already applied to a database.
+
+### Persistent demo locations
+
+To demonstrate the existing workbench against PostgreSQL, explicitly enable the
+fictional location dictionary before starting the application. Set the database
+and initial account credentials as described above, then run:
+
+```powershell
+$env:CLINICFLOW_DEMO_DATA_ENABLED = 'true'
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+This adds the same two fictional departments, two wards, and three beds used by
+the H2 demo. It creates no patients or encounters. Open the workbench or run
+`scripts/demo-workflow.ps1` with the operator account to exercise the full workflow.
+Use only the `postgres` profile for this setup; do not combine it with `demo`.
+
+Initialization only inserts missing department codes, ward codes, and ward/bed
+numbers. Existing IDs, names, enabled states, patient records, and occupancy
+history are preserved. Beds resolve the ward by its code, including when an
+existing ward has a different ID. Restarting with the flag enabled does not
+duplicate the dictionary or reset completed or active stays. A disabled or
+occupied demo bed stays disabled or occupied, so it may prevent another demo run.
+
+All location inserts run in one transaction. If a fixed fixture ID already belongs
+to another record, initialization fails and rolls back rather than overwriting
+that record. Inspect the conflict before retrying. The script lives in
+`src/main/resources/demo/postgresql-locations.sql`, outside the Flyway schema
+migrations, and is disabled by default.
+
+After initialization, remove `CLINICFLOW_DEMO_DATA_ENABLED` from the application
+environment or set it to `false`. This stops future initialization; it does not
+delete the persisted dictionary or workflow data. The account setup and database
+credentials are independent of this flag.
 
 ### PostgreSQL integration tests
 
@@ -214,8 +314,10 @@ and use the Maven profile:
 
 Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
 application's `postgres` profile and Flyway migrations, and verify migration
-re-entry, patient search and pagination, discharge cancellation, rollback after
-SQL has been flushed, and two admissions competing for one bed. The concurrency
+re-entry, an upgrade from the original schema with existing patient data, account
+login across application restarts, optional demo initialization and rollback,
+preservation of existing dictionaries and active stays on restart, patient search and pagination, discharge
+cancellation, rollback after SQL has been flushed, and two admissions competing for one bed. The concurrency
 test checks PostgreSQL's lock wait information before allowing the winning
 transaction to commit.
 
@@ -287,6 +389,11 @@ powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\scripts\demo-wor
 `RemoteSigned` applies only to this process and does not change the saved
 PowerShell execution policy.
 
+The script prompts for sign-in credentials, maintains a session and CSRF token,
+and signs out when the walkthrough ends. In an existing PowerShell session you
+can pass `-Credential (Get-Credential)` instead of entering a password in command
+history. Use the same credentials as the browser.
+
 The script queries reference IDs, registers a fictional patient, cancels an
 admission before department entry, then admits the patient again. It enters the
 first ward, transfers to the second, discharges, cancels discharge, and discharges
@@ -352,17 +459,20 @@ Test configuration and expected behaviour are in
 
 Patients can be listed and searched by name or medical record number, with
 pagination. Patient records also show their encounters with pagination. Patient
-and encounter details are retrieved by ID. A hospital-wide inpatient list and
-reference-data maintenance endpoints are not implemented.
+and encounter details are retrieved by ID. The hospital-wide inpatient list supports
+search, status and current-location filters, and pagination. Reference-data
+maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
-Authentication and role-based access are not implemented. Cancellation operators
-are supplied by the caller; these fields do not identify an authenticated user.
+Session authentication and viewer/operator roles protect the workbench and APIs.
+Cancellation operators come from the authenticated account. PostgreSQL accounts
+are persisted and initialized from configuration; the local H2 profiles keep
+accounts in memory. Account administration and password reset are not implemented.
 The timeline contains location and discharge history, not a complete audit of all
 system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs and provides
-a patient directory and registration page. Physician assignment, outpatient
-scheduling, clinical orders, billing, and inpatient workflow screens are outside
-the implemented scope. The next business increments are inpatient lists and
-their workbench screens, followed by authenticated operations.
+connected patient and inpatient workbench pages for the full workflow. Physician
+assignment, outpatient scheduling, clinical orders, and billing are outside the
+implemented scope. PostgreSQL supports optional, repeatable demo-location
+initialization. The next delivery work is deployment packaging and an interview walkthrough.

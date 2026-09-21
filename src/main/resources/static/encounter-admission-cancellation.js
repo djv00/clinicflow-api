@@ -2,7 +2,7 @@ import { element, ApiError, request, clearFieldError, showFieldError, localDateT
     encounterStatuses, formatEncounterTime } from './workbench.js';
 
 const dialog = element('admission-cancellation-dialog');
-const fields = { cancelledAt: 'admissionCancelledAt', cancelledBy: 'admissionCancelledBy' };
+const fields = { cancelledAt: 'admissionCancelledAt' };
 let encounter;
 let onClose;
 let notice;
@@ -104,7 +104,6 @@ element('admission-cancellation-form').addEventListener('submit', async (event) 
     const enteredTime = element('admissionCancelledAt').value;
     const cancelledAt = new Date(enteredTime);
     const normalizedTime = enteredTime.length === 16 ? `${enteredTime}:00` : enteredTime;
-    const cancelledBy = element('admissionCancelledBy').value.trim();
     let timeError;
     if (Number.isNaN(cancelledAt.getTime()) || localDateTimeValue(cancelledAt, true) !== normalizedTime) {
         timeError = 'Enter a valid local cancellation time.';
@@ -118,11 +117,6 @@ element('admission-cancellation-form').addEventListener('submit', async (event) 
         element('admissionCancelledAt').focus();
         return;
     }
-    if (!cancelledBy || cancelledBy.length > 100) {
-        showFieldError('admissionCancelledBy', !cancelledBy ? 'Recorded operator is required.' : 'Recorded operator must not exceed 100 characters.');
-        element('admissionCancelledBy').focus();
-        return;
-    }
     saving = true;
     updateControls();
     let saved;
@@ -134,7 +128,7 @@ element('admission-cancellation-form').addEventListener('submit', async (event) 
         }
         saved = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/admission-cancellations`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cancelledAt: cancelledAt.toISOString(), cancelledBy })
+            body: JSON.stringify({ cancelledAt: cancelledAt.toISOString() })
         });
     } catch (error) {
         let message = error instanceof ApiError ? error.message

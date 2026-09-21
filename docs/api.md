@@ -15,6 +15,52 @@ reference endpoints when using another database. The
 [demo script](../scripts/demo-workflow.ps1) runs the complete workflow with new
 record numbers and current UTC timestamps.
 
+## Authentication
+
+Business APIs require a server-side login session. In Postman or an HTTP client,
+keep the cookie jar enabled for the following sequence:
+
+1. `GET /api/auth/csrf` returns `headerName` and `token` and creates an anonymous
+   session cookie. Retain the cookie and token together.
+2. `POST /api/auth/login` with `Content-Type: application/x-www-form-urlencoded`,
+   form fields `username` and `password`, and the returned CSRF header. Success
+   is `204`; wrong credentials return a generic `401` problem response. The
+   session identifier changes on successful authentication; retain the new cookie.
+3. `GET /api/auth/session` returns the signed-in `username` and `roles`, for example
+   `{"username":"viewer","roles":["VIEWER"]}`. Anonymous requests
+   receive `401` JSON, not an HTML redirect.
+4. Obtain a fresh token from `/api/auth/csrf` after login. Add that header and the
+   session cookie to POST requests in the examples below. GET requests only need
+   the session cookie. Login and logout invalidate the previous CSRF token.
+5. `POST /api/auth/logout` with the cookie and CSRF header returns `204`,
+   invalidates the session, and clears the session cookie. GET does not sign out.
+
+Missing or invalid CSRF tokens return `403`. An unauthenticated business request
+with a valid token returns `401`; an unauthenticated write without a token may
+be rejected by CSRF protection first. An expired session requires signing in
+again. Clients must not automatically replay an unconfirmed business write.
+Authentication responses and protected pages use no-store cache headers.
+
+Business reads (`GET` and `HEAD` under `/api/v1`) require `VIEWER` or `OPERATOR`.
+All other methods under `/api/v1` require `OPERATOR`. A viewer write with a valid
+CSRF token returns `403` with title `Access denied` before reaching business
+validation or services. Missing/invalid CSRF tokens instead return `403` with
+title `Request not allowed`. Permission denial does not sign the user out.
+Both roles can inspect their session and sign out.
+
+PostgreSQL accounts are persisted; the default and demo profiles use in-memory
+accounts. The login/session API is the same for both. Admission and discharge cancellations
+record the authenticated username; they no longer accept an operator as input.
+A legacy `cancelledBy` request property is ignored and cannot override that identity.
+Existing historical operator values are retained.
+Account configuration is in the [README](../README.md#sign-in).
+The workbench uses an HttpOnly session cookie
+and fetches a CSRF token before writes, following Spring Security's
+[CSRF integration](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html)
+and [logout handling](https://docs.spring.io/spring-security/reference/servlet/authentication/logout.html).
+Role rules use Spring Security's
+[request authorization](https://docs.spring.io/spring-security/reference/servlet/authorization/authorize-http-requests.html).
+
 ## Endpoints
 
 | Method | Path after `/api/v1` | Success | Response |
@@ -384,8 +430,7 @@ POST /api/v1/encounters/{id}/admission-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-01T14:30:00-04:00",
-  "cancelledBy": "demo-clerk"
+  "cancelledAt": "2025-09-01T14:30:00-04:00"
 }
 ```
 
@@ -396,8 +441,8 @@ and `admissionCancelledBy`. These two fields are null before cancellation.
   encounter must be `ADMITTED` with no location history, including closed records.
 - The cancellation time is required, must include an offset, cannot be in the
   future, and cannot precede admission. Equal times are allowed.
-- The operator is required and limited to 100 characters. It is a caller-supplied
-  identifier; authentication and user lookup are not implemented yet.
+- `admissionCancelledBy` is the authenticated operator's username, recorded by
+  the server. No operator field is required in the request.
 - Cancellation retains the encounter and its original number. The patient can
   have a new admission with a new encounter number afterwards.
 - Repeated cancellation returns `409` and preserves the original cancellation
@@ -415,8 +460,7 @@ POST /api/v1/encounters/{id}/discharge-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-03T15:00:00-04:00",
-  "cancelledBy": "demo-clerk"
+  "cancelledAt": "2025-09-03T15:00:00-04:00"
 }
 ```
 
@@ -438,8 +482,8 @@ the current discharge for API callers and demo scripts.
   Same-instant admissions are treated as conflicts because their order is ambiguous.
   An `ADMISSION_CANCELLED` record does not block correction of the earlier discharge.
 - The cancellation time must include an offset, be at or after discharge, and
-  not be in the future. The operator is required and limited to 100 characters;
-  as with admission cancellation, it is supplied by the caller.
+  not be in the future. The discharge record's `cancelledBy` is the authenticated
+  operator's username, recorded by the server.
 - Effective care continues at the department, ward, and optional bed referenced
   by that discharge. These references must still be active. The bed must be free
   now and have no conflicting occupancy since the original discharge, including

@@ -4,9 +4,12 @@ import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import com.jiangyudai.clinicflow.security.SecurityConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -14,12 +17,15 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PatientController.class)
+@Import(SecurityConfiguration.class)
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class PatientControllerTest {
 
     @Autowired
@@ -44,7 +50,7 @@ class PatientControllerTest {
                 LocalDate.of(1990, 5, 14)
         )).thenReturn(patient);
 
-        mockMvc.perform(post("/api/v1/patients")
+        mockMvc.perform(post("/api/v1/patients").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -68,7 +74,7 @@ class PatientControllerTest {
                 LocalDate.of(1990, 5, 14)
         )).thenThrow(new DuplicateMedicalRecordNumberException("MRN-100001"));
 
-        mockMvc.perform(post("/api/v1/patients")
+        mockMvc.perform(post("/api/v1/patients").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {
@@ -85,7 +91,7 @@ class PatientControllerTest {
 
     @Test
     void rejectsFutureDateOfBirth() throws Exception {
-        mockMvc.perform(post("/api/v1/patients")
+        mockMvc.perform(post("/api/v1/patients").with(csrf())
                         .contentType("application/json")
                         .content("""
                                 {

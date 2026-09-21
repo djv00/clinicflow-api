@@ -1,3 +1,5 @@
+import { sessionRequest, requireSignIn } from './session.js';
+
 export const element = (id) => document.getElementById(id);
 
 export class ApiError extends Error {
@@ -11,19 +13,17 @@ export class ApiError extends Error {
 }
 
 export async function request(url, options = {}, controller = new AbortController()) {
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    try {
-        const response = await fetch(url, {
-            ...options, signal: controller.signal, cache: 'no-store',
-            headers: { Accept: 'application/json', ...options.headers }
-        });
-        const body = await response.json().catch(() => null);
-        if (!response.ok) throw new ApiError(response.status, body);
-        if (body === null) throw new Error('The server returned an unreadable response.');
-        return body;
-    } finally {
-        clearTimeout(timeout);
+    const response = await sessionRequest(url, options, controller);
+    if (response.status === 401) requireSignIn();
+    if (response.status === 403) {
+        const session = await sessionRequest('./api/auth/session', {}, controller);
+        if (session.status === 401) requireSignIn();
     }
+    if (response.status === 204) return null;
+    const body = response.body;
+    if (!response.ok) throw new ApiError(response.status, body);
+    if (body === null) throw new Error('The server returned an unreadable response.');
+    return body;
 }
 
 export function clearFieldError(field) {

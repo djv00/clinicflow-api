@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
@@ -85,12 +86,13 @@ public class EncounterController {
     @PostMapping("/{id}/admission-cancellations")
     public EncounterResponse cancelAdmission(
             @PathVariable("id") UUID encounterId,
-            @Valid @RequestBody CancelAdmissionRequest request
+            @Valid @RequestBody CancelAdmissionRequest request,
+            Principal principal
     ) {
         Encounter encounter = encounterService.cancelAdmission(
                 encounterId,
                 request.cancelledAt(),
-                request.cancelledBy()
+                principal.getName()
         );
 
         return EncounterResponse.from(encounter);
@@ -112,10 +114,11 @@ public class EncounterController {
     @PostMapping("/{id}/discharge-cancellations")
     public EncounterResponse cancelDischarge(
             @PathVariable("id") UUID encounterId,
-            @Valid @RequestBody CancelDischargeRequest request
+            @Valid @RequestBody CancelDischargeRequest request,
+            Principal principal
     ) {
         return EncounterResponse.from(encounterService.cancelDischarge(
-                encounterId, request.cancelledAt(), request.cancelledBy(), request.expectedDischargeId()
+                encounterId, request.cancelledAt(), principal.getName(), request.expectedDischargeId()
         ));
     }
 

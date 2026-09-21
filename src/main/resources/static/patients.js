@@ -5,6 +5,7 @@ import { openEncounterDischarge } from './encounter-discharge.js';
 import { openAdmissionCancellation } from './encounter-admission-cancellation.js';
 import { openDischargeCancellation } from './encounter-discharge-cancellation.js';
 import { openEncounterTimeline } from './encounter-timeline.js';
+import { accountReady, canWrite } from './account.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -116,6 +117,7 @@ element('next-page').addEventListener('click', () => { if (page + 1 < totalPages
 element('retry-list').addEventListener('click', loadPatients);
 
 element('register-patient').addEventListener('click', () => {
+    if (!canWrite()) return;
     element('registration-form').reset();
     registrationFields.forEach(clearFieldError);
     element('registration-error').hidden = true;
@@ -133,7 +135,7 @@ registrationFields.forEach((field) => element(field).addEventListener('input', (
 
 element('registration-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || !canWrite()) return;
     registrationFields.forEach(clearFieldError);
     const body = Object.fromEntries(registrationFields.map((field) => [field, element(field).value.trim()]));
     saving = true;
@@ -239,11 +241,12 @@ element('retry-patient').addEventListener('click', loadPatientDetails);
 
 function hideAdmissionForm() {
     element('admission-form').hidden = true;
-    element('admit-patient').hidden = false;
+    element('admit-patient').hidden = !canWrite();
     element('admit-patient').setAttribute('aria-expanded', 'false');
 }
 
 element('admit-patient').addEventListener('click', () => {
+    if (!canWrite()) return;
     element('admission-form').reset();
     admissionFields.forEach(clearFieldError);
     element('admission-error').hidden = true;
@@ -269,7 +272,7 @@ element('refresh-admission-records').addEventListener('click', () => {
 
 element('admission-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (admitting) return;
+    if (admitting || !canWrite()) return;
     admissionFields.forEach(clearFieldError);
     element('admission-error').hidden = true;
     element('refresh-admission-records').hidden = true;
@@ -353,6 +356,7 @@ element('admission-form').addEventListener('submit', async (event) => {
 
 function openEncounterAction(encounter, openAction) {
     if (admitting) return;
+    if (openAction !== openEncounterTimeline && !canWrite()) return;
     hideAdmissionForm();
     const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
     openAction(encounter, patient, (notice) => {
@@ -381,6 +385,7 @@ async function loadPatientEncounters() {
     try {
         const params = new URLSearchParams({ page: encountersPage, size: 5 });
         const result = await request(`./api/v1/patients/${encodeURIComponent(selectedPatientId)}/encounters?${params}`, {}, controller);
+        await accountReady;
         if (controller !== encountersController) return;
         encountersPage = result.page;
         encountersTotalPages = result.totalPages;
@@ -409,7 +414,7 @@ async function loadPatientEncounters() {
             timeline.setAttribute('aria-label', `Timeline for ${encounter.encounterNumber}`);
             timeline.addEventListener('click', () => openEncounterAction(encounter, openEncounterTimeline));
             actions.append(timeline);
-            if (encounter.status === 'DISCHARGED') {
+            if (canWrite() && encounter.status === 'DISCHARGED') {
                 const cancel = document.createElement('button');
                 cancel.type = 'button';
                 cancel.className = 'row-action';
@@ -418,7 +423,7 @@ async function loadPatientEncounters() {
                 cancel.addEventListener('click', () => openEncounterAction(encounter, openDischargeCancellation));
                 actions.append(cancel);
             }
-            if (encounter.status === 'ADMITTED' || encounter.status === 'IN_DEPARTMENT') {
+            if (canWrite() && ['ADMITTED', 'IN_DEPARTMENT'].includes(encounter.status)) {
                 const transfer = encounter.status === 'IN_DEPARTMENT';
                 const enter = document.createElement('button');
                 enter.type = 'button';

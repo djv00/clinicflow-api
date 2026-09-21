@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,6 +42,8 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop"
 })
 @AutoConfigureMockMvc
+@WithMockUser(username = "test-operator", roles = "OPERATOR")
 class AdmissionCancellationIntegrationTest {
 
     @Autowired
@@ -79,31 +83,49 @@ class AdmissionCancellationIntegrationTest {
 
         MvcResult result = mockMvc.perform(post(
                         "/api/v1/encounters/{id}/admission-cancellations", data.encounterId()
-                ).contentType("application/json").content(request(data.cancelledAt(), "first-clerk")))
+                ).with(csrf()).contentType("application/json").content(request(data.cancelledAt())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(data.encounterId().toString()))
                 .andExpect(jsonPath("$.encounterNumber").value(data.encounterNumber()))
                 .andExpect(jsonPath("$.patientId").value(data.patientId().toString()))
                 .andExpect(jsonPath("$.status").value("ADMISSION_CANCELLED"))
                 .andExpect(jsonPath("$.dischargedAt").value(nullValue()))
-                .andExpect(jsonPath("$.admissionCancelledBy").value("first-clerk"))
+                .andExpect(jsonPath("$.admissionCancelledBy").value("test-operator"))
                 .andReturn();
 
         String cancelledAt = JsonPath.read(result.getResponse().getContentAsString(), "$.admissionCancelledAt");
         assertThat(OffsetDateTime.parse(cancelledAt).toInstant()).isEqualTo(data.cancelledAt().toInstant());
 
-        mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", data.encounterId())
+        mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", data.encounterId()).with(csrf())
+                        .with(user("second-operator").roles("OPERATOR"))
                         .contentType("application/json")
-                        .content(request(data.cancelledAt().plusMinutes(1), "second-clerk")))
+                        .content(request(data.cancelledAt().plusMinutes(1))))
                 .andExpect(status().isConflict());
 
         mockMvc.perform(get("/api/v1/encounters/{id}", data.encounterId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ADMISSION_CANCELLED"))
                 .andExpect(jsonPath("$.admissionCancelledAt").value(cancelledAt))
-                .andExpect(jsonPath("$.admissionCancelledBy").value("first-clerk"));
+                .andExpect(jsonPath("$.admissionCancelledBy").value("test-operator"));
 
-        assertCancelled(data, "first-clerk");
+        assertCancelled(data, "test-operator");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"admission-operator", "another-operator"})
+    void recordsAuthenticatedOperatorDespiteForgedRequestField(String username) throws Exception {
+        CancellationData data = createCancellationData();
+        mockMvc.perform(post("/api/v1/encounters/{id}/admission-cancellations", data.encounterId())
+                        .with(user(username).roles("OPERATOR")).with(csrf())
+                        .contentType("application/json")
+                        .content(request(data.cancelledAt()).replace("}", ", \"cancelledBy\": \"forged-operator\"}")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.admissionCancelledBy").value(username));
+
+        assertCancelled(data, username);
+        mockMvc.perform(get("/api/v1/encounters/{id}/timeline", data.encounterId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.encounter.admissionCancelledBy").value(username));
     }
 
     @Test
@@ -302,10 +324,10 @@ class AdmissionCancellationIntegrationTest {
         throw new AssertionError("Concurrent workflow was not observed waiting for the encounter lock");
     }
 
-    private String request(OffsetDateTime cancelledAt, String cancelledBy) {
+    private String request(OffsetDateTime cancelledAt) {
         return """
-                {"cancelledAt": "%s", "cancelledBy": "%s"}
-                """.formatted(cancelledAt, cancelledBy);
+                {"cancelledAt": "%s"}
+                """.formatted(cancelledAt);
     }
 
     private CancellationData createCancellationData() {

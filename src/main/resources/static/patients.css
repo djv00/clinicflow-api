@@ -37,6 +37,15 @@ a { color: var(--accent); }
 .workbench-nav { display: flex; gap: 20px; margin-left: auto; }
 .workbench-nav a { text-decoration: none; padding: 8px 0; border-bottom: 2px solid transparent; }
 .workbench-nav a[aria-current="page"] { border-color: var(--accent); font-weight: 600; }
+.account-controls { display: flex; align-items: center; gap: 12px; }
+.account-controls span { max-width: 160px; overflow-wrap: anywhere; }
+.login-main { max-width: 500px; padding-top: 64px; }
+.login-card { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 28px; }
+.login-card .button { width: 100%; }
+@media (max-width: 900px) {
+    .app-header { height: auto; min-height: 76px; flex-wrap: wrap; gap: 12px 24px; padding-block: 16px; }
+    .account-controls { margin-left: auto; }
+}
 main { max-width: 1280px; margin: 0 auto; padding: 42px 40px 60px; }
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 28px; }
 .eyebrow { margin: 0 0 6px; font-size: 11px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
@@ -171,7 +180,7 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
     .inpatient-filters { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 700px) {
-    .app-header { padding: 0 20px; height: 66px; }
+    .app-header { padding: 14px 20px; height: auto; min-height: 66px; }
     .header-section { display: none; }
     main { padding: 26px 16px; }
     .page-heading { align-items: start; flex-direction: column; gap: 18px; }

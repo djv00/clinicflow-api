@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-15. This describes implemented behaviour and the next delivery
+Updated: 2026-09-21. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -15,23 +15,24 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | Planned | No login or server-identified operator yet. |
+| Authentication and roles | Implemented | Session login/logout, operator and viewer permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Account administration and password reset are not implemented. |
+| Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Add authenticated operations.** Define the small set of operator roles,
-   protect both pages and APIs, and record the operator from the authenticated
-   identity. Verify permission failures as well as successful workflows.
-2. **Package the demonstration.** Make persistent demo setup repeatable, document
-   configuration and deployment, and prepare an English walkthrough of the
-   workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
+1. **Package deployment.** Provide a repeatable application-and-database startup,
+   document configuration, and verify the demonstration in its target environment.
+2. **Prepare the interview walkthrough.** Explain the workflow, transaction
+   boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
-The core workbench flow is connected. The next stage is authentication and role
-checks, starting with login and read access before migrating recorded operators
-to authenticated identities and protecting workflow writes.
+The core workbench flow, session login, viewer/operator permissions, and
+authenticated cancellation operators are connected. PostgreSQL now preserves
+accounts across restarts; initial passwords only provision missing accounts.
+Fictional PostgreSQL locations are available through `CLINICFLOW_DEMO_DATA_ENABLED`;
+the setting is off by default and is separate from the H2 `demo` profile.
 
 ## Later extensions
 
@@ -46,9 +47,9 @@ or certificate modules are outside this delivery sequence.
 - `mvnw.cmd -Ppostgres-it clean verify` also runs the PostgreSQL tests. These
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).
-- IDEA's JUnit run-all action can include `PostgresWorkflowIT` directly. It still
-  needs that database environment; it does not follow Maven's default test-file
-  selection.
+- IDEA's JUnit run-all action can include `PostgresWorkflowIT`,
+  `PostgresAccountsIT`, and `PostgresDemoDataIT` directly. They still need that
+  database environment; IDEA does not follow Maven's default test-file selection.
 - Browser checks cover empty and populated records, pagination, cancelled
   admissions, and switching between patients. Admission checks cover successful
   creation, conflict and validation messages, local time conversion, duplicate
@@ -69,13 +70,39 @@ or certificate modules are outside this delivery sequence.
   optional beds, inactive references, literal search, pagination, and workflow changes.
   Browser checks cover filtering, patient record actions, refreshed results, failed reads,
   and stale requests. PostgreSQL checks include the joined worklist query and page count.
-- Admission cancellation page checks cover time and operator validation, leaving without
+- Admission cancellation page checks cover time validation, leaving without
   saving, failed reads and refresh, changing encounter state, blocked duplicate submissions,
   and recovery after a committed cancellation's response is lost. The cancelled encounter
   remains in the patient record and timeline and leaves the inpatient list.
 - Discharge cancellation page checks cover original placement previews, bed and no-bed
-  restoration, time and operator validation, leaving without saving, occupied beds,
+  restoration, time validation, leaving without saving, occupied beds,
   intervening bed use, another active stay, failed reads, stale forms, duplicate-submit
   prevention, and recovery after a committed correction's response is lost. Timeline and
   inpatient list checks confirm the restored care period. H2 and PostgreSQL tests verify
   that a stale discharge ID is rejected even when a new discharge has the same timestamp.
+- Session security checks cover anonymous reads/writes, wrong credentials, login and
+  business-write CSRF checks, session fixation protection, token rotation, authenticated
+  reads/writes, logout invalidation, no-store responses, and password hashing. Existing
+  business API tests now provide an authenticated test user and CSRF tokens while
+  keeping the security filters enabled.
+- Browser checks cover incorrect credentials, successful sign-in, patient registration,
+  inactivity expiry, sign-out, and a second tab attempting to use the signed-out session.
+  The authenticated demo script completes the inpatient workflow and signs out.
+- Role checks cover all seven business POST endpoints, other write methods,
+  an unrecognised role, distinct CSRF/permission failures, and a real viewer login,
+  reads, forbidden registration, and logout. Account configuration checks cover
+  optional viewer activation, BCrypt, and duplicate/blank usernames.
+- Browser role checks cover read-only records in admitted, in-department,
+  discharged, and cancelled states, timeline access, inpatient filtering, and
+  operator action visibility. A failed session-permissions request keeps editing
+  hidden in the directory and patient record; reloading restores operator access.
+  The role slice passed 355 regular tests, 8 PostgreSQL tests, and the authenticated
+  demo workflow.
+- Authenticated cancellation checks cover missing/forged request operators,
+  different signed-in operators, canonical account names after real login,
+  persisted timeline values, and repeated cancellations preserving the original
+  audit. Operator account names are checked against the audit field length at
+  startup. Browser checks confirm both forms save without an operator input,
+  admission-time validation still works, and discharge restoration shows the
+  authenticated operator in the timeline. This slice passed 357 regular tests,
+  8 PostgreSQL tests, and the updated authenticated demo workflow.
