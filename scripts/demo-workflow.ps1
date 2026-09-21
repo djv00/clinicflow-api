@@ -28,7 +28,7 @@ function Find-DemoRecord {
 
     $matches = @($Records | Where-Object { $_.$Field -eq $Value })
     if ($matches.Count -ne 1) {
-        throw "Expected one available $Field=$Value. Start with the demo profile and check bed occupancy."
+        throw "Expected one available $Field=$Value. Use the demo profile, or enable CLINICFLOW_DEMO_DATA_ENABLED with postgres, and check bed availability and active status."
     }
     $matches[0]
 }

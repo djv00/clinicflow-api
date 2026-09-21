@@ -48,7 +48,8 @@ validation or services. Missing/invalid CSRF tokens instead return `403` with
 title `Request not allowed`. Permission denial does not sign the user out.
 Both roles can inspect their session and sign out.
 
-Accounts are still configured in memory. Admission and discharge cancellations
+PostgreSQL accounts are persisted; the default and demo profiles use in-memory
+accounts. The login/session API is the same for both. Admission and discharge cancellations
 record the authenticated username; they no longer accept an operator as input.
 A legacy `cancelledBy` request property is ignored and cannot override that identity.
 Existing historical operator values are retained.

@@ -55,17 +55,20 @@ endpoints are not available yet.
 
 ### Sign in
 
-The workbench and business APIs require a signed-in session. Accounts are
-configured at startup and held in memory; user management and persistent account
-provisioning are not implemented yet. Passwords are encoded with BCrypt.
-By default, the operator username is `operator` and a generated development
-password is printed once during startup. That password changes on restart.
+The workbench and business APIs require a signed-in session. Passwords are
+encoded with BCrypt. The default and `demo` profiles keep accounts in memory;
+the `postgres` profile stores accounts, roles, and password hashes in the database.
+User management and password reset endpoints are not implemented yet.
+For the default and `demo` profiles, the operator username is `operator` and a
+generated development password is printed once during startup unless configured.
+That generated password changes on restart.
 
 To choose credentials, set `SPRING_SECURITY_USER_NAME` and
 `SPRING_SECURITY_USER_PASSWORD` in the environment of the process starting the
 application (or the IDE run configuration). Do not commit credentials. These
-settings apply to the default, `demo`, and `postgres` profiles. A generated
-development password is not a deployment account setup.
+settings configure local accounts or initialize a missing PostgreSQL operator.
+PostgreSQL startup requires an explicit password when that operator does not
+already exist; it never saves a generated development password.
 The operator username must be nonblank and at most 100 characters so it fits
 the cancellation audit fields; invalid configuration fails at startup.
 
@@ -76,9 +79,24 @@ the cancellation audit fields; invalid configuration fails at startup.
 
 To enable a separate read-only account, set `CLINICFLOW_VIEWER_PASSWORD` before
 starting the application. Its username defaults to `viewer`; optionally set
-`CLINICFLOW_VIEWER_USERNAME`. Without a nonblank password this account does not
-exist. The viewer and operator usernames must differ, ignoring case. Both account
-configurations apply to all database profiles and require a restart to change.
+`CLINICFLOW_VIEWER_USERNAME`. A nonblank password creates a missing viewer account.
+The viewer and operator usernames must differ, ignoring case. In-memory account
+configuration changes take effect on restart.
+
+For PostgreSQL, startup only creates missing configured accounts. Existing
+passwords, roles, canonical usernames, and enabled states are preserved, even if
+the bootstrap environment values change. Removing the viewer password does not
+delete an existing viewer. After initialization, bootstrap passwords can be removed
+from the environment; keep the configured operator username so startup finds the
+same account. Changing that username to a new value provisions another operator
+and requires an initial password. Reusing an account with a different role fails
+startup instead of changing its permissions. Initialization is transactional.
+Run initial provisioning with one application instance.
+
+Database usernames are unique ignoring case; successful login returns the stored
+username for audit records. Both persistent account usernames are limited to 100
+characters. Changing bootstrap passwords is not a password-reset mechanism, and
+disabling an account prevents new sign-ins without revoking an existing session.
 
 The header shows the signed-in account's access level. Read-only users can open
 records and timelines, but do not see editing actions. Those actions also stay
@@ -217,6 +235,7 @@ to run the application:
 
 ```powershell
 $env:DB_PASSWORD = 'choose-a-local-password'
+$env:SPRING_SECURITY_USER_PASSWORD = 'choose-an-initial-operator-password'
 docker compose up -d --wait postgres
 .\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
 ```
@@ -234,17 +253,54 @@ owned by an application user, then set these variables before starting the profi
 $env:DB_URL = 'jdbc:postgresql://localhost:5432/clinicflow'
 $env:DB_USERNAME = 'clinicflow'
 $env:DB_PASSWORD = 'your-database-password'
+$env:SPRING_SECURITY_USER_PASSWORD = 'choose-an-initial-operator-password'
 .\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
 ```
 
 `DB_URL` and `DB_USERNAME` default to the values shown above; `DB_PASSWORD` is
 required. Keep actual credentials outside the repository. Use `postgres` and
-`demo` separately: the demo dictionary is only loaded into the disposable H2
-database. PostgreSQL starts without patient or reference data.
+`demo` separately: `demo` initializes a disposable H2 database. PostgreSQL starts
+without patients or reference data unless the optional demo-location setup below
+is enabled.
 
 The first migration matches the existing patient-flow entities, including foreign
-keys, unique constraints and history indexes. Add a new versioned migration for
+keys, unique constraints and history indexes. The second adds persistent accounts
+without changing patient-flow tables. Add a new versioned migration for
 later schema changes instead of editing a migration already applied to a database.
+
+### Persistent demo locations
+
+To demonstrate the existing workbench against PostgreSQL, explicitly enable the
+fictional location dictionary before starting the application. Set the database
+and initial account credentials as described above, then run:
+
+```powershell
+$env:CLINICFLOW_DEMO_DATA_ENABLED = 'true'
+.\mvnw.cmd '-Dspring-boot.run.profiles=postgres' spring-boot:run
+```
+
+This adds the same two fictional departments, two wards, and three beds used by
+the H2 demo. It creates no patients or encounters. Open the workbench or run
+`scripts/demo-workflow.ps1` with the operator account to exercise the full workflow.
+Use only the `postgres` profile for this setup; do not combine it with `demo`.
+
+Initialization only inserts missing department codes, ward codes, and ward/bed
+numbers. Existing IDs, names, enabled states, patient records, and occupancy
+history are preserved. Beds resolve the ward by its code, including when an
+existing ward has a different ID. Restarting with the flag enabled does not
+duplicate the dictionary or reset completed or active stays. A disabled or
+occupied demo bed stays disabled or occupied, so it may prevent another demo run.
+
+All location inserts run in one transaction. If a fixed fixture ID already belongs
+to another record, initialization fails and rolls back rather than overwriting
+that record. Inspect the conflict before retrying. The script lives in
+`src/main/resources/demo/postgresql-locations.sql`, outside the Flyway schema
+migrations, and is disabled by default.
+
+After initialization, remove `CLINICFLOW_DEMO_DATA_ENABLED` from the application
+environment or set it to `false`. This stops future initialization; it does not
+delete the persisted dictionary or workflow data. The account setup and database
+credentials are independent of this flag.
 
 ### PostgreSQL integration tests
 
@@ -258,8 +314,10 @@ and use the Maven profile:
 
 Testcontainers starts a disposable PostgreSQL 17 instance. The tests use the
 application's `postgres` profile and Flyway migrations, and verify migration
-re-entry, patient search and pagination, discharge cancellation, rollback after
-SQL has been flushed, and two admissions competing for one bed. The concurrency
+re-entry, an upgrade from the original schema with existing patient data, account
+login across application restarts, optional demo initialization and rollback,
+preservation of existing dictionaries and active stays on restart, patient search and pagination, discharge
+cancellation, rollback after SQL has been flushed, and two admissions competing for one bed. The concurrency
 test checks PostgreSQL's lock wait information before allowing the winning
 transaction to commit.
 
@@ -407,13 +465,14 @@ maintenance endpoints are not implemented.
 Department, ward, and bed lists support filters but currently have no pagination.
 
 Session authentication and viewer/operator roles protect the workbench and APIs.
-Cancellation operators come from the authenticated account. Accounts are currently
-configured in memory; persistent account provisioning remains to be implemented.
+Cancellation operators come from the authenticated account. PostgreSQL accounts
+are persisted and initialized from configuration; the local H2 profiles keep
+accounts in memory. Account administration and password reset are not implemented.
 The timeline contains location and discharge history, not a complete audit of all
 system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs and provides
 connected patient and inpatient workbench pages for the full workflow. Physician
 assignment, outpatient scheduling, clinical orders, and billing are outside the
-implemented scope. The next delivery work is persistent account provisioning,
-repeatable demo setup, deployment, and an interview walkthrough.
+implemented scope. PostgreSQL supports optional, repeatable demo-location
+initialization. The next delivery work is deployment packaging and an interview walkthrough.

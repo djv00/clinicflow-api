@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-16. This describes implemented behaviour and the next delivery
+Updated: 2026-09-21. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -15,23 +15,24 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | Implemented for local use | Session login/logout, configured operator and optional viewer accounts, API role checks, page action visibility, CSRF protection, and authenticated cancellation operators. Persistent account provisioning remains for deployment. |
+| Authentication and roles | Implemented | Session login/logout, operator and viewer permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Account administration and password reset are not implemented. |
+| Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Prepare persistent accounts.** Login, role checks, and authenticated cancellation
-   operators are connected. Next implement persistent account provisioning before
-   deployment.
-2. **Package the demonstration.** Make persistent demo setup repeatable, document
-   configuration and deployment, and prepare an English walkthrough of the
-   workflow, transaction boundaries, concurrency behaviour, tests, and tradeoffs.
+1. **Package deployment.** Provide a repeatable application-and-database startup,
+   document configuration, and verify the demonstration in its target environment.
+2. **Prepare the interview walkthrough.** Explain the workflow, transaction
+   boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits. Stop for review
 and a commit after a tested slice, rather than accumulating the whole workbench.
 The core workbench flow, session login, viewer/operator permissions, and
-authenticated cancellation operators are connected. The current configured
-accounts are for local use; persistent account provisioning is the next slice.
+authenticated cancellation operators are connected. PostgreSQL now preserves
+accounts across restarts; initial passwords only provision missing accounts.
+Fictional PostgreSQL locations are available through `CLINICFLOW_DEMO_DATA_ENABLED`;
+the setting is off by default and is separate from the H2 `demo` profile.
 
 ## Later extensions
 
@@ -46,9 +47,9 @@ or certificate modules are outside this delivery sequence.
 - `mvnw.cmd -Ppostgres-it clean verify` also runs the PostgreSQL tests. These
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).
-- IDEA's JUnit run-all action can include `PostgresWorkflowIT` directly. It still
-  needs that database environment; it does not follow Maven's default test-file
-  selection.
+- IDEA's JUnit run-all action can include `PostgresWorkflowIT`,
+  `PostgresAccountsIT`, and `PostgresDemoDataIT` directly. They still need that
+  database environment; IDEA does not follow Maven's default test-file selection.
 - Browser checks cover empty and populated records, pagination, cancelled
   admissions, and switching between patients. Admission checks cover successful
   creation, conflict and validation messages, local time conversion, duplicate
