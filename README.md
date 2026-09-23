@@ -50,8 +50,8 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 
 The API starts on port 8080. By default, it uses an in-memory H2 database that is
 cleared on shutdown. Default startup does not load reference data, so location
-list queries return empty arrays. Reference-data creation and maintenance
-endpoints are not available yet.
+list queries return empty arrays. Department, ward, and bed maintenance endpoints
+are not available yet. The physician directory API can use existing departments.
 
 ### Sign in
 
@@ -74,8 +74,9 @@ the cancellation audit fields; invalid configuration fails at startup.
 
 | Role | Access |
 | --- | --- |
-| `VIEWER` | Search patients and inpatients; view patient records, encounter history, timelines, and location dictionaries. |
+| `VIEWER` | Search patients, inpatients, and physicians; view patient records, encounter history, timelines, and location dictionaries. |
 | `OPERATOR` | All viewer access, plus registration, admission, department entry, transfer, discharge, and both cancellation workflows. |
+| `ADMIN` | Read and maintain the physician directory; read departments for affiliation selection. This role alone does not grant patient or inpatient access. |
 
 To enable a separate read-only account, set `CLINICFLOW_VIEWER_PASSWORD` before
 starting the application. Its username defaults to `viewer`; optionally set
@@ -83,10 +84,21 @@ starting the application. Its username defaults to `viewer`; optionally set
 The viewer and operator usernames must differ, ignoring case. In-memory account
 configuration changes take effect on restart.
 
+To enable a directory administrator, set `CLINICFLOW_ADMIN_PASSWORD`; the username
+defaults to `admin`, with `CLINICFLOW_ADMIN_USERNAME` as an optional override. The
+username must differ from other configured accounts, ignoring case. No default
+administrator password is supplied and existing operators/viewers are not promoted.
+The same provisioning rules below apply to the administrator. Accounts still have
+one role each; combined roles and account administration are future work.
+
+The [physician directory API](docs/api.md#physician-directory) is ready for Postman
+or other HTTP clients. Its page is not implemented yet; use an operator or viewer
+account for the existing patient/inpatient workbench.
+
 For PostgreSQL, startup only creates missing configured accounts. Existing
 passwords, roles, canonical usernames, and enabled states are preserved, even if
-the bootstrap environment values change. Removing the viewer password does not
-delete an existing viewer. After initialization, bootstrap passwords can be removed
+the bootstrap environment values change. Removing an optional account's bootstrap
+password does not delete that account. After initialization, bootstrap passwords can be removed
 from the environment; keep the configured operator username so startup finds the
 same account. Changing that username to a new value provisions another operator
 and requires an initial password. Reusing an account with a different role fails
@@ -94,7 +106,7 @@ startup instead of changing its permissions. Initialization is transactional.
 Run initial provisioning with one application instance.
 
 Database usernames are unique ignoring case; successful login returns the stored
-username for audit records. Both persistent account usernames are limited to 100
+username for audit records. Persistent account usernames are limited to 100
 characters. Changing bootstrap passwords is not a password-reset mechanism, and
 disabling an account prevents new sign-ins without revoking an existing session.
 

@@ -31,7 +31,10 @@ public class PersistentAccountConfiguration {
     @Bean
     ApplicationRunner initializeAccounts(AccountProvisioningService provisioning, SecurityProperties properties,
             @Value("${clinicflow.security.viewer.username:viewer}") String viewerUsername,
-            @Value("${clinicflow.security.viewer.password:}") String viewerPassword) {
-        return arguments -> provisioning.initialize(properties.getUser(), viewerUsername, viewerPassword);
+            @Value("${clinicflow.security.viewer.password:}") String viewerPassword,
+            @Value("${clinicflow.security.admin.username:admin}") String adminUsername,
+            @Value("${clinicflow.security.admin.password:}") String adminPassword) {
+        return arguments -> provisioning.initialize(properties.getUser(), viewerUsername, viewerPassword,
+                adminUsername, adminPassword);
     }
 }

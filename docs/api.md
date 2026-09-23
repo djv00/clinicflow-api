@@ -30,7 +30,7 @@ keep the cookie jar enabled for the following sequence:
    `{"username":"viewer","roles":["VIEWER"]}`. Anonymous requests
    receive `401` JSON, not an HTML redirect.
 4. Obtain a fresh token from `/api/auth/csrf` after login. Add that header and the
-   session cookie to POST requests in the examples below. GET requests only need
+   session cookie to POST and PUT requests in the examples below. GET requests only need
    the session cookie. Login and logout invalidate the previous CSRF token.
 5. `POST /api/auth/logout` with the cookie and CSRF header returns `204`,
    invalidates the session, and clears the session cookie. GET does not sign out.
@@ -41,12 +41,15 @@ be rejected by CSRF protection first. An expired session requires signing in
 again. Clients must not automatically replay an unconfirmed business write.
 Authentication responses and protected pages use no-store cache headers.
 
-Business reads (`GET` and `HEAD` under `/api/v1`) require `VIEWER` or `OPERATOR`.
-All other methods under `/api/v1` require `OPERATOR`. A viewer write with a valid
+Patient/inpatient reads (`GET` and `HEAD`) require `VIEWER` or `OPERATOR`, and
+their writes require `OPERATOR`. Physician reads allow `VIEWER`, `OPERATOR`, or
+`ADMIN`; physician writes require `ADMIN`. Administrators can also read department
+lookups, but the role alone grants no patient/inpatient access. A viewer write with a valid
 CSRF token returns `403` with title `Access denied` before reaching business
 validation or services. Missing/invalid CSRF tokens instead return `403` with
 title `Request not allowed`. Permission denial does not sign the user out.
-Both roles can inspect their session and sign out.
+All three roles can inspect their session and sign out. Accounts currently have
+one role each; adding `ADMIN` does not change any existing account's role.
 
 PostgreSQL accounts are persisted; the default and demo profiles use in-memory
 accounts. The login/session API is the same for both. Admission and discharge cancellations
@@ -544,3 +547,93 @@ For example, registering a patient with an empty medical record number returns:
 Malformed JSON, UUIDs, query parameters, and timestamps return `400`; they are
 handled by Spring MVC and may have a different response body. Clients should
 check the HTTP status before reading error-specific fields.
+
+## Physician directory
+
+These endpoints manage physician profiles and current service-department
+affiliations. They do not assign physicians to encounters or create login accounts.
+`VIEWER`, `OPERATOR`, and `ADMIN` may read them; only `ADMIN` may write them.
+An administrator can also use `GET /api/v1/departments?active=true` to find selectable
+departments. Configure a separate administrator as described in the README and
+use the same session/CSRF login sequence above.
+
+| Method | Path | Result |
+| --- | --- | --- |
+| GET | `/api/v1/physicians` | Paginated directory with optional filters |
+| GET | `/api/v1/physicians/{id}` | Profile, affiliations, active state, and current version |
+| POST | `/api/v1/physicians` | Create a physician; returns `201` with the profile |
+| PUT | `/api/v1/physicians/{id}` | Replace names and current department selection |
+| PUT | `/api/v1/physicians/{id}/active` | Activate or deactivate without removing affiliations |
+
+The list accepts `keyword` (up to 100 characters), `departmentId` (UUID), `active`
+(`true`/`false`), `page` (default 0), and `size` (default 20, maximum 100). Omitting
+`active` includes both active and inactive physicians. Keyword search is a
+case-insensitive literal fragment of the code or full name; `%`, `_`, and `!` are
+not wildcards. Results sort by last name, first name, and unique physician code.
+The response has `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Affiliations in each item are sorted by department code; filtering by a department
+does not hide that physician's other affiliations.
+
+Create an initially unassigned physician:
+
+```http
+POST /api/v1/physicians
+Content-Type: application/json
+
+{
+  "physicianCode": "PHY-001",
+  "firstName": "Maya",
+  "lastName": "Chen",
+  "departmentIds": []
+}
+```
+
+Codes are required, case-sensitive, unique, and limited to 30 characters. Names
+are required and limited to 100 characters each. Surrounding whitespace is removed.
+The code cannot be edited. `departmentIds` must be supplied, may be empty, and can
+contain at most 100 distinct existing department IDs. New affiliations require
+active departments; repeated IDs represent one affiliation.
+
+The returned object includes `id`, `physicianCode`, `firstName`, `lastName`,
+`active`, `version`, and `departments`. Each department has `id`, `departmentCode`,
+`departmentName`, and `active`. Supply the last-read version when editing:
+
+```http
+PUT /api/v1/physicians/<physicianId>
+Content-Type: application/json
+
+{
+  "firstName": "Mai",
+  "lastName": "Chen",
+  "departmentIds": ["<departmentId>"],
+  "version": 0
+}
+```
+
+This replaces the complete department selection. Existing inactive affiliations
+may be retained or removed, but cannot be newly added. A missing or invalid
+department rejects the whole update, including name changes. Read the returned
+version after saving; do not assume that it is still the original value.
+
+```http
+PUT /api/v1/physicians/<physicianId>/active
+Content-Type: application/json
+
+{"active": false, "version": 1}
+```
+
+Use the actual current version, not the illustrative values above. Both fields
+are required; versions must be nonnegative. Deactivation retains affiliations
+and keeps the record available for queries. An inactive physician can be edited
+and reactivated. There is no physician DELETE endpoint.
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid request, pagination, or newly selected inactive department |
+| 401 | Sign-in required |
+| 403 | Insufficient role or missing/invalid CSRF token |
+| 404 | Physician or requested department does not exist |
+| 409 | Duplicate physician code or stale/concurrent update |
+
+On a version conflict, reload the profile and review the latest department
+selection before resubmitting. Do not silently retry an old edit with a new version.

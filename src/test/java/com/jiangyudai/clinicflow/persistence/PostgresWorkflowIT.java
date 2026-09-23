@@ -16,7 +16,9 @@ import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import com.jiangyudai.clinicflow.physician.entity.Physician;
+import com.jiangyudai.clinicflow.physician.exception.DuplicatePhysicianCodeException;
 import com.jiangyudai.clinicflow.physician.repository.PhysicianRepository;
+import com.jiangyudai.clinicflow.physician.service.PhysicianService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.flywaydb.core.Flyway;
@@ -39,6 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -70,6 +73,8 @@ class PostgresWorkflowIT {
     private BedRepository bedRepository;
     @Autowired
     private PhysicianRepository physicianRepository;
+    @Autowired
+    private PhysicianService physicianService;
     @Autowired
     private Flyway flyway;
     @Autowired
@@ -174,7 +179,7 @@ class PostgresWorkflowIT {
 
             Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource())
                     .locations("classpath:db/migration/postgresql")
-                    .schemas(upgradeSchema).defaultSchema(upgradeSchema).load();
+                    .schemas(upgradeSchema).defaultSchema(upgradeSchema).target("3").load();
             assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(upgrade.migrate().migrationsExecuted).isZero();
             assertThat(jdbc.queryForObject("SELECT medical_record_number FROM " + upgradeSchema
@@ -268,6 +273,62 @@ class PostgresWorkflowIT {
             assertThat(current.getDepartments()).extracting(Department::getId)
                     .containsExactly(replacement.departmentId());
         });
+    }
+
+    @Test
+    void searchesPhysicianDirectoryWithPostgresFiltersAndLiteralKeywords() {
+        Locations first = createLocations();
+        Locations second = createLocations();
+        String prefix = "SEARCH-" + UUID.randomUUID().toString().substring(0, 8);
+        var literal = physicianService.create(prefix + "%_!", "Maya", "Chen",
+                Set.of(first.departmentId(), second.departmentId()));
+        var other = physicianService.create(prefix + "B", "Maya", "Chen", Set.of(first.departmentId()));
+        physicianService.changeActive(other.id(), false, other.version());
+
+        var page = physicianService.search(prefix, first.departmentId(), null, 0, 1);
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(2);
+        assertThat(page.items()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(literal.id());
+            assertThat(item.departments()).hasSize(2);
+        });
+        assertThat(physicianService.search(prefix + "%_!", null, true, 0, 20).items())
+                .singleElement().satisfies(item -> assertThat(item.id()).isEqualTo(literal.id()));
+        assertThat(physicianService.search(prefix, first.departmentId(), false, 0, 20).items())
+                .singleElement().satisfies(item -> assertThat(item.id()).isEqualTo(other.id()));
+        assertThat(physicianService.search(prefix, first.departmentId(), null, 2, 1).totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentRegistrationOfTheSamePhysicianCodeReturnsABusinessConflict() throws Exception {
+        String code = "RACE-" + UUID.randomUUID().toString().substring(0, 16);
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var physician = physicianService.create(code, "Maya", "Chen", Set.of());
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return physician;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> physicianService.create(code, "Alex", "Martin", Set.of()));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).physicianCode()).isEqualTo(code);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicatePhysicianCodeException.class);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM physicians WHERE physician_code = ?",
+                    Integer.class, code)).isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test
@@ -432,7 +493,7 @@ class PostgresWorkflowIT {
         while (System.nanoTime() < deadline) {
             if (contender.isDone()) {
                 contender.get();
-                throw new AssertionError("Second admission completed before waiting for the bed lock");
+                throw new AssertionError("Second operation completed before waiting for the database lock");
             }
             Boolean blocked = jdbc.queryForObject("""
                     SELECT EXISTS (
@@ -445,17 +506,17 @@ class PostgresWorkflowIT {
             }
             Thread.sleep(25);
         }
-        throw new AssertionError("PostgreSQL did not report the second admission waiting for the bed lock");
+        throw new AssertionError("PostgreSQL did not report the second operation waiting for the database lock");
     }
 
     private static void awaitRelease(CountDownLatch latch) {
         try {
             if (!latch.await(15, TimeUnit.SECONDS)) {
-                throw new AssertionError("Timed out waiting to commit the first admission");
+                throw new AssertionError("Timed out waiting to commit the first operation");
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("First admission was interrupted", exception);
+            throw new IllegalStateException("First operation was interrupted", exception);
         }
     }
 
