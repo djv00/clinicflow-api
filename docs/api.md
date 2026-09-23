@@ -298,6 +298,13 @@ An unchanged location returns `409`. Destination validation and occupancy
 conflicts use the same `400`, `404`, and `409` categories as department
 admission.
 
+When physician responsibility has been recorded, a department change closes its
+open assignment at `transferredAt` with reason `DEPARTMENT_TRANSFER`; a move within
+the same department preserves it. The closure operator comes from the session.
+A department change that precedes recorded responsibility returns `409`, and all
+location/assignment changes roll back together. Assignment endpoints are pending;
+see the [service rules and delivery status](physician-assignments.md).
+
 ## Departments, wards, and beds
 
 | Endpoint | Optional filters | Response fields |
@@ -420,7 +427,11 @@ and `dischargedAt`.
 - Each discharge also creates an `encounter_discharges` record referencing the
   exact closed location. Its discharge time is retained if care resumes later.
 - The encounter write lock serializes discharge with transfers and repeated
-  discharge attempts. An error rolls back the encounter, location, and discharge record together.
+  discharge attempts. An error rolls back the encounter, location, physician
+  assignment closure, and discharge record together.
+- Any open physician assignment closes at the same time with reason `DISCHARGE`
+  and the session operator. A time before recorded physician responsibility
+  returns `409`, even when that physician has already been released.
 
 An unknown encounter returns `404`; invalid time or request data returns `400`;
 an invalid state, repeated discharge, or missing current location returns `409`.
@@ -507,6 +518,9 @@ the current discharge for API callers and demo scripts.
   assignment from passing the same availability check.
 - All cancellation changes commit together. A repeated cancellation returns
   `409` without changing the first cancellation's details.
+- Physician responsibility stays closed after cancellation. Restoring the
+  location does not silently restore a doctor who may no longer be eligible;
+  explicit physician selection is required through the assignment service.
 
 Unknown encounters return `404`. Invalid request data, time, or inactive location
 references return `400`. Invalid encounter state, another active encounter,

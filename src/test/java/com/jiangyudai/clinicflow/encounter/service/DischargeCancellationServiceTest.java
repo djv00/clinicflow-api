@@ -52,6 +52,9 @@ class DischargeCancellationServiceTest {
     private PatientService patientService;
     @Mock
     private LocationService locationService;
+    @Mock
+    private EncounterPhysicianService physicianService;
+
     @InjectMocks
     private EncounterService encounterService;
 

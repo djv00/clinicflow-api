@@ -1,10 +1,12 @@
 package com.jiangyudai.clinicflow.physician.repository;
 
 import com.jiangyudai.clinicflow.physician.entity.Physician;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +20,11 @@ public interface PhysicianRepository extends JpaRepository<Physician, UUID> {
     Optional<Physician> findByPhysicianCode(String physicianCode);
 
     boolean existsByPhysicianCode(String physicianCode);
+
+    // Lock the root before loading affiliations; directory edits update its version before changing the join table.
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select p from Physician p where p.id = :id")
+    Optional<Physician> findByIdForRead(@Param("id") UUID id);
 
     @EntityGraph(attributePaths = "departments")
     Optional<Physician> findWithDepartmentsById(UUID id);

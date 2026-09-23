@@ -26,6 +26,20 @@ import java.util.Map;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    @ExceptionHandler(InvalidPhysicianAssignmentException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPhysicianAssignment(InvalidPhysicianAssignmentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid physician assignment");
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(PhysicianAssignmentConflictException.class)
+    public ResponseEntity<ProblemDetail> handlePhysicianAssignmentConflict(PhysicianAssignmentConflictException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Physician assignment conflict");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler(PhysicianNotFoundException.class)
     public ResponseEntity<ProblemDetail> handlePhysicianNotFound(PhysicianNotFoundException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());

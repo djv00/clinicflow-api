@@ -12,6 +12,10 @@ import com.jiangyudai.clinicflow.encounter.repository.EncounterPhysicianAssignme
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidPhysicianAssignmentException;
+import com.jiangyudai.clinicflow.encounter.exception.PhysicianAssignmentConflictException;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
@@ -30,6 +34,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -74,6 +80,8 @@ class PostgresWorkflowIT {
     private PatientService patientService;
     @Autowired
     private EncounterService encounterService;
+    @Autowired
+    private EncounterPhysicianService encounterPhysicianService;
     @Autowired
     private InpatientQueryService inpatientQueryService;
     @Autowired
@@ -146,7 +154,7 @@ class PostgresWorkflowIT {
                 EncounterStatus.IN_DEPARTMENT, locations.departmentId(), locations.wardId()), 0, 1);
         assertThat(filtered.totalElements()).isEqualTo(1);
         assertThat(filtered.items().getFirst().bedId()).isEqualTo(locations.firstBedId());
-        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1));
+        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1), "test-clerk");
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
         encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
@@ -391,7 +399,7 @@ class PostgresWorkflowIT {
         EncounterLocation initial = enterDepartment(encounterId, locations);
         OffsetDateTime dischargedAt = ENTERED_AT.plusDays(1);
 
-        encounterService.dischargeEncounter(encounterId, dischargedAt);
+        encounterService.dischargeEncounter(encounterId, dischargedAt, "test-clerk");
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isFalse());
         encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk");
@@ -420,10 +428,10 @@ class PostgresWorkflowIT {
         UUID encounterId = admitPatient();
         enterDepartment(encounterId, createLocations());
         OffsetDateTime time = ENTERED_AT.plusDays(1);
-        encounterService.dischargeEncounter(encounterId, time);
+        encounterService.dischargeEncounter(encounterId, time, "test-clerk");
         UUID originalId = encounterService.getTimeline(encounterId).discharges().getFirst().id();
         encounterService.cancelDischarge(encounterId, time.plusHours(1), "first-clerk", originalId);
-        encounterService.dischargeEncounter(encounterId, time);
+        encounterService.dischargeEncounter(encounterId, time, "test-clerk");
         var before = encounterService.getTimeline(encounterId);
 
         assertThatThrownBy(() -> encounterService.cancelDischarge(
@@ -663,6 +671,132 @@ class PostgresWorkflowIT {
         }
     }
 
+    @Test
+    void competingPhysicianSelectionsReturnAConflictAfterWaitingForTheEncounter() throws Exception {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        UUID locationId = enterDepartment(encounterId, locations).getId();
+        UUID firstPhysician = createPhysician(locations.departmentId());
+        UUID secondPhysician = createPhysician(locations.departmentId());
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var assignment = encounterPhysicianService.assign(encounterId, firstPhysician, locationId, null, ENTERED_AT, "first-clerk");
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return assignment;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> encounterPhysicianService.assign(encounterId, secondPhysician, locationId, null, ENTERED_AT, "second-clerk"));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            UUID committedId = first.get(10, TimeUnit.SECONDS).getId();
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(PhysicianAssignmentConflictException.class);
+            assertThat(encounterPhysicianService.getHistory(encounterId)).singleElement()
+                    .satisfies(item -> assertThat(item.getId()).isEqualTo(committedId));
+            var replacement = encounterPhysicianService.assign(encounterId, secondPhysician, locationId, committedId,
+                    ENTERED_AT.plusHours(1), "handover-clerk");
+            assertThat(encounterPhysicianService.getHistory(encounterId)).hasSize(2);
+            assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId())
+                    .isEqualTo(replacement.getId());
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void assignmentAndDischargeSerializeInEitherOrder(boolean assignmentFirst) throws Exception {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        UUID locationId = enterDepartment(encounterId, locations).getId();
+        UUID physicianId = createPhysician(locations.departmentId());
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        Runnable assign = () -> encounterPhysicianService.assign(encounterId, physicianId, locationId, null, ENTERED_AT, "assign-clerk");
+        Runnable discharge = () -> encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk");
+        try {
+            var first = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                (assignmentFirst ? assign : discharge).run();
+                entityManager.flush();
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(assignmentFirst ? discharge : assign);
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            if (assignmentFirst) {
+                second.get(10, TimeUnit.SECONDS);
+                assertThat(encounterPhysicianService.getHistory(encounterId)).singleElement().satisfies(item -> {
+                    assertThat(item.getEndReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
+                    assertThat(item.getEndedBy()).isEqualTo("discharge-clerk");
+                    assertThat(item.getEndedAt().toInstant()).isEqualTo(ENTERED_AT.plusHours(1).toInstant());
+                });
+            } else {
+                assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                        .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(InvalidEncounterStatusException.class);
+                assertThat(encounterPhysicianService.getHistory(encounterId)).isEmpty();
+            }
+            assertThat(encounterService.getEncounter(encounterId).getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
+            assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void assignmentRechecksEligibilityAfterAConcurrentDirectoryEdit(boolean deactivate) throws Exception {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        UUID locationId = enterDepartment(encounterId, locations).getId();
+        UUID physicianId = createPhysician(locations.departmentId());
+        var original = physicianService.get(physicianId);
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var edit = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                if (deactivate) {
+                    physicianService.changeActive(physicianId, false, original.version());
+                } else {
+                    physicianService.update(physicianId, original.firstName(), original.lastName(), Set.of(), original.version());
+                }
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var assign = executor.submit(() -> encounterPhysicianService.assign(encounterId, physicianId, locationId, null, ENTERED_AT, "operator"));
+            awaitBlockedBy(assign, firstBackend.get());
+            releaseFirst.countDown();
+            edit.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> assign.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(InvalidPhysicianAssignmentException.class);
+            assertThat(encounterPhysicianService.getHistory(encounterId)).isEmpty();
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     private EncounterPhysicianAssignment createAssignment(UUID encounterId, UUID physicianId,
                                                           UUID departmentId, OffsetDateTime startedAt) {
         return transactions.execute(status -> assignmentRepository.saveAndFlush(new EncounterPhysicianAssignment(
@@ -727,7 +861,7 @@ class PostgresWorkflowIT {
 
     private void transfer(UUID encounterId, Locations locations) {
         encounterService.transferEncounter(encounterId, locations.departmentId(),
-                locations.wardId(), locations.secondBedId(), ENTERED_AT.plusHours(1));
+                locations.wardId(), locations.secondBedId(), ENTERED_AT.plusHours(1), "test-clerk");
     }
 
     private Locations createLocations() {

@@ -82,6 +82,9 @@ class EncounterTransferServiceTest {
     @Mock
     private LocationService locationService;
 
+    @Mock
+    private EncounterPhysicianService physicianService;
+
     @InjectMocks
     private EncounterService encounterService;
 
@@ -191,7 +194,7 @@ class EncounterTransferServiceTest {
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
                         TARGET_BED_ID,
-                        TRANSFERRED_AT
+                        TRANSFERRED_AT, "test-clerk"
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -232,7 +235,7 @@ class EncounterTransferServiceTest {
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
                         null,
-                        TRANSFERRED_AT
+                        TRANSFERRED_AT, "test-clerk"
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -262,7 +265,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                null
+                null, "test-clerk"
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("required");
 
@@ -283,7 +286,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT
+                TRANSFERRED_AT, "test-clerk"
         )).isInstanceOf(EncounterNotFoundException.class);
 
         verifyNoInteractions(
@@ -313,7 +316,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT
+                TRANSFERRED_AT, "test-clerk"
         )).isInstanceOf(InvalidEncounterStatusException.class)
                 .hasMessageContaining("IN_DEPARTMENT");
 
@@ -337,7 +340,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT
+                TRANSFERRED_AT, "test-clerk"
         )).isInstanceOf(
                 CurrentEncounterLocationNotFoundException.class
         );
@@ -356,7 +359,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                CURRENT_STARTED_AT.minusSeconds(1)
+                CURRENT_STARTED_AT.minusSeconds(1), "test-clerk"
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining(
                         "before the current location start time"
@@ -377,7 +380,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                OffsetDateTime.now().plusDays(1)
+                OffsetDateTime.now().plusDays(1), "test-clerk"
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("future");
 
@@ -418,7 +421,7 @@ class EncounterTransferServiceTest {
                         CURRENT_DEPARTMENT_ID,
                         CURRENT_WARD_ID,
                         TARGET_BED_ID,
-                        TRANSFERRED_AT
+                        TRANSFERRED_AT, "test-clerk"
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -454,7 +457,7 @@ class EncounterTransferServiceTest {
                 CURRENT_DEPARTMENT_ID,
                 CURRENT_WARD_ID,
                 CURRENT_BED_ID,
-                TRANSFERRED_AT
+                TRANSFERRED_AT, "test-clerk"
         )).isInstanceOf(SameEncounterLocationException.class);
 
         assertThat(currentLocation.getEndedAt()).isNull();
@@ -490,7 +493,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT
+                TRANSFERRED_AT, "test-clerk"
         )).isInstanceOf(BedOccupiedException.class);
 
         assertThat(currentLocation.getEndedAt()).isNull();

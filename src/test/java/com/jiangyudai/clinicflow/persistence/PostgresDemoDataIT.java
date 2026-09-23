@@ -56,8 +56,8 @@ class PostgresDemoDataIT {
                 encounterId = encounters.admitPatient(patientId, "DEMO-STAY-TEST", start.plusHours(1)).getId();
                 encounters.admitToDepartment(encounterId, departmentId, wardId, bedId, start.plusHours(2));
                 encounters.transferEncounter(encounterId, UUID.fromString("10000000-0000-0000-0000-000000000002"),
-                        UUID.fromString("20000000-0000-0000-0000-000000000002"), SECOND_BED, start.plusHours(3));
-                encounters.dischargeEncounter(encounterId, start.plusHours(4));
+                        UUID.fromString("20000000-0000-0000-0000-000000000002"), SECOND_BED, start.plusHours(3), "test-clerk");
+                encounters.dischargeEncounter(encounterId, start.plusHours(4), "test-clerk");
                 encounters.cancelDischarge(encounterId, start.plusHours(5), "test-operator");
 
                 database.jdbc.update("UPDATE departments SET active = false WHERE id = ?", departmentId);

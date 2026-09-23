@@ -87,7 +87,7 @@ class EncounterDischargeControllerTest {
     void returnsNotFoundForUnknownEncounter() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        )))
+        ), eq("test-operator")))
                 .thenThrow(new EncounterNotFoundException(ENCOUNTER_ID));
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
@@ -100,7 +100,7 @@ class EncounterDischargeControllerTest {
     void returnsConflictForMissingLocation() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        )))
+        ), eq("test-operator")))
                 .thenThrow(new CurrentEncounterLocationNotFoundException(ENCOUNTER_ID));
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
@@ -113,7 +113,7 @@ class EncounterDischargeControllerTest {
     void returnsBadRequestForInvalidDischargeTime() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        )))
+        ), eq("test-operator")))
                 .thenThrow(new InvalidDischargeTimeException(
                         "Discharge time cannot be before the current location start time"
                 ));

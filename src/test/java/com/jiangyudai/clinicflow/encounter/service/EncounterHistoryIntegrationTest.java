@@ -161,7 +161,7 @@ class EncounterHistoryIntegrationTest {
     void zeroDurationLocationDoesNotOccupyAnyHistoricalInterval() {
         HistoryData data = createData();
         enter(data.encounterId(), data, data.bedId(), STARTED_AT);
-        encounterService.dischargeEncounter(data.encounterId(), STARTED_AT);
+        encounterService.dischargeEncounter(data.encounterId(), STARTED_AT, "test-clerk");
         UUID other = newEncounter(ADMITTED_AT);
 
         assertThat(enter(other, data, data.bedId(), ADMITTED_AT).getBed().getId()).isEqualTo(data.bedId());
@@ -174,14 +174,14 @@ class EncounterHistoryIntegrationTest {
         EncounterLocation current = enter(other, data, data.otherBedId(), STARTED_AT);
 
         assertThatThrownBy(() -> encounterService.transferEncounter(
-                other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT.minusHours(1)
+                other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT.minusHours(1), "test-clerk"
         )).isInstanceOf(BedHistoryConflictException.class);
 
         EncounterLocation unchanged = locationRepository.findByEncounter_IdAndEndedAtIsNull(other).orElseThrow();
         assertThat(unchanged.getId()).isEqualTo(current.getId());
         assertThat(locationRepository.findAllByEncounter_IdOrderByStartedAtAsc(other)).hasSize(1);
         EncounterLocation next = encounterService.transferEncounter(
-                other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT
+                other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT, "test-clerk"
         );
         assertThat(next.getBed().getId()).isEqualTo(data.bedId());
         assertThat(locationRepository.findById(current.getId()).orElseThrow().getEndedAt()).isEqualTo(DISCHARGED_AT);
@@ -192,7 +192,7 @@ class EncounterHistoryIntegrationTest {
         HistoryData data = dischargedPatient();
         UUID other = newEncounter(DISCHARGED_AT);
         enter(other, data, data.bedId(), DISCHARGED_AT.plusHours(1));
-        encounterService.dischargeEncounter(other, DISCHARGED_AT.plusHours(3));
+        encounterService.dischargeEncounter(other, DISCHARGED_AT.plusHours(3), "test-clerk");
 
         assertThatThrownBy(() -> encounterService.cancelDischarge(
                 data.encounterId(), DISCHARGED_AT.plusHours(2), "test-clerk"
@@ -221,7 +221,7 @@ class EncounterHistoryIntegrationTest {
 
         assertWaitingWorkflowFails(() -> {
             enter(data.encounterId(), data, data.bedId(), STARTED_AT);
-            encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT);
+            encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk");
         }, () -> admit(data.patientId(), DISCHARGED_AT.minusHours(1)),
                 EncounterHistoryConflictException.class, data.patientId());
     }
@@ -233,7 +233,7 @@ class EncounterHistoryIntegrationTest {
 
         assertWaitingWorkflowFails(() -> {
             enter(data.encounterId(), data, data.bedId(), STARTED_AT);
-            encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT);
+            encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk");
         }, () -> enter(other, data, data.bedId(), DISCHARGED_AT.minusHours(1)),
                 BedHistoryConflictException.class, data.patientId());
 
@@ -307,7 +307,7 @@ class EncounterHistoryIntegrationTest {
     private HistoryData dischargedPatient() {
         HistoryData data = createData();
         enter(data.encounterId(), data, data.bedId(), STARTED_AT);
-        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT);
+        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk");
         return data;
     }
 

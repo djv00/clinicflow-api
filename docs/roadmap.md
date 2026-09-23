@@ -18,15 +18,15 @@ history. Business rules are implemented in one Spring Boot backend.
 | Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
 | Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
-| Encounter physician responsibility | Persistence implemented | Assignment history links encounters, physicians, and departments, with effective times, operator audit, stale-update protection, and one open assignment per encounter enforced in PostgreSQL. Workflow services, endpoints, and page controls are the next slices. |
+| Encounter physician responsibility | Persistence and workflow services implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Session operators identify transfer/discharge closures. Assignment endpoints and page controls are the next slices. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Connect physicians to encounters.** The assignment entity, repository, and V5
-   migration are in place. Next, implement eligibility checks and assignment/handover
-   services with atomic transfer/discharge closure, then add secured APIs and page
-   controls. Follow the [assignment workflow rules](physician-assignments.md),
+1. **Expose physician responsibility in the workbench.** Persistence and workflow
+   services are in place. Next, add secured assignment/history/release APIs, then
+   physician selection and history controls on the encounter page.
+   Follow the [assignment workflow rules](physician-assignments.md),
    including explicit physician selection after a discharge correction.
 2. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
@@ -49,7 +49,8 @@ immutable, case-sensitive identifiers with surrounding whitespace removed.
 Affiliations refer to existing departments, are unique per physician/department,
 and have no cascade to shared department records. Deactivation keeps affiliations.
 New affiliations require active departments; existing inactive affiliations can
-be retained or removed. Encounter assignment eligibility remains a later slice.
+be retained or removed. New encounter assignments require an active physician
+affiliated with the encounter's current active department.
 Version checks also cover affiliation edits, so a stale profile cannot replace a
 more recent department selection.
 
@@ -75,8 +76,13 @@ to user accounts only when a physician-specific login use case is implemented.
   retained department references after directory changes, no cascading deletion,
   and optimistic locking. PostgreSQL checks cover V4-to-V5 migration with existing
   data, closure/time/reference constraints, one open assignment under concurrent
-  inserts, and rollback of both sides of a handover. These are persistence checks;
-  assignment workflow integration is still pending.
+  inserts, and rollback of both sides of a handover.
+- Assignment service checks cover stale selections, eligibility, responsibility
+  times, same-department moves, department changes, discharge correction, and
+  rollback of complete workflows. PostgreSQL checks verify competing selections,
+  assignment versus discharge in both orders, and eligibility after a concurrent
+  directory edit. Existing transfer/discharge endpoint checks verify that closure
+  audit uses the session operator and ignores a forged operator in request JSON.
 - Physician page checks cover administrator navigation, multiple department
   selection, profile edits, deactivation/reactivation, read-only roles, and
   unsaved-edit confirmation. Two open records verify stale-edit rejection and

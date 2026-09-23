@@ -2,23 +2,25 @@
 
 ## Scope and delivery status
 
-The persistence slice is implemented: an assignment links an encounter, physician,
+Persistence and workflow services are implemented: an assignment links an encounter, physician,
 and service department, with effective start/end times and operator audit. The
 directory's many-to-many department affiliations describe where a physician can
 work; an assignment describes responsibility for one particular hospital stay.
 
-There are no assignment endpoints or page controls yet. Existing admission,
-transfer, and discharge services do not create or close these records. The next
-slice must connect the workflows together before exposing assignment writes.
+`EncounterPhysicianService` supports assignment, handover, release, and history
+reads. Transfer and discharge close responsibility in their existing transaction,
+using the authenticated operator from those endpoints. Department entry leaves
+physician selection explicit. There are no assignment endpoints or page controls
+yet; those are the next slice.
 
 The workflow references establish that department entry and transfer identify a
 responsible inpatient physician. They do not fully specify concurrency, doctor
 handover, or discharge-correction behaviour. The rules below are ClinicFlow design
-decisions for the next slice, not claims about another system's implementation.
+decisions, not claims about another system's implementation.
 
-## Planned workflow rules
+## Implemented service rules
 
-| Operation | Intended behaviour |
+| Operation | Behaviour |
 | --- | --- |
 | First assignment | The encounter must be in a department. Select an active physician affiliated with that active department. Record the authenticated operator. |
 | Physician handover | Close the previous assignment as `REASSIGNED` and insert the next one in the same transaction. Keep both records. |
@@ -37,7 +39,15 @@ outside this slice. A physician can be responsible for several encounters.
 
 After a discharge correction, a new assignment may start at the restored care
 period's start only after an operator confirms it and eligibility/history checks
-pass. Until then, the encounter must be shown as unassigned.
+pass. Until then, no open physician assignment exists. The upcoming API and page
+must display that unassigned state explicitly.
+
+Assign/release operations require the caller's last-seen location ID and current
+assignment ID. A null assignment ID means the caller saw no current physician;
+it does not mean an unconditional overwrite. A changed location or assignment,
+reselecting the current physician, or releasing an absent assignment is a conflict.
+The service requires an operator argument; the assignment endpoints must take it
+from the authenticated session when they are added.
 
 ## Data and transaction rules
 
@@ -54,11 +64,26 @@ pass. Until then, the encounter must be shown as unassigned.
 - The close fields must be all absent or all present. A version column protects
   against stale updates to the same assignment. H2 repository tests validate the
   mapping; PostgreSQL tests separately validate the migration and database checks.
-- The next service slice must serialize assignment changes with the existing
-  encounter write lock, reject overlap/backdated changes that cross later history,
-  and enforce current-location and physician eligibility. These cross-record rules
-  are not enforced by the persistence slice alone.
+- Assignment changes use the existing encounter write lock. New assignments and
+  releases cannot precede the current location start, the open assignment start,
+  or the end of any closed responsibility record, and cannot be in the future.
+  Transfer to another department and discharge also reject times before recorded
+  responsibility, including when the current physician has already been released.
+- Assignment eligibility is held stable with read locks in the order Encounter ->
+  Physician -> Department. A directory edit's version update locks the physician
+  before changing affiliations. Assignment waits for such an edit and checks its
+  committed result. Directory changes made after an assignment commits preserve
+  that assignment; they do not terminate an ongoing responsibility automatically.
 - Replacement must flush the previous closure before inserting a new open row,
   because the PostgreSQL unique index is immediate. Both operations must roll back
   together on failure. Authenticated operator names must come from the session,
   never from a client-supplied audit field.
+
+## Verification
+
+Service integration tests cover handover/release, stale selections, eligibility,
+effective times, department changes, discharge correction, rollback after flushed
+writes, and session-derived closure operators. PostgreSQL tests additionally
+exercise competing selections, assignment/discharge in both lock orders, and
+assignment waiting for physician deactivation or affiliation removal. H2 does not
+provide the PostgreSQL partial index; workflow writes still use the encounter lock.
