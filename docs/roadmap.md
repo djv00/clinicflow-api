@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-21. This describes implemented behaviour and the next delivery
+Updated: 2026-09-22. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -17,17 +17,23 @@ history. Business rules are implemented in one Spring Boot backend.
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
 | Authentication and roles | Implemented | Session login/logout, operator and viewer permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
+| Physician directory | Persistence implemented | Physician records and current service-department affiliations, with unique codes and optimistic locking. Directory APIs, permissions, pages, and encounter assignments are not implemented yet. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Package deployment.** Provide a repeatable application-and-database startup,
+1. **Expose the physician directory.** Define maintenance permissions, add directory
+   APIs and pages, and preserve existing viewer/operator access. A physician may
+   serve several departments; this is separate from an employee's HR department.
+2. **Connect physicians to encounters.** Record assignment history and define how
+   department entry, transfer, discharge, and discharge cancellation affect it.
+3. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
-2. **Prepare the interview walkthrough.** Explain the workflow, transaction
+4. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
-Each step should be delivered through small, runnable commits. Stop for review
-and a commit after a tested slice, rather than accumulating the whole workbench.
+Each step should be delivered through small, runnable commits after a tested slice,
+rather than accumulating the whole feature before committing.
 The core workbench flow, session login, viewer/operator permissions, and
 authenticated cancellation operators are connected. PostgreSQL now preserves
 accounts across restarts; initial passwords only provision missing accounts.
@@ -36,14 +42,27 @@ the setting is off by default and is separate from the H2 `demo` profile.
 
 ## Later extensions
 
-Physician records and encounter assignment are a possible coursework-inspired
-extension after the core web workflow. Keep the existing coursework repository
-unchanged. Billing, prescriptions, outpatient scheduling, and coursework training
-or certificate modules are outside this delivery sequence.
+Physician records apply coursework relationship modelling to the inpatient
+workflow. Keep the existing coursework repository unchanged. Physician codes are
+immutable, case-sensitive identifiers with surrounding whitespace removed.
+Affiliations refer to existing departments, are unique per physician/department,
+and have no cascade to shared department records. Deactivation keeps affiliations;
+directory and assignment services will enforce availability rules in later slices.
+Version checks also cover affiliation edits, so a stale profile cannot replace a
+more recent department selection.
+
+A limited medicine catalogue and encounter medication orders can follow the
+physician workflow. Billing, outpatient scheduling, and coursework training or
+certificate modules remain outside this delivery sequence. Link physician records
+to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
 
 - `mvnw.cmd test` runs the regular unit, controller, and H2 tests.
+- Physician repository checks cover shared departments, duplicate affiliations
+  across persistence contexts, removal without cascading, deactivation, unique
+  codes, and stale updates. PostgreSQL checks add a V2-to-V3 upgrade with existing
+  data, database constraints, affiliation rollback, and competing edit versions.
 - `mvnw.cmd -Ppostgres-it clean verify` also runs the PostgreSQL tests. These
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).
