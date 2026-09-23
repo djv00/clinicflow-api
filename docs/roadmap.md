@@ -18,14 +18,14 @@ history. Business rules are implemented in one Spring Boot backend.
 | Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
 | Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
-| Encounter physician responsibility | Persistence and workflow services implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Session operators identify transfer/discharge closures. Assignment endpoints and page controls are the next slices. |
+| Encounter physician responsibility | API implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. The query returns current location and responsibility together. Writes use session operators; viewers can read. Page controls are the next slice. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Expose physician responsibility in the workbench.** Persistence and workflow
-   services are in place. Next, add secured assignment/history/release APIs, then
-   physician selection and history controls on the encounter page.
+1. **Expose physician responsibility in the workbench.** Persistence, workflow
+   services, and secured assignment/history/release APIs are in place. Next, add
+   physician selection, handover, release, and history controls on the encounter page.
    Follow the [assignment workflow rules](physician-assignments.md),
    including explicit physician selection after a discharge correction.
 2. **Package deployment.** Provide a repeatable application-and-database startup,
@@ -83,6 +83,11 @@ to user accounts only when a physician-specific login use case is implemented.
   assignment versus discharge in both orders, and eligibility after a concurrent
   directory edit. Existing transfer/discharge endpoint checks verify that closure
   audit uses the session operator and ignores a forged operator in request JSON.
+- Assignment API checks cover real login and canonical operator names, read/write
+  roles, CSRF, field validation, missing references, eligibility failures, stale
+  location/assignment IDs, and repeated submissions. Flat response DTOs work with
+  Open Session in View disabled. A PostgreSQL concurrency check verifies that a
+  query waits for a discharge and returns matching encounter/location/physician state.
 - Physician page checks cover administrator navigation, multiple department
   selection, profile edits, deactivation/reactivation, read-only roles, and
   unsaved-edit confirmation. Two open records verify stale-edit rejection and

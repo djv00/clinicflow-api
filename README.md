@@ -97,8 +97,10 @@ Directory administrators land there after sign-in; operators and viewers can
 browse physician records but cannot edit them. Administrators can add physicians,
 edit names and service departments, and deactivate or reactivate records.
 The [physician directory API](docs/api.md#physician-directory) is also available
-for Postman or other HTTP clients. Physician-to-encounter assignments are not
-implemented yet.
+for Postman or other HTTP clients. Operators can use the
+[physician responsibility API](docs/api.md#physician-responsibility) to assign,
+hand over, or release a physician for an encounter and read its history. Assignment
+controls on the encounter page are the next delivery step.
 
 For PostgreSQL, startup only creates missing configured accounts. Existing
 passwords, roles, canonical usernames, and enabled states are preserved, even if

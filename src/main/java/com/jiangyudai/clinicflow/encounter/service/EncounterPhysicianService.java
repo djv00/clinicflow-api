@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterPhysicianAssignmentsResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterPhysicianAssignment;
@@ -101,6 +102,16 @@ public class EncounterPhysicianService {
     public List<EncounterPhysicianAssignment> getHistory(UUID encounterId) {
         encounters.findByIdForRead(encounterId).orElseThrow(() -> new EncounterNotFoundException(encounterId));
         return assignments.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
+    }
+
+    /** Supplies the current location and assignment IDs together so clients can detect stale selections. */
+    @Transactional
+    public EncounterPhysicianAssignmentsResponse getAssignments(UUID encounterId) {
+        Encounter encounter = encounters.findByIdForRead(encounterId)
+                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
+        var location = locations.findByEncounter_IdAndEndedAtIsNull(encounterId).orElse(null);
+        var history = assignments.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
+        return EncounterPhysicianAssignmentsResponse.from(encounter, location, history);
     }
 
     /** Caller holds the encounter write lock; closure must commit with the transfer or discharge. */

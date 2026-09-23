@@ -82,6 +82,9 @@ Role rules use Spring Security's
 | POST | `/encounters/{id}/discharge-cancellations` | 200 | Encounter |
 | GET | `/encounters/{id}/discharges` | 200 | Discharge list |
 | GET | `/encounters/{id}/timeline` | 200 | Encounter, locations, discharges |
+| GET | `/encounters/{id}/physician-assignments` | 200 | Current location, current assignment ID, and responsibility history |
+| POST | `/encounters/{id}/physician-assignments` | 201 | New physician assignment |
+| POST | `/encounters/{id}/physician-assignments/{assignmentId}/releases` | 200 | Closed physician assignment |
 | GET | `/departments` | 200 | Department list |
 | GET | `/departments/{id}` | 200 | Department |
 | GET | `/wards` | 200 | Ward list |
@@ -302,8 +305,83 @@ When physician responsibility has been recorded, a department change closes its
 open assignment at `transferredAt` with reason `DEPARTMENT_TRANSFER`; a move within
 the same department preserves it. The closure operator comes from the session.
 A department change that precedes recorded responsibility returns `409`, and all
-location/assignment changes roll back together. Assignment endpoints are pending;
-see the [service rules and delivery status](physician-assignments.md).
+location/assignment changes roll back together. See the
+[assignment rules and delivery status](physician-assignments.md).
+
+## Physician responsibility
+
+```http
+GET /api/v1/encounters/<encounterId>/physician-assignments
+```
+
+Returns `200` with `encounterId`, `status`, `currentLocation`,
+`currentAssignmentId`, and `assignments`. Status, location, and responsibility are
+read under the same encounter lock. `currentLocation` has the location response
+fields, or is null before department entry and after discharge. A null
+`currentAssignmentId` means no physician is currently assigned, even if closed
+history exists. An existing encounter without assignments returns an empty array;
+an unknown encounter returns `404`.
+
+Each assignment contains `id`, `encounterId`, `physicianId`, `physicianCode`,
+`physicianFirstName`, `physicianLastName`, `departmentId`, `departmentCode`,
+`departmentName`, `startedAt`, `assignedBy`, `endedAt`, `endReason`, and `endedBy`.
+The three closure fields are null while responsibility is open. History is ordered
+by start time and then record ID; equal-time ID ordering is only for stable display.
+Use `currentAssignmentId` to identify the current record, not the last array item.
+Names are current directory values, while reference IDs and responsibility audit
+are retained on the assignment.
+
+Read the current context, then select an active physician affiliated with its
+department. The directory search supports `departmentId` and `active=true`;
+eligibility is rechecked during the write.
+
+```http
+POST /api/v1/encounters/<encounterId>/physician-assignments
+Content-Type: application/json
+
+{
+  "physicianId": "<physicianId>",
+  "expectedLocationId": "<currentLocation.id>",
+  "expectedAssignmentId": null,
+  "startedAt": "2025-09-02T11:00:00-04:00"
+}
+```
+
+Returns `201` with the new assignment. The encounter must be `IN_DEPARTMENT`.
+`physicianId`, `expectedLocationId`, and `startedAt` are required. A null or omitted
+`expectedAssignmentId` means no current physician was observed; it never means
+an unconditional replacement. For handover, send the query's `currentAssignmentId`.
+The previous record closes as `REASSIGNED` and the new record starts at the same
+effective time in one transaction. Selecting the already responsible physician
+returns `409` without adding history.
+
+```http
+POST /api/v1/encounters/<encounterId>/physician-assignments/<assignmentId>/releases
+Content-Type: application/json
+
+{
+  "expectedLocationId": "<currentLocation.id>",
+  "endedAt": "2025-09-02T12:00:00-04:00"
+}
+```
+
+Returns `200` with the closed assignment, using reason `RELEASED`. Both body fields
+are required. The path ID must still be the encounter's current assignment;
+historical, unrelated, missing, or already released IDs return `409`. Release keeps
+the encounter in care without a responsible physician. It does not delete history.
+
+Both writes require `OPERATOR` and a valid CSRF token; reads require `VIEWER` or
+`OPERATOR`. `ADMIN` alone grants no access here. Operators are taken from the
+authenticated session. Fields such as `assignedBy`, `endedBy`, `operator`, or
+`endReason` in request JSON do not control audit or release reason.
+
+Invalid UUIDs, missing required fields, invalid/future times, and an ineligible
+physician return `400`. An unknown encounter or selected physician returns `404`.
+Changed location/assignment, an invalid encounter state, or a time that crosses
+later responsibility history returns `409`. All failed writes leave the previous
+responsibility unchanged. Repeated successful writes are rejected as conflicts;
+after an unconfirmed response, reload this query and inspect the current/history
+records before deciding whether another operation is needed.
 
 ## Departments, wards, and beds
 
@@ -520,7 +598,7 @@ the current discharge for API callers and demo scripts.
   `409` without changing the first cancellation's details.
 - Physician responsibility stays closed after cancellation. Restoring the
   location does not silently restore a doctor who may no longer be eligible;
-  explicit physician selection is required through the assignment service.
+  explicit physician selection is required through the assignment endpoint.
 
 Unknown encounters return `404`. Invalid request data, time, or inactive location
 references return `400`. Invalid encounter state, another active encounter,

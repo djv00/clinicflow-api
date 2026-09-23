@@ -797,6 +797,50 @@ class PostgresWorkflowIT {
         }
     }
 
+    @Test
+    void assignmentQueryWaitsForDischargeAndReturnsOneCommittedState() throws Exception {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        UUID locationId = enterDepartment(encounterId, locations).getId();
+        UUID physicianId = createPhysician(locations.departmentId());
+        UUID assignmentId = encounterPhysicianService.assign(encounterId, physicianId, locationId, null, ENTERED_AT, "assign-clerk").getId();
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var discharge = executor.submit(() -> transactions.executeWithoutResult(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk");
+                entityManager.flush();
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var read = executor.submit(() -> encounterPhysicianService.getAssignments(encounterId));
+            awaitBlockedBy(read, firstBackend.get());
+            releaseFirst.countDown();
+            discharge.get(10, TimeUnit.SECONDS);
+            var state = read.get(10, TimeUnit.SECONDS);
+            assertThat(state.encounterId()).isEqualTo(encounterId);
+            assertThat(state.status()).isEqualTo(EncounterStatus.DISCHARGED);
+            assertThat(state.currentLocation()).isNull();
+            assertThat(state.currentAssignmentId()).isNull();
+            assertThat(state.assignments()).singleElement().satisfies(item -> {
+                assertThat(item.id()).isEqualTo(assignmentId);
+                assertThat(item.physicianId()).isEqualTo(physicianId);
+                assertThat(item.physicianFirstName()).isEqualTo("Maya");
+                assertThat(item.departmentId()).isEqualTo(locations.departmentId());
+                assertThat(item.endReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
+                assertThat(item.endedBy()).isEqualTo("discharge-clerk");
+            });
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     private EncounterPhysicianAssignment createAssignment(UUID encounterId, UUID physicianId,
                                                           UUID departmentId, OffsetDateTime startedAt) {
         return transactions.execute(status -> assignmentRepository.saveAndFlush(new EncounterPhysicianAssignment(

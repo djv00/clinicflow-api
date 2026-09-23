@@ -10,8 +10,9 @@ work; an assignment describes responsibility for one particular hospital stay.
 `EncounterPhysicianService` supports assignment, handover, release, and history
 reads. Transfer and discharge close responsibility in their existing transaction,
 using the authenticated operator from those endpoints. Department entry leaves
-physician selection explicit. There are no assignment endpoints or page controls
-yet; those are the next slice.
+physician selection explicit. Secured assignment, release, and combined state/history
+endpoints are available; see the [API examples](api.md#physician-responsibility).
+Page controls are the next slice.
 
 The workflow references establish that department entry and transfer identify a
 responsible inpatient physician. They do not fully specify concurrency, doctor
@@ -39,15 +40,25 @@ outside this slice. A physician can be responsible for several encounters.
 
 After a discharge correction, a new assignment may start at the restored care
 period's start only after an operator confirms it and eligibility/history checks
-pass. Until then, no open physician assignment exists. The upcoming API and page
-must display that unassigned state explicitly.
+pass. Until then, no open physician assignment exists. The API returns a null
+`currentAssignmentId`; the upcoming page must display that unassigned state explicitly.
 
 Assign/release operations require the caller's last-seen location ID and current
 assignment ID. A null assignment ID means the caller saw no current physician;
 it does not mean an unconditional overwrite. A changed location or assignment,
 reselecting the current physician, or releasing an absent assignment is a conflict.
-The service requires an operator argument; the assignment endpoints must take it
-from the authenticated session when they are added.
+The endpoints take the operator from the authenticated session. Client-supplied
+audit fields cannot replace it. Viewers and operators can read responsibility;
+only operators can assign or release. Directory administrator permission alone
+does not grant access to encounter responsibility.
+
+The combined query returns encounter status, current location, current assignment
+ID, and responsibility history under one encounter read lock. Clients should use
+that context for write preconditions. A missing current location is normal before
+department entry and after discharge; a missing current assignment is normal while
+physician selection is pending. Physician and department display names reflect
+their current directory values; the responsibility record retains the reference
+IDs, effective times, and operators, not a snapshot of every directory field.
 
 ## Data and transaction rules
 
@@ -87,3 +98,6 @@ writes, and session-derived closure operators. PostgreSQL tests additionally
 exercise competing selections, assignment/discharge in both lock orders, and
 assignment waiting for physician deactivation or affiliation removal. H2 does not
 provide the PostgreSQL partial index; workflow writes still use the encounter lock.
+API tests cover real session audit, permissions, CSRF, invalid bodies, detached
+response mapping, stale forms, repeated requests, and discharge/correction reads.
+The PostgreSQL query test verifies a consistent response during concurrent discharge.
