@@ -1,0 +1,24 @@
+.physician-filters { display: grid; grid-template-columns: 2fr 1.4fr 1fr; gap: 16px; padding: 24px; border-bottom: 1px solid var(--line); }
+.physician-filters > div { min-width: 0; }
+.physician-filters select { width: 100%; min-height: 42px; margin-top: 7px; padding: 8px; }
+.physician-filter-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
+#physician-filter-error { margin-top: 20px; }
+#physician-table { min-width: 780px; }
+#physician-table th, #physician-table td { width: auto; vertical-align: top; padding: 14px 20px; }
+#physician-table td:first-child { min-width: 180px; }
+#physician-table td:nth-child(3) { min-width: 240px; }
+#physician-table td:nth-child(3) div + div { margin-top: 5px; }
+#physician-page-summary { color: var(--muted); font-size: 13px; }
+#physician-dialog { width: min(660px, calc(100% - 32px)); }
+#physician-dialog legend { font-size: 13px; font-weight: 600; }
+#physician-dialog input:read-only { background: #f6f8f9; }
+.department-options { max-height: 210px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; padding: 8px 12px; margin-top: 12px; }
+.department-option { display: flex; gap: 10px; align-items: start; padding: 7px 0; font-weight: 400; overflow-wrap: anywhere; }
+.department-option input { flex: 0 0 auto; width: 17px; height: 17px; margin: 2px 0 0; }
+.availability-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.availability-heading p { margin: 0; }
+#physician-dialog .dialog-actions { flex-wrap: wrap; }
+#reload-physician { margin-right: auto; }
+@media (max-width: 700px) {
+    .physician-filters { grid-template-columns: 1fr; padding: 18px; }
+}

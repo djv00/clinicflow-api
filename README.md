@@ -91,9 +91,13 @@ administrator password is supplied and existing operators/viewers are not promot
 The same provisioning rules below apply to the administrator. Accounts still have
 one role each; combined roles and account administration are future work.
 
-The [physician directory API](docs/api.md#physician-directory) is ready for Postman
-or other HTTP clients. Its page is not implemented yet; use an operator or viewer
-account for the existing patient/inpatient workbench.
+Open **Physicians** from the workbench navigation, or visit `/physicians.html`.
+Directory administrators land there after sign-in; operators and viewers can
+browse physician records but cannot edit them. Administrators can add physicians,
+edit names and service departments, and deactivate or reactivate records.
+The [physician directory API](docs/api.md#physician-directory) is also available
+for Postman or other HTTP clients. Physician-to-encounter assignments are not
+implemented yet.
 
 For PostgreSQL, startup only creates missing configured accounts. Existing
 passwords, roles, canonical usernames, and enabled states are preserved, even if

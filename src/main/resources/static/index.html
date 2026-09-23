@@ -19,8 +19,9 @@
     </a>
     <span class="header-section">Patient administration</span>
     <nav class="workbench-nav" aria-label="Workbench">
-        <a id="patients-link" href="#patients" aria-current="page">Patients</a>
-        <a id="inpatients-link" href="#inpatients">Inpatients</a>
+        <a id="patients-link" href="#patients" aria-current="page" hidden>Patients</a>
+        <a id="inpatients-link" href="#inpatients" hidden>Inpatients</a>
+        <a id="physicians-link" href="./physicians.html" hidden>Physicians</a>
     </nav>
     <div class="account-controls">
         <span id="signed-in-user" class="muted" aria-label="Signed-in user"></span>
@@ -29,9 +30,10 @@
     </div>
 </header>
 <main id="main">
+    <noscript><p class="message error">Enable JavaScript to use the workbench.</p></noscript>
     <p id="account-error" class="message error" role="alert" hidden></p>
     <p id="read-only-notice" class="message information" hidden>Read-only access. You can view patients, hospital stays, and timelines. Contact an operator to register patients or make changes.</p>
-    <section id="patients-view" aria-label="Patient administration">
+    <section id="patients-view" aria-label="Patient administration" hidden>
     <div class="page-heading">
         <div>
             <p class="eyebrow">Patient directory</p>

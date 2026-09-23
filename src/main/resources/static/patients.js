@@ -5,7 +5,7 @@ import { openEncounterDischarge } from './encounter-discharge.js';
 import { openAdmissionCancellation } from './encounter-admission-cancellation.js';
 import { openDischargeCancellation } from './encounter-discharge-cancellation.js';
 import { openEncounterTimeline } from './encounter-timeline.js';
-import { accountReady, canWrite } from './account.js';
+import { accountReady, canWrite, canReadClinical } from './account.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -32,6 +32,8 @@ function setListState(title, detail = '') {
 }
 
 export async function loadPatients() {
+    await accountReady;
+    if (!canReadClinical()) return;
     const version = ++listVersion;
     listController?.abort();
     listController = new AbortController();

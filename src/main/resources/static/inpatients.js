@@ -1,5 +1,6 @@
 import { element, ApiError, request, encounterStatuses, formatEncounterTime } from './workbench.js';
 import { loadPatients, openPatient } from './patients.js';
+import { accountReady, canReadClinical } from './account.js';
 
 let filters = {};
 let page = 0;
@@ -142,9 +143,11 @@ for (const id of ['retry-inpatients', 'refresh-inpatients']) element(id).addEven
 element('retry-inpatient-filters').addEventListener('click', loadLocationFilters);
 element('patient-dialog').addEventListener('close', loadInpatients);
 
-function showView(event) {
+async function showView(event) {
+    await accountReady;
+    if (!canReadClinical()) return;
     // In-page anchors such as Skip to content must not switch workbench views.
-    if (!['', '#patients', '#inpatients'].includes(window.location.hash)) return;
+    if (event && !['', '#patients', '#inpatients'].includes(window.location.hash)) return;
     const inpatients = window.location.hash === '#inpatients';
     element('patients-view').hidden = inpatients;
     element('inpatients-view').hidden = !inpatients;

@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-22. This describes implemented behaviour and the next delivery
+Updated: 2026-09-23. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -17,20 +17,16 @@ history. Business rules are implemented in one Spring Boot backend.
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
 | Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
-| Physician directory | API implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. Edits require a version; invalid departments and conflicts do not partially update a record. The page and encounter assignments are not implemented yet. |
+| Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. Encounter assignments are not implemented yet. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Connect the physician directory page.** Use the directory APIs for search,
-   details, maintenance, and department selection. Show actions by role and support
-   conflict recovery. A physician may serve several departments; this is separate
-   from an employee's HR department.
-2. **Connect physicians to encounters.** Record assignment history and define how
+1. **Connect physicians to encounters.** Record assignment history and define how
    department entry, transfer, discharge, and discharge cancellation affect it.
-3. **Package deployment.** Provide a repeatable application-and-database startup,
+2. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
-4. **Prepare the interview walkthrough.** Explain the workflow, transaction
+3. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits after a tested slice,
@@ -71,6 +67,13 @@ to user accounts only when a physician-specific login use case is implemented.
   V4 role-constraint upgrade without changing existing account IDs/passwords,
   administrator persistence across restarts, filtered queries, and a controlled
   race between two registrations using the same physician code.
+- Physician page checks cover administrator navigation, multiple department
+  selection, profile edits, deactivation/reactivation, read-only roles, and
+  unsaved-edit confirmation. Two open records verify stale-edit rejection and
+  reloading. Interrupted successful responses verify that updates are reloaded
+  and unconfirmed creations are looked up by their exact code before another save.
+  Browser checks also cover combined filters, pagination, empty results, failed
+  list requests and retry, failed permission loading, and narrow-screen overflow.
 - `mvnw.cmd -Ppostgres-it clean verify` also runs the PostgreSQL tests. These
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).

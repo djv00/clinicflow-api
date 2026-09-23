@@ -42,7 +42,7 @@ a { color: var(--accent); }
 .login-main { max-width: 500px; padding-top: 64px; }
 .login-card { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 28px; }
 .login-card .button { width: 100%; }
-@media (max-width: 900px) {
+@media (max-width: 1150px) {
     .app-header { height: auto; min-height: 76px; flex-wrap: wrap; gap: 12px 24px; padding-block: 16px; }
     .account-controls { margin-left: auto; }
 }
