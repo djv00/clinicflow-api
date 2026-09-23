@@ -17,13 +17,17 @@ history. Business rules are implemented in one Spring Boot backend.
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
 | Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
-| Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. Encounter assignments are not implemented yet. |
+| Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
+| Encounter physician responsibility | Persistence implemented | Assignment history links encounters, physicians, and departments, with effective times, operator audit, stale-update protection, and one open assignment per encounter enforced in PostgreSQL. Workflow services, endpoints, and page controls are the next slices. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
 
-1. **Connect physicians to encounters.** Record assignment history and define how
-   department entry, transfer, discharge, and discharge cancellation affect it.
+1. **Connect physicians to encounters.** The assignment entity, repository, and V5
+   migration are in place. Next, implement eligibility checks and assignment/handover
+   services with atomic transfer/discharge closure, then add secured APIs and page
+   controls. Follow the [assignment workflow rules](physician-assignments.md),
+   including explicit physician selection after a discharge correction.
 2. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
 3. **Prepare the interview walkthrough.** Explain the workflow, transaction
@@ -67,6 +71,12 @@ to user accounts only when a physician-specific login use case is implemented.
   V4 role-constraint upgrade without changing existing account IDs/passwords,
   administrator persistence across restarts, filtered queries, and a controlled
   race between two registrations using the same physician code.
+- Assignment persistence checks cover responsibility history, shared physicians,
+  retained department references after directory changes, no cascading deletion,
+  and optimistic locking. PostgreSQL checks cover V4-to-V5 migration with existing
+  data, closure/time/reference constraints, one open assignment under concurrent
+  inserts, and rollback of both sides of a handover. These are persistence checks;
+  assignment workflow integration is still pending.
 - Physician page checks cover administrator navigation, multiple department
   selection, profile edits, deactivation/reactivation, read-only roles, and
   unsaved-edit confirmation. Two open records verify stale-edit rejection and

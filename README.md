@@ -19,6 +19,7 @@ Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
 - [Current progress and next steps](docs/roadmap.md)
+- [Physician assignment model and planned workflow](docs/physician-assignments.md)
 
 ## Workflow
 

@@ -3,8 +3,12 @@ package com.jiangyudai.clinicflow.persistence;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
 import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
+import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
+import com.jiangyudai.clinicflow.encounter.entity.EncounterPhysicianAssignment;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
+import com.jiangyudai.clinicflow.encounter.repository.EncounterPhysicianAssignmentRepository;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
@@ -40,7 +44,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -73,6 +80,8 @@ class PostgresWorkflowIT {
     private BedRepository bedRepository;
     @Autowired
     private PhysicianRepository physicianRepository;
+    @Autowired
+    private EncounterPhysicianAssignmentRepository assignmentRepository;
     @Autowired
     private PhysicianService physicianService;
     @Autowired
@@ -486,6 +495,180 @@ class PostgresWorkflowIT {
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    @Test
+    void upgradesExistingDirectoryAndEncountersWithoutInventingPhysicianAssignments() {
+        String upgradeSchema = "clinicflow_assignment_upgrade_" + UUID.randomUUID().toString().replace("-", "");
+        UUID patientId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+        UUID physicianId = UUID.randomUUID();
+        try {
+            Flyway.configure().dataSource(jdbc.getDataSource())
+                    .locations("classpath:db/migration/postgresql")
+                    .schemas(upgradeSchema).defaultSchema(upgradeSchema).target("4").load().migrate();
+            jdbc.update("INSERT INTO " + upgradeSchema + ".patients VALUES (?, ?, ?, ?, ?)",
+                    patientId, "UPGRADE-001", "Test", "Patient", LocalDate.of(1990, 5, 14));
+            jdbc.update("INSERT INTO " + upgradeSchema + ".departments VALUES (?, ?, ?, ?)",
+                    departmentId, "MED", "Medicine", true);
+            jdbc.update("INSERT INTO " + upgradeSchema + ".physicians VALUES (?, ?, ?, ?, ?, ?)",
+                    physicianId, "PHY-001", "Maya", "Chen", true, 0);
+            jdbc.update("INSERT INTO " + upgradeSchema + ".physician_departments VALUES (?, ?)",
+                    physicianId, departmentId);
+            jdbc.update("INSERT INTO " + upgradeSchema + ".encounters "
+                            + "(id, encounter_number, patient_id, status, admitted_at) VALUES (?, ?, ?, ?, ?)",
+                    UUID.randomUUID(), "ENC-001", patientId, "ADMITTED", ADMITTED_AT);
+            jdbc.update("INSERT INTO " + upgradeSchema + ".user_accounts VALUES (?, ?, ?, ?, ?, ?)",
+                    UUID.randomUUID(), "admin", "admin", "unchanged-migration-test-hash", "ADMIN", true);
+            Map<String, List<Map<String, Object>>> before = new LinkedHashMap<>();
+            for (String table : List.of("patients", "departments", "physicians", "physician_departments",
+                    "encounters", "user_accounts")) {
+                before.put(table, jdbc.queryForList("SELECT * FROM " + upgradeSchema + "." + table));
+            }
+
+            Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource())
+                    .locations("classpath:db/migration/postgresql")
+                    .schemas(upgradeSchema).defaultSchema(upgradeSchema).target("5").load();
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            before.forEach((table, rows) -> assertThat(jdbc.queryForList("SELECT * FROM " + upgradeSchema + "." + table))
+                    .as(table + " survives the upgrade").isEqualTo(rows));
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + upgradeSchema
+                    + ".encounter_physician_assignments", Integer.class)).isZero();
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS \"" + upgradeSchema + "\" CASCADE");
+        }
+    }
+
+    @Test
+    void physicianHandoverPreservesHistoryAndRollsBackBothChangesOnFailure() {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        enterDepartment(encounterId, locations);
+        UUID originalPhysician = createPhysician(locations.departmentId());
+        UUID nextPhysician = createPhysician(locations.departmentId());
+        var original = createAssignment(encounterId, originalPhysician, locations.departmentId(), ENTERED_AT);
+        UUID anotherEncounter = admitPatient();
+        encounterService.admitToDepartment(anotherEncounter, locations.departmentId(), locations.wardId(), null, ENTERED_AT);
+        createAssignment(anotherEncounter, originalPhysician, locations.departmentId(), ENTERED_AT);
+
+        assertThatThrownBy(() -> createAssignment(encounterId, nextPhysician, locations.departmentId(), ENTERED_AT))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        OffsetDateTime handoverAt = ENTERED_AT.plusHours(1);
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
+            assignmentRepository.findById(original.getId()).orElseThrow()
+                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk");
+            assignmentRepository.flush();
+            createAssignment(encounterId, nextPhysician, locations.departmentId(), handoverAt);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_physician_assignments WHERE encounter_id = ?",
+                    Integer.class, encounterId)).isEqualTo(2);
+            throw new IllegalStateException("Failure after physician handover was flushed");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after physician handover was flushed");
+
+        var retained = assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow();
+        assertThat(retained.getId()).isEqualTo(original.getId());
+        assertThat(retained.getVersion()).isEqualTo(original.getVersion());
+        assertThat(retained.getEndReason()).isNull();
+        assertThat(retained.getEndedBy()).isNull();
+        assertThat(assignmentRepository.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId)).hasSize(1);
+
+        var next = transactions.execute(status -> {
+            assignmentRepository.findById(original.getId()).orElseThrow()
+                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk");
+            assignmentRepository.flush();
+            return createAssignment(encounterId, nextPhysician, locations.departmentId(), handoverAt);
+        });
+        var history = assignmentRepository.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
+        assertThat(history).extracting(EncounterPhysicianAssignment::getId).containsExactly(original.getId(), next.getId());
+        assertThat(history.getFirst().getEndedAt().toInstant()).isEqualTo(handoverAt.toInstant());
+        assertThat(history.getFirst().getAssignedBy()).isEqualTo("test-clerk");
+        assertThat(history.getFirst().getEndedBy()).isEqualTo("handover-clerk");
+        assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getPhysician().getId())
+                .isEqualTo(nextPhysician);
+        assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(anotherEncounter).orElseThrow().getPhysician().getId())
+                .isEqualTo(originalPhysician);
+    }
+
+    @Test
+    void assignmentSchemaRejectsInvalidClosureAuditTimesAndReferences() {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        enterDepartment(encounterId, locations);
+        UUID physicianId = createPhysician(locations.departmentId());
+        UUID id = createAssignment(encounterId, physicianId, locations.departmentId(), ENTERED_AT).getId();
+
+        // Direct SQL checks the migration even when entity validation is bypassed.
+        for (String change : List.of("ended_at = started_at", "end_reason = 'RELEASED'", "ended_by = 'operator'",
+                "ended_at = started_at, ended_by = 'operator'",
+                "ended_at = started_at, end_reason = 'RELEASED'",
+                "ended_at = started_at, end_reason = 'UNKNOWN', ended_by = 'operator'",
+                "ended_at = started_at, end_reason = 'RELEASED', ended_by = ' '",
+                "ended_at = started_at - INTERVAL '1 second', end_reason = 'RELEASED', ended_by = 'operator'",
+                "assigned_by = ' '")) {
+            assertThatThrownBy(() -> jdbc.update("UPDATE encounter_physician_assignments SET " + change + " WHERE id = ?", id))
+                    .as(change).isInstanceOf(DataIntegrityViolationException.class);
+        }
+        for (String column : List.of("encounter_id", "physician_id", "department_id")) {
+            assertThatThrownBy(() -> jdbc.update("UPDATE encounter_physician_assignments SET " + column + " = ? WHERE id = ?",
+                    UUID.randomUUID(), id)).as(column).isInstanceOf(DataIntegrityViolationException.class);
+        }
+        transactions.executeWithoutResult(status -> assignmentRepository.findById(id).orElseThrow()
+                .endAt(ENTERED_AT, PhysicianAssignmentEndReason.RELEASED, "operator"));
+        // Remove the separate affiliation so it cannot mask the assignment's physician foreign key.
+        jdbc.update("DELETE FROM physician_departments WHERE physician_id = ?", physicianId);
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM physicians WHERE id = ?", physicianId))
+                .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("fk_physician_assignments_physician");
+        assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
+        assertThat(assignmentRepository.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId)).singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getStartedAt().toInstant()).isEqualTo(ENTERED_AT.toInstant());
+                    assertThat(row.getEndedAt().toInstant()).isEqualTo(ENTERED_AT.toInstant());
+                    assertThat(row.getAssignedBy()).isEqualTo("test-clerk");
+                });
+    }
+
+    @Test
+    void concurrentOpenPhysicianAssignmentsCannotBothCommit() throws Exception {
+        Locations locations = createLocations();
+        UUID encounterId = admitPatient();
+        enterDepartment(encounterId, locations);
+        UUID firstPhysician = createPhysician(locations.departmentId());
+        UUID secondPhysician = createPhysician(locations.departmentId());
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var assignment = createAssignment(encounterId, firstPhysician, locations.departmentId(), ENTERED_AT);
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return assignment;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> createAssignment(encounterId, secondPhysician, locations.departmentId(), ENTERED_AT));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            UUID committedId = first.get(10, TimeUnit.SECONDS).getId();
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DataIntegrityViolationException.class);
+            assertThat(assignmentRepository.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId))
+                    .extracting(EncounterPhysicianAssignment::getId).containsExactly(committedId);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private EncounterPhysicianAssignment createAssignment(UUID encounterId, UUID physicianId,
+                                                          UUID departmentId, OffsetDateTime startedAt) {
+        return transactions.execute(status -> assignmentRepository.saveAndFlush(new EncounterPhysicianAssignment(
+                entityManager.getReference(Encounter.class, encounterId),
+                entityManager.getReference(Physician.class, physicianId),
+                entityManager.getReference(Department.class, departmentId), startedAt, "test-clerk")));
     }
 
     private void awaitBlockedBy(Future<?> contender, int blockingPid) throws Exception {
