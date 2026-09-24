@@ -112,10 +112,10 @@ class EncounterDischargeIntegrationTest {
         DischargeData first = createDischargeData(true);
         DischargeData second = createDischargeData(false);
 
-        encounterService.dischargeEncounter(first.encounterId(), first.dischargedAt());
+        encounterService.dischargeEncounter(first.encounterId(), first.dischargedAt(), "test-clerk");
         encounterService.transferEncounter(
                 second.encounterId(), first.departmentId(), first.wardId(),
-                first.bedId(), second.dischargedAt()
+                first.bedId(), second.dischargedAt(), "test-clerk"
         );
 
         Encounter readmission = encounterService.admitPatient(
@@ -141,10 +141,10 @@ class EncounterDischargeIntegrationTest {
         OffsetDateTime transferredAt = data.startedAt().plusHours(1);
         encounterService.transferEncounter(
                 data.encounterId(), data.departmentId(), data.wardId(),
-                data.otherBedId(), transferredAt
+                data.otherBedId(), transferredAt, "test-clerk"
         );
 
-        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt());
+        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
 
         assertDischarged(data, 2);
         transactions.executeWithoutResult(status -> {
@@ -163,7 +163,7 @@ class EncounterDischargeIntegrationTest {
         DischargeData data = createDischargeData(true);
 
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
-            encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt());
+            encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
             entityManager.flush();
             throw new IllegalStateException("Simulated failure after discharge");
         })).isInstanceOf(IllegalStateException.class)
@@ -191,7 +191,7 @@ class EncounterDischargeIntegrationTest {
 
         try {
             Future<?> secondAttempt = transactions.execute(status -> {
-                encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt());
+                encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
                 entityManager.flush();
                 int sessionId = ((Number) entityManager.createNativeQuery("select session_id()")
                         .getSingleResult()).intValue();
@@ -200,10 +200,10 @@ class EncounterDischargeIntegrationTest {
                     if (transfer) {
                         encounterService.transferEncounter(
                                 data.encounterId(), data.departmentId(), data.wardId(),
-                                data.otherBedId(), data.dischargedAt()
+                                data.otherBedId(), data.dischargedAt(), "test-clerk"
                         );
                     } else {
-                        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt());
+                        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
                     }
                 });
                 awaitBlockedWorkflow(sessionId, attempt);
@@ -231,13 +231,13 @@ class EncounterDischargeIntegrationTest {
             Future<?> discharge = transactions.execute(status -> {
                 encounterService.transferEncounter(
                         data.encounterId(), data.departmentId(), data.wardId(),
-                        data.otherBedId(), transferredAt
+                        data.otherBedId(), transferredAt, "test-clerk"
                 );
                 entityManager.flush();
                 int sessionId = ((Number) entityManager.createNativeQuery("select session_id()")
                         .getSingleResult()).intValue();
                 Future<?> attempt = executor.submit(() ->
-                        encounterService.dischargeEncounter(data.encounterId(), data.startedAt())
+                        encounterService.dischargeEncounter(data.encounterId(), data.startedAt(), "test-clerk")
                 );
                 awaitBlockedWorkflow(sessionId, attempt);
                 return attempt;

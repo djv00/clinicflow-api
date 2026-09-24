@@ -101,11 +101,13 @@ public class EncounterController {
     @PostMapping("/{id}/discharges")
     public EncounterResponse dischargeEncounter(
             @PathVariable("id") UUID encounterId,
-            @Valid @RequestBody DischargeEncounterRequest request
+            @Valid @RequestBody DischargeEncounterRequest request,
+            Principal principal
     ) {
         Encounter encounter = encounterService.dischargeEncounter(
                 encounterId,
-                request.dischargedAt()
+                request.dischargedAt(),
+                principal.getName()
         );
 
         return EncounterResponse.from(encounter);
@@ -132,7 +134,8 @@ public class EncounterController {
     @ResponseStatus(HttpStatus.CREATED)
     public EncounterLocationResponse transferEncounter(
             @PathVariable("id") UUID encounterId,
-            @Valid @RequestBody TransferEncounterRequest request
+            @Valid @RequestBody TransferEncounterRequest request,
+            Principal principal
     ) {
         EncounterLocation location =
                 encounterService.transferEncounter(
@@ -140,7 +143,8 @@ public class EncounterController {
                         request.departmentId(),
                         request.wardId(),
                         request.bedId(),
-                        request.transferredAt()
+                        request.transferredAt(),
+                        principal.getName()
                 );
 
         return EncounterLocationResponse.from(location);

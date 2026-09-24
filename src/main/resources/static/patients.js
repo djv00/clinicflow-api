@@ -5,7 +5,8 @@ import { openEncounterDischarge } from './encounter-discharge.js';
 import { openAdmissionCancellation } from './encounter-admission-cancellation.js';
 import { openDischargeCancellation } from './encounter-discharge-cancellation.js';
 import { openEncounterTimeline } from './encounter-timeline.js';
-import { accountReady, canWrite } from './account.js';
+import { openEncounterPhysicians } from './encounter-physicians.js';
+import { accountReady, canWrite, canReadClinical } from './account.js';
 const dateFormat = new Intl.DateTimeFormat('en-CA', {
     year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
 });
@@ -32,6 +33,8 @@ function setListState(title, detail = '') {
 }
 
 export async function loadPatients() {
+    await accountReady;
+    if (!canReadClinical()) return;
     const version = ++listVersion;
     listController?.abort();
     listController = new AbortController();
@@ -356,7 +359,7 @@ element('admission-form').addEventListener('submit', async (event) => {
 
 function openEncounterAction(encounter, openAction) {
     if (admitting) return;
-    if (openAction !== openEncounterTimeline && !canWrite()) return;
+    if (![openEncounterTimeline, openEncounterPhysicians].includes(openAction) && !canWrite()) return;
     hideAdmissionForm();
     const patient = `${element('detail-first-name').textContent} ${element('detail-last-name').textContent} (${element('detail-record-number').textContent})`;
     openAction(encounter, patient, (notice) => {
@@ -414,6 +417,13 @@ async function loadPatientEncounters() {
             timeline.setAttribute('aria-label', `Timeline for ${encounter.encounterNumber}`);
             timeline.addEventListener('click', () => openEncounterAction(encounter, openEncounterTimeline));
             actions.append(timeline);
+            const physicians = document.createElement('button');
+            physicians.type = 'button';
+            physicians.className = 'row-action';
+            physicians.textContent = 'Physician responsibility';
+            physicians.setAttribute('aria-label', `Physician responsibility for ${encounter.encounterNumber}`);
+            physicians.addEventListener('click', () => openEncounterAction(encounter, openEncounterPhysicians));
+            actions.append(physicians);
             if (canWrite() && encounter.status === 'DISCHARGED') {
                 const cancel = document.createElement('button');
                 cancel.type = 'button';

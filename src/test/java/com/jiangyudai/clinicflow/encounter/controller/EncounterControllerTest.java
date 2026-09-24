@@ -338,7 +338,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT))
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
         )).thenReturn(location);
 
         mockMvc.perform(post(
@@ -368,7 +368,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT))
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
         );
     }
 
@@ -383,7 +383,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 isNull(),
-                argThat(time -> time.isEqual(TRANSFERRED_AT))
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
         )).thenReturn(location);
 
         mockMvc.perform(post(
@@ -410,7 +410,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 isNull(),
-                argThat(time -> time.isEqual(TRANSFERRED_AT))
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
         );
     }
 
@@ -669,7 +669,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT))
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
         )).thenThrow(exception);
     }
 }

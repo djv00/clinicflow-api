@@ -5,6 +5,8 @@ import com.jiangyudai.clinicflow.location.exception.InvalidLocationException;
 import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
+import com.jiangyudai.clinicflow.physician.exception.*;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,49 @@ import java.util.Map;
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(InvalidPhysicianAssignmentException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPhysicianAssignment(InvalidPhysicianAssignmentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid physician assignment");
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(PhysicianAssignmentConflictException.class)
+    public ResponseEntity<ProblemDetail> handlePhysicianAssignmentConflict(PhysicianAssignmentConflictException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Physician assignment conflict");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(PhysicianNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handlePhysicianNotFound(PhysicianNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Physician not found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(DuplicatePhysicianCodeException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicatePhysicianCode(DuplicatePhysicianCodeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Duplicate physician code");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler({PhysicianVersionConflictException.class, OptimisticLockingFailureException.class})
+    public ResponseEntity<ProblemDetail> handleConcurrentUpdate(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "The record has changed. Reload it before saving.");
+        problem.setTitle("Update conflict");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(InvalidPhysicianDepartmentException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPhysicianDepartment(InvalidPhysicianDepartmentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid physician department");
+        return ResponseEntity.badRequest().body(problem);
+    }
 
     // Encounter admission errors
     @ExceptionHandler(DuplicateEncounterNumberException.class)

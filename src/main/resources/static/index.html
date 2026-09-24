@@ -19,8 +19,9 @@
     </a>
     <span class="header-section">Patient administration</span>
     <nav class="workbench-nav" aria-label="Workbench">
-        <a id="patients-link" href="#patients" aria-current="page">Patients</a>
-        <a id="inpatients-link" href="#inpatients">Inpatients</a>
+        <a id="patients-link" href="#patients" aria-current="page" hidden>Patients</a>
+        <a id="inpatients-link" href="#inpatients" hidden>Inpatients</a>
+        <a id="physicians-link" href="./physicians.html" hidden>Physicians</a>
     </nav>
     <div class="account-controls">
         <span id="signed-in-user" class="muted" aria-label="Signed-in user"></span>
@@ -29,9 +30,10 @@
     </div>
 </header>
 <main id="main">
+    <noscript><p class="message error">Enable JavaScript to use the workbench.</p></noscript>
     <p id="account-error" class="message error" role="alert" hidden></p>
     <p id="read-only-notice" class="message information" hidden>Read-only access. You can view patients, hospital stays, and timelines. Contact an operator to register patients or make changes.</p>
-    <section id="patients-view" aria-label="Patient administration">
+    <section id="patients-view" aria-label="Patient administration" hidden>
     <div class="page-heading">
         <div>
             <p class="eyebrow">Patient directory</p>
@@ -480,6 +482,86 @@
             <button id="save-discharge-cancellation" class="button primary" type="submit" disabled>Confirm cancellation</button>
         </div>
     </form>
+</dialog>
+<dialog id="responsibility-dialog" aria-labelledby="responsibility-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Hospital encounter</p><h2 id="responsibility-title">Physician responsibility</h2></div>
+        <button id="close-responsibility" class="close-button" type="button" aria-label="Close physician responsibility">×</button>
+    </div>
+    <dl class="placement-summary history-summary">
+        <div><dt>Patient</dt><dd id="responsibility-patient"></dd></div>
+        <div><dt>Encounter number</dt><dd id="responsibility-encounter" class="record-number"></dd></div>
+    </dl>
+    <p id="responsibility-time-zone" class="muted"></p>
+    <p id="responsibility-state" role="status"></p>
+    <p id="responsibility-notice" class="message success" role="status" hidden></p>
+    <p id="responsibility-error" class="message error" role="alert" tabindex="-1" hidden></p>
+    <div id="responsibility-content" hidden>
+        <section class="current-placement" aria-labelledby="responsibility-current-title">
+            <h3 id="responsibility-current-title">Current responsibility</h3>
+            <dl class="placement-summary">
+                <div><dt>Encounter status</dt><dd id="responsibility-status"></dd></div>
+                <div><dt>Department</dt><dd id="responsibility-department"></dd></div>
+                <div><dt>Responsible physician</dt><dd id="responsibility-current"></dd></div>
+                <div><dt>Responsible since</dt><dd id="responsibility-since"></dd></div>
+            </dl>
+            <p id="responsibility-guidance" class="muted"></p>
+            <div id="responsibility-actions" class="responsibility-actions" hidden>
+                <button id="assign-responsibility" class="button primary" type="button">Assign physician</button>
+                <button id="release-responsibility" class="button secondary" type="button">Release physician</button>
+            </div>
+        </section>
+        <section id="responsibility-editor" class="history-section" aria-labelledby="responsibility-editor-title" hidden>
+            <h3 id="responsibility-editor-title"></h3>
+            <div id="responsibility-picker">
+                <form id="responsibility-search" class="responsibility-search" role="search">
+                    <div class="field"><label for="responsibility-keyword">Find a physician in this department</label>
+                        <input id="responsibility-keyword" type="search" maxlength="100" placeholder="Name or physician code">
+                    </div>
+                    <button id="search-responsibility" class="button secondary" type="submit">Search</button>
+                </form>
+                <p id="responsibility-choices-state" role="status"></p>
+                <div id="responsibility-choices" role="radiogroup" aria-label="Eligible physicians"></div>
+                <div class="responsibility-actions">
+                    <button id="previous-responsibility" class="button secondary" type="button">Previous</button>
+                    <button id="next-responsibility" class="button secondary" type="button">Next</button>
+                    <button id="retry-responsibility-choices" class="button secondary" type="button" hidden>Retry search</button>
+                </div>
+            </div>
+            <form id="responsibility-form" novalidate>
+                <p id="responsibility-change" class="message information"></p>
+                <fieldset id="responsibility-fields">
+                    <legend class="sr-only">Responsibility effective time</legend>
+                    <div class="field">
+                        <label for="responsibility-time">Effective time</label>
+                        <input id="responsibility-time" type="datetime-local" step="1" required aria-describedby="responsibility-time-hint responsibility-time-error">
+                        <p id="responsibility-time-hint" class="field-hint"></p>
+                        <p id="responsibility-time-error" class="field-error" hidden></p>
+                    </div>
+                </fieldset>
+                <div class="dialog-actions">
+                    <button id="cancel-responsibility-change" class="button secondary" type="button">Discard change</button>
+                    <button id="save-responsibility" class="button primary" type="submit">Save assignment</button>
+                </div>
+            </form>
+        </section>
+        <section class="history-section" aria-labelledby="responsibility-history-title">
+            <h3 id="responsibility-history-title">Responsibility history</h3>
+            <p class="muted">Earliest start first. Equal times do not establish operation order. Names reflect the current directory.</p>
+            <p id="responsibility-history-empty">No physician responsibility recorded.</p>
+            <div id="responsibility-history-region" class="table-region" role="region" aria-label="Physician responsibility history" tabindex="0" hidden>
+                <table class="history-table">
+                    <caption class="sr-only">Physician responsibility periods and recorded operators</caption>
+                    <thead><tr><th scope="col">Physician / department</th><th scope="col">From</th><th scope="col">Until</th><th scope="col">Record</th></tr></thead>
+                    <tbody id="responsibility-history"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div class="dialog-actions">
+        <button id="refresh-responsibility" class="button secondary" type="button">Refresh responsibility</button>
+        <button id="dismiss-responsibility" class="button secondary" type="button">Back</button>
+    </div>
 </dialog>
 <dialog id="timeline-dialog" aria-labelledby="timeline-title">
     <div class="dialog-heading">

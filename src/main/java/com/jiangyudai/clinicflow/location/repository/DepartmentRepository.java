@@ -1,7 +1,9 @@
 package com.jiangyudai.clinicflow.location.repository;
 
 import com.jiangyudai.clinicflow.location.entity.Department;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +17,10 @@ public interface DepartmentRepository
     Optional<Department> findByDepartmentCode(String departmentCode);
 
     boolean existsByDepartmentCode(String departmentCode);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select d from Department d where d.id = :id")
+    Optional<Department> findByIdForRead(@Param("id") UUID id);
 
     @Query("""
             select d from Department d

@@ -30,7 +30,7 @@ keep the cookie jar enabled for the following sequence:
    `{"username":"viewer","roles":["VIEWER"]}`. Anonymous requests
    receive `401` JSON, not an HTML redirect.
 4. Obtain a fresh token from `/api/auth/csrf` after login. Add that header and the
-   session cookie to POST requests in the examples below. GET requests only need
+   session cookie to POST and PUT requests in the examples below. GET requests only need
    the session cookie. Login and logout invalidate the previous CSRF token.
 5. `POST /api/auth/logout` with the cookie and CSRF header returns `204`,
    invalidates the session, and clears the session cookie. GET does not sign out.
@@ -41,12 +41,15 @@ be rejected by CSRF protection first. An expired session requires signing in
 again. Clients must not automatically replay an unconfirmed business write.
 Authentication responses and protected pages use no-store cache headers.
 
-Business reads (`GET` and `HEAD` under `/api/v1`) require `VIEWER` or `OPERATOR`.
-All other methods under `/api/v1` require `OPERATOR`. A viewer write with a valid
+Patient/inpatient reads (`GET` and `HEAD`) require `VIEWER` or `OPERATOR`, and
+their writes require `OPERATOR`. Physician reads allow `VIEWER`, `OPERATOR`, or
+`ADMIN`; physician writes require `ADMIN`. Administrators can also read department
+lookups, but the role alone grants no patient/inpatient access. A viewer write with a valid
 CSRF token returns `403` with title `Access denied` before reaching business
 validation or services. Missing/invalid CSRF tokens instead return `403` with
 title `Request not allowed`. Permission denial does not sign the user out.
-Both roles can inspect their session and sign out.
+All three roles can inspect their session and sign out. Accounts currently have
+one role each; adding `ADMIN` does not change any existing account's role.
 
 PostgreSQL accounts are persisted; the default and demo profiles use in-memory
 accounts. The login/session API is the same for both. Admission and discharge cancellations
@@ -79,6 +82,9 @@ Role rules use Spring Security's
 | POST | `/encounters/{id}/discharge-cancellations` | 200 | Encounter |
 | GET | `/encounters/{id}/discharges` | 200 | Discharge list |
 | GET | `/encounters/{id}/timeline` | 200 | Encounter, locations, discharges |
+| GET | `/encounters/{id}/physician-assignments` | 200 | Current location, current assignment ID, and responsibility history |
+| POST | `/encounters/{id}/physician-assignments` | 201 | New physician assignment |
+| POST | `/encounters/{id}/physician-assignments/{assignmentId}/releases` | 200 | Closed physician assignment |
 | GET | `/departments` | 200 | Department list |
 | GET | `/departments/{id}` | 200 | Department |
 | GET | `/wards` | 200 | Ward list |
@@ -295,6 +301,88 @@ An unchanged location returns `409`. Destination validation and occupancy
 conflicts use the same `400`, `404`, and `409` categories as department
 admission.
 
+When physician responsibility has been recorded, a department change closes its
+open assignment at `transferredAt` with reason `DEPARTMENT_TRANSFER`; a move within
+the same department preserves it. The closure operator comes from the session.
+A department change that precedes recorded responsibility returns `409`, and all
+location/assignment changes roll back together. See the
+[assignment rules and delivery status](physician-assignments.md).
+
+## Physician responsibility
+
+```http
+GET /api/v1/encounters/<encounterId>/physician-assignments
+```
+
+Returns `200` with `encounterId`, `status`, `currentLocation`,
+`currentAssignmentId`, and `assignments`. Status, location, and responsibility are
+read under the same encounter lock. `currentLocation` has the location response
+fields, or is null before department entry and after discharge. A null
+`currentAssignmentId` means no physician is currently assigned, even if closed
+history exists. An existing encounter without assignments returns an empty array;
+an unknown encounter returns `404`.
+
+Each assignment contains `id`, `encounterId`, `physicianId`, `physicianCode`,
+`physicianFirstName`, `physicianLastName`, `departmentId`, `departmentCode`,
+`departmentName`, `startedAt`, `assignedBy`, `endedAt`, `endReason`, and `endedBy`.
+The three closure fields are null while responsibility is open. History is ordered
+by start time and then record ID; equal-time ID ordering is only for stable display.
+Use `currentAssignmentId` to identify the current record, not the last array item.
+Names are current directory values, while reference IDs and responsibility audit
+are retained on the assignment.
+
+Read the current context, then select an active physician affiliated with its
+department. The directory search supports `departmentId` and `active=true`;
+eligibility is rechecked during the write.
+
+```http
+POST /api/v1/encounters/<encounterId>/physician-assignments
+Content-Type: application/json
+
+{
+  "physicianId": "<physicianId>",
+  "expectedLocationId": "<currentLocation.id>",
+  "expectedAssignmentId": null,
+  "startedAt": "2025-09-02T11:00:00-04:00"
+}
+```
+
+Returns `201` with the new assignment. The encounter must be `IN_DEPARTMENT`.
+`physicianId`, `expectedLocationId`, and `startedAt` are required. A null or omitted
+`expectedAssignmentId` means no current physician was observed; it never means
+an unconditional replacement. For handover, send the query's `currentAssignmentId`.
+The previous record closes as `REASSIGNED` and the new record starts at the same
+effective time in one transaction. Selecting the already responsible physician
+returns `409` without adding history.
+
+```http
+POST /api/v1/encounters/<encounterId>/physician-assignments/<assignmentId>/releases
+Content-Type: application/json
+
+{
+  "expectedLocationId": "<currentLocation.id>",
+  "endedAt": "2025-09-02T12:00:00-04:00"
+}
+```
+
+Returns `200` with the closed assignment, using reason `RELEASED`. Both body fields
+are required. The path ID must still be the encounter's current assignment;
+historical, unrelated, missing, or already released IDs return `409`. Release keeps
+the encounter in care without a responsible physician. It does not delete history.
+
+Both writes require `OPERATOR` and a valid CSRF token; reads require `VIEWER` or
+`OPERATOR`. `ADMIN` alone grants no access here. Operators are taken from the
+authenticated session. Fields such as `assignedBy`, `endedBy`, `operator`, or
+`endReason` in request JSON do not control audit or release reason.
+
+Invalid UUIDs, missing required fields, invalid/future times, and an ineligible
+physician return `400`. An unknown encounter or selected physician returns `404`.
+Changed location/assignment, an invalid encounter state, or a time that crosses
+later responsibility history returns `409`. All failed writes leave the previous
+responsibility unchanged. Repeated successful writes are rejected as conflicts;
+after an unconfirmed response, reload this query and inspect the current/history
+records before deciding whether another operation is needed.
+
 ## Departments, wards, and beds
 
 | Endpoint | Optional filters | Response fields |
@@ -417,7 +505,11 @@ and `dischargedAt`.
 - Each discharge also creates an `encounter_discharges` record referencing the
   exact closed location. Its discharge time is retained if care resumes later.
 - The encounter write lock serializes discharge with transfers and repeated
-  discharge attempts. An error rolls back the encounter, location, and discharge record together.
+  discharge attempts. An error rolls back the encounter, location, physician
+  assignment closure, and discharge record together.
+- Any open physician assignment closes at the same time with reason `DISCHARGE`
+  and the session operator. A time before recorded physician responsibility
+  returns `409`, even when that physician has already been released.
 
 An unknown encounter returns `404`; invalid time or request data returns `400`;
 an invalid state, repeated discharge, or missing current location returns `409`.
@@ -504,6 +596,9 @@ the current discharge for API callers and demo scripts.
   assignment from passing the same availability check.
 - All cancellation changes commit together. A repeated cancellation returns
   `409` without changing the first cancellation's details.
+- Physician responsibility stays closed after cancellation. Restoring the
+  location does not silently restore a doctor who may no longer be eligible;
+  explicit physician selection is required through the assignment endpoint.
 
 Unknown encounters return `404`. Invalid request data, time, or inactive location
 references return `400`. Invalid encounter state, another active encounter,
@@ -544,3 +639,93 @@ For example, registering a patient with an empty medical record number returns:
 Malformed JSON, UUIDs, query parameters, and timestamps return `400`; they are
 handled by Spring MVC and may have a different response body. Clients should
 check the HTTP status before reading error-specific fields.
+
+## Physician directory
+
+These endpoints manage physician profiles and current service-department
+affiliations. They do not assign physicians to encounters or create login accounts.
+`VIEWER`, `OPERATOR`, and `ADMIN` may read them; only `ADMIN` may write them.
+An administrator can also use `GET /api/v1/departments?active=true` to find selectable
+departments. Configure a separate administrator as described in the README and
+use the same session/CSRF login sequence above.
+
+| Method | Path | Result |
+| --- | --- | --- |
+| GET | `/api/v1/physicians` | Paginated directory with optional filters |
+| GET | `/api/v1/physicians/{id}` | Profile, affiliations, active state, and current version |
+| POST | `/api/v1/physicians` | Create a physician; returns `201` with the profile |
+| PUT | `/api/v1/physicians/{id}` | Replace names and current department selection |
+| PUT | `/api/v1/physicians/{id}/active` | Activate or deactivate without removing affiliations |
+
+The list accepts `keyword` (up to 100 characters), `departmentId` (UUID), `active`
+(`true`/`false`), `page` (default 0), and `size` (default 20, maximum 100). Omitting
+`active` includes both active and inactive physicians. Keyword search is a
+case-insensitive literal fragment of the code or full name; `%`, `_`, and `!` are
+not wildcards. Results sort by last name, first name, and unique physician code.
+The response has `items`, `page`, `size`, `totalElements`, and `totalPages`.
+Affiliations in each item are sorted by department code; filtering by a department
+does not hide that physician's other affiliations.
+
+Create an initially unassigned physician:
+
+```http
+POST /api/v1/physicians
+Content-Type: application/json
+
+{
+  "physicianCode": "PHY-001",
+  "firstName": "Maya",
+  "lastName": "Chen",
+  "departmentIds": []
+}
+```
+
+Codes are required, case-sensitive, unique, and limited to 30 characters. Names
+are required and limited to 100 characters each. Surrounding whitespace is removed.
+The code cannot be edited. `departmentIds` must be supplied, may be empty, and can
+contain at most 100 distinct existing department IDs. New affiliations require
+active departments; repeated IDs represent one affiliation.
+
+The returned object includes `id`, `physicianCode`, `firstName`, `lastName`,
+`active`, `version`, and `departments`. Each department has `id`, `departmentCode`,
+`departmentName`, and `active`. Supply the last-read version when editing:
+
+```http
+PUT /api/v1/physicians/<physicianId>
+Content-Type: application/json
+
+{
+  "firstName": "Mai",
+  "lastName": "Chen",
+  "departmentIds": ["<departmentId>"],
+  "version": 0
+}
+```
+
+This replaces the complete department selection. Existing inactive affiliations
+may be retained or removed, but cannot be newly added. A missing or invalid
+department rejects the whole update, including name changes. Read the returned
+version after saving; do not assume that it is still the original value.
+
+```http
+PUT /api/v1/physicians/<physicianId>/active
+Content-Type: application/json
+
+{"active": false, "version": 1}
+```
+
+Use the actual current version, not the illustrative values above. Both fields
+are required; versions must be nonnegative. Deactivation retains affiliations
+and keeps the record available for queries. An inactive physician can be edited
+and reactivated. There is no physician DELETE endpoint.
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid request, pagination, or newly selected inactive department |
+| 401 | Sign-in required |
+| 403 | Insufficient role or missing/invalid CSRF token |
+| 404 | Physician or requested department does not exist |
+| 409 | Duplicate physician code or stale/concurrent update |
+
+On a version conflict, reload the profile and review the latest department
+selection before resubmitting. Do not silently retry an old edit with a new version.

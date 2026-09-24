@@ -6,6 +6,7 @@ import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
 import com.jiangyudai.clinicflow.encounter.exception.*;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterDischargeRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
@@ -46,19 +47,22 @@ public class EncounterService {
     private final EncounterRepository encounterRepository;
     private final PatientService patientService;
     private final EncounterDischargeRepository encounterDischargeRepository;
+    private final EncounterPhysicianService physicianService;
 
     public EncounterService(
             EncounterRepository encounterRepository,
             PatientService patientService,
             EncounterLocationRepository encounterLocationRepository,
             LocationService locationService,
-            EncounterDischargeRepository encounterDischargeRepository
+            EncounterDischargeRepository encounterDischargeRepository,
+            EncounterPhysicianService physicianService
     ) {
         this.encounterRepository = encounterRepository;
         this.patientService = patientService;
         this.encounterLocationRepository = encounterLocationRepository;
         this.locationService = locationService;
         this.encounterDischargeRepository = encounterDischargeRepository;
+        this.physicianService = physicianService;
     }
 
     /**
@@ -190,7 +194,8 @@ public class EncounterService {
             UUID departmentId,
             UUID wardId,
             UUID bedId,
-            OffsetDateTime transferredAt
+            OffsetDateTime transferredAt,
+            String operator
     ) {
         if (transferredAt == null) {
             throw new InvalidEncounterTransferTimeException(
@@ -267,7 +272,11 @@ public class EncounterService {
                 transferredAt
         );
 
-        // Both history records change within the same transaction.
+        if (!currentLocation.getDepartment().getId().equals(departmentId)) {
+            physicianService.closeForCareEnd(encounterId, transferredAt, PhysicianAssignmentEndReason.DEPARTMENT_TRANSFER, operator);
+        }
+
+        // Location and physician history change within the same transaction.
         currentLocation.endAt(transferredAt);
 
         return encounterLocationRepository.save(nextLocation);
@@ -279,7 +288,8 @@ public class EncounterService {
     @Transactional
     public Encounter dischargeEncounter(
             UUID encounterId,
-            OffsetDateTime dischargedAt
+            OffsetDateTime dischargedAt,
+            String operator
     ) {
         if (dischargedAt == null) {
             throw new InvalidDischargeTimeException(
@@ -312,6 +322,7 @@ public class EncounterService {
         }
 
         encounter.dischargeAt(dischargedAt);
+        physicianService.closeForCareEnd(encounterId, dischargedAt, PhysicianAssignmentEndReason.DISCHARGE, operator);
         currentLocation.endAt(dischargedAt);
         encounterDischargeRepository.save(new EncounterDischarge(encounter, currentLocation));
 

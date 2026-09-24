@@ -62,10 +62,10 @@ class InpatientQueryIntegrationTest {
         waiting = admit("STAY-001", "MRN-001", "Maya", "Chen");
         placed = admit("STAY-002", "MRN-002", "Evan", "Cole");
         encounterService.admitToDepartment(placed.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
-        encounterService.transferEncounter(placed.getId(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2));
+        encounterService.transferEncounter(placed.getId(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2), "test-clerk");
         Encounter discharged = admit("STAY-003", "MRN-003", "Theo", "Gray");
         encounterService.admitToDepartment(discharged.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(2));
-        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.plusHours(3));
+        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
         Encounter cancelled = admit("STAY-004", "MRN-004", "Lena", "Ross");
         encounterService.cancelAdmission(cancelled.getId(), ADMITTED_AT.plusMinutes(30), "test-clerk");
         entityManager.flush();
@@ -156,7 +156,7 @@ class InpatientQueryIntegrationTest {
     @Test
     void reflectsEntryDischargeAndCancellationWithoutDuplicatingHistoricalLocations() throws Exception {
         encounterService.admitToDepartment(waiting.getId(), medicine.getId(), firstWard.getId(), null, ADMITTED_AT.plusHours(1));
-        encounterService.dischargeEncounter(placed.getId(), ADMITTED_AT.plusHours(4));
+        encounterService.dischargeEncounter(placed.getId(), ADMITTED_AT.plusHours(4), "test-clerk");
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         encounterService.cancelDischarge(placed.getId(), ADMITTED_AT.plusHours(5), "test-clerk");

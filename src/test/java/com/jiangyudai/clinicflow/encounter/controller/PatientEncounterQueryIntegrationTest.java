@@ -64,7 +64,7 @@ class PatientEncounterQueryIntegrationTest {
         Encounter discharged = encounterService.admitPatient(patient.getId(), "VISIT-002", ADMITTED_AT.minusDays(1));
         encounterService.admitToDepartment(discharged.getId(), department.getId(), ward.getId(), null,
                 ADMITTED_AT.minusDays(1).plusHours(1));
-        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.minusDays(1).plusHours(2));
+        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.minusDays(1).plusHours(2), "test-clerk");
         current = encounterService.admitPatient(patient.getId(), "VISIT-003", ADMITTED_AT);
 
         Patient other = patientService.createPatient("HISTORY-002", "Maya", "Chen", LocalDate.of(1980, 6, 15));
@@ -171,7 +171,7 @@ class PatientEncounterQueryIntegrationTest {
         mockMvc.perform(get(PATH, patient.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("IN_DEPARTMENT"));
-        encounterService.dischargeEncounter(current.getId(), ADMITTED_AT.plusHours(2));
+        encounterService.dischargeEncounter(current.getId(), ADMITTED_AT.plusHours(2), "test-clerk");
         mockMvc.perform(get(PATH, patient.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("DISCHARGED"))

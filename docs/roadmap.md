@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-21. This describes implemented behaviour and the next delivery
+Updated: 2026-09-23. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -15,8 +15,10 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
-| Authentication and roles | Implemented | Session login/logout, operator and viewer permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Account administration and password reset are not implemented. |
+| Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
+| Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
+| Encounter physician responsibility | API and page implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Patient and inpatient pages show current responsibility and history, with a paginated department physician picker and recovery after conflicts or unconfirmed saves. Writes use session operators; viewers can read. |
 | Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
 
 ## Remaining delivery sequence
@@ -26,8 +28,8 @@ history. Business rules are implemented in one Spring Boot backend.
 2. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
-Each step should be delivered through small, runnable commits. Stop for review
-and a commit after a tested slice, rather than accumulating the whole workbench.
+Each step should be delivered through small, runnable commits after a tested slice,
+rather than accumulating the whole feature before committing.
 The core workbench flow, session login, viewer/operator permissions, and
 authenticated cancellation operators are connected. PostgreSQL now preserves
 accounts across restarts; initial passwords only provision missing accounts.
@@ -36,14 +38,65 @@ the setting is off by default and is separate from the H2 `demo` profile.
 
 ## Later extensions
 
-Physician records and encounter assignment are a possible coursework-inspired
-extension after the core web workflow. Keep the existing coursework repository
-unchanged. Billing, prescriptions, outpatient scheduling, and coursework training
-or certificate modules are outside this delivery sequence.
+Physician records apply coursework relationship modelling to the inpatient
+workflow. Keep the existing coursework repository unchanged. Physician codes are
+immutable, case-sensitive identifiers with surrounding whitespace removed.
+Affiliations refer to existing departments, are unique per physician/department,
+and have no cascade to shared department records. Deactivation keeps affiliations.
+New affiliations require active departments; existing inactive affiliations can
+be retained or removed. New encounter assignments require an active physician
+affiliated with the encounter's current active department.
+Version checks also cover affiliation edits, so a stale profile cannot replace a
+more recent department selection.
+
+A limited medicine catalogue and encounter medication orders can follow the
+physician workflow. Billing, outpatient scheduling, and coursework training or
+certificate modules remain outside this delivery sequence. Link physician records
+to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
 
+- Responsibility page checks cover both entry points, department-filtered physician
+  search and pagination, effective-time validation, assignment, handover, release,
+  stale-form rejection, blocked duplicate saves, failed reads, and a committed save
+  whose response is lost. Refresh recovers the history without repeating the write.
+  Browser checks also cover pre-department records, discharge closure, explicit
+  unassigned state after discharge correction, and viewer access without write
+  controls. The page slice passed 467 regular tests and 27 PostgreSQL tests.
 - `mvnw.cmd test` runs the regular unit, controller, and H2 tests.
+- Physician repository checks cover shared departments, duplicate affiliations
+  across persistence contexts, removal without cascading, deactivation, unique
+  codes, and stale updates. PostgreSQL checks add a V2-to-V3 upgrade with existing
+  data, database constraints, affiliation rollback, and competing edit versions.
+- Directory API checks cover real administrator login, role separation, CSRF,
+  pagination without duplicate physicians, literal search, version conflicts,
+  inactive references, and atomic profile changes. PostgreSQL checks include the
+  V4 role-constraint upgrade without changing existing account IDs/passwords,
+  administrator persistence across restarts, filtered queries, and a controlled
+  race between two registrations using the same physician code.
+- Assignment persistence checks cover responsibility history, shared physicians,
+  retained department references after directory changes, no cascading deletion,
+  and optimistic locking. PostgreSQL checks cover V4-to-V5 migration with existing
+  data, closure/time/reference constraints, one open assignment under concurrent
+  inserts, and rollback of both sides of a handover.
+- Assignment service checks cover stale selections, eligibility, responsibility
+  times, same-department moves, department changes, discharge correction, and
+  rollback of complete workflows. PostgreSQL checks verify competing selections,
+  assignment versus discharge in both orders, and eligibility after a concurrent
+  directory edit. Existing transfer/discharge endpoint checks verify that closure
+  audit uses the session operator and ignores a forged operator in request JSON.
+- Assignment API checks cover real login and canonical operator names, read/write
+  roles, CSRF, field validation, missing references, eligibility failures, stale
+  location/assignment IDs, and repeated submissions. Flat response DTOs work with
+  Open Session in View disabled. A PostgreSQL concurrency check verifies that a
+  query waits for a discharge and returns matching encounter/location/physician state.
+- Physician page checks cover administrator navigation, multiple department
+  selection, profile edits, deactivation/reactivation, read-only roles, and
+  unsaved-edit confirmation. Two open records verify stale-edit rejection and
+  reloading. Interrupted successful responses verify that updates are reloaded
+  and unconfirmed creations are looked up by their exact code before another save.
+  Browser checks also cover combined filters, pagination, empty results, failed
+  list requests and retry, failed permission loading, and narrow-screen overflow.
 - `mvnw.cmd -Ppostgres-it clean verify` also runs the PostgreSQL tests. These
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).

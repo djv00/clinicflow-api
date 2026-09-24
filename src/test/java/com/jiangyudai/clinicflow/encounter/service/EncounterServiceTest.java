@@ -48,6 +48,9 @@ class EncounterServiceTest {
     @Mock
     private PatientService patientService;
 
+    @Mock
+    private EncounterPhysicianService physicianService;
+
     @InjectMocks
     private EncounterService encounterService;
 

@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Physicians · ClinicFlow</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./patients.css">
+    <link rel="stylesheet" href="./physicians.css">
+    <script type="module" src="./physicians.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header">
+    <a class="brand" href="./" aria-label="ClinicFlow home"><span class="brand-mark" aria-hidden="true"></span>ClinicFlow</a>
+    <span class="header-section">Physician directory</span>
+    <nav class="workbench-nav" aria-label="Workbench">
+        <a id="patients-link" href="./#patients" hidden>Patients</a>
+        <a id="inpatients-link" href="./#inpatients" hidden>Inpatients</a>
+        <a id="physicians-link" href="./physicians.html" aria-current="page" hidden>Physicians</a>
+    </nav>
+    <div class="account-controls">
+        <span id="signed-in-user" class="muted" aria-label="Signed-in user"></span>
+        <span id="account-role" class="muted" aria-label="Account access"></span>
+        <button id="sign-out" class="button secondary" type="button">Sign out</button>
+    </div>
+</header>
+<main id="main">
+    <p id="account-error" class="message error" role="alert" hidden></p>
+    <noscript><p class="message error">Enable JavaScript to use the physician directory.</p></noscript>
+    <section id="physicians-view" aria-labelledby="physicians-title" hidden>
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">Care team directory</p>
+                <h1 id="physicians-title">Physicians</h1>
+                <p class="intro">Find physicians and review their service departments.</p>
+            </div>
+            <button id="add-physician" class="button primary" type="button" hidden>Add physician</button>
+        </div>
+        <p id="physician-read-only" class="message information" hidden>You can view physician records. A directory administrator can update them.</p>
+        <section class="directory" aria-label="Physician directory">
+            <form id="physician-search" class="physician-filters" role="search">
+                <div>
+                    <label for="physician-keyword">Search physicians</label>
+                    <input id="physician-keyword" type="search" maxlength="100" placeholder="Name or physician code" autocomplete="off">
+                </div>
+                <div>
+                    <label for="physician-department">Service department</label>
+                    <select id="physician-department" disabled><option value="">All departments</option></select>
+                </div>
+                <div>
+                    <label for="physician-active">Availability</label>
+                    <select id="physician-active"><option value="">All physicians</option><option value="true">Active</option><option value="false">Inactive</option></select>
+                </div>
+                <div class="physician-filter-actions">
+                    <button class="button primary" type="submit">Search</button>
+                    <button id="clear-physicians" class="button secondary" type="button">Clear filters</button>
+                    <button id="refresh-physicians" class="button secondary" type="button">Refresh list</button>
+                </div>
+            </form>
+            <div id="physician-filter-error" class="message information list-error" role="status" hidden>
+                <p>Department filters could not be loaded. You can still search by name, code, or availability.</p>
+                <button id="retry-physician-filters" class="button secondary" type="button">Retry departments</button>
+            </div>
+            <div class="list-heading">
+                <p id="physician-summary" role="status">Loading physicians…</p>
+                <span class="muted">Sorted by last name, then first name</span>
+            </div>
+            <div id="physician-list-error" class="message error list-error" role="alert" hidden>
+                <p id="physician-list-error-text"></p>
+                <button id="retry-physicians" class="button secondary" type="button">Try again</button>
+            </div>
+            <div id="physician-table-region" class="table-region" role="region" aria-label="Physician table" tabindex="0" aria-busy="true">
+                <table id="physician-table">
+                    <caption class="sr-only">Physicians matching the current filters</caption>
+                    <thead><tr><th scope="col">Physician</th><th scope="col">Code</th><th scope="col">Service departments</th><th scope="col">Availability</th><th scope="col">Actions</th></tr></thead>
+                    <tbody id="physician-rows"></tbody>
+                </table>
+                <div id="physician-list-state" class="list-state" role="status">Loading physicians…</div>
+            </div>
+            <div class="pagination">
+                <label for="physician-page-size">Rows per page <select id="physician-page-size"><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option></select></label>
+                <nav class="page-controls" aria-label="Physician pages">
+                    <span id="physician-page-summary">Page —</span>
+                    <button id="previous-physicians" class="button secondary" type="button" disabled>Previous</button>
+                    <button id="next-physicians" class="button secondary" type="button" disabled>Next</button>
+                </nav>
+            </div>
+        </section>
+        <p class="directory-note">Service departments describe where a physician practises. They do not assign a physician to a patient's hospital stay.</p>
+    </section>
+</main>
+<dialog id="physician-dialog" aria-labelledby="physician-dialog-title">
+    <div class="dialog-heading">
+        <div><p class="eyebrow">Physician record</p><h2 id="physician-dialog-title">Physician details</h2></div>
+        <button id="close-physician" class="close-button" type="button" aria-label="Close physician record">×</button>
+    </div>
+    <p id="physician-dialog-status" class="dialog-intro" role="status"></p>
+    <p id="physician-error" class="message error" role="alert" tabindex="-1" hidden></p>
+    <p id="physician-saved" class="message success" role="status" hidden></p>
+    <form id="physician-form">
+        <fieldset id="physician-fields" disabled>
+            <legend class="sr-only">Physician profile</legend>
+            <div class="field">
+                <label for="physician-code">Physician code</label>
+                <input id="physician-code" required maxlength="30" autocomplete="off" aria-describedby="physician-code-hint">
+                <p id="physician-code-hint" class="field-hint">Required. A unique code that cannot be changed after registration.</p>
+            </div>
+            <div class="name-fields">
+                <div class="field"><label for="physician-first-name">First name</label><input id="physician-first-name" required maxlength="100" autocomplete="off"></div>
+                <div class="field"><label for="physician-last-name">Last name</label><input id="physician-last-name" required maxlength="100" autocomplete="off"></div>
+            </div>
+            <fieldset class="field" aria-describedby="physician-departments-hint">
+                <legend>Service departments</legend>
+                <p id="physician-departments-hint" class="field-hint">Select all departments this physician serves, or leave unassigned. Existing inactive affiliations may be retained or removed.</p>
+                <div id="physician-department-options" class="department-options"></div>
+            </fieldset>
+        </fieldset>
+        <div id="physician-availability" class="current-placement" hidden>
+            <div class="availability-heading">
+                <p>Availability: <strong id="physician-current-active"></strong></p>
+                <button id="change-physician-active" class="button secondary" type="button" aria-expanded="false" aria-controls="physician-active-confirm" hidden></button>
+            </div>
+            <p id="physician-dirty-hint" class="field-hint" hidden>Save or reload your edits before changing availability.</p>
+            <div id="physician-active-confirm" hidden>
+                <p id="physician-active-explanation"></p>
+                <button id="confirm-physician-active" class="button primary" type="button"></button>
+                <button id="cancel-physician-active" class="button secondary" type="button">Keep current availability</button>
+            </div>
+        </div>
+        <div class="dialog-actions">
+            <button id="reload-physician" class="button secondary" type="button" hidden>Reload record</button>
+            <button id="done-physician" class="button secondary" type="button">Close</button>
+            <button id="save-physician" class="button primary" type="submit" hidden>Save changes</button>
+        </div>
+    </form>
+    <div id="physician-discard-confirm" class="message information" hidden>
+        <p>Close this record and discard your unsaved edits?</p>
+        <button id="keep-physician-editing" class="button primary" type="button">Keep editing</button>
+        <button id="discard-physician" class="button secondary" type="button">Discard edits</button>
+    </div>
+</dialog>
+</body>
+</html>

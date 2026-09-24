@@ -21,6 +21,12 @@ public class AccountProvisioningService {
 
     @Transactional
     public void initialize(SecurityProperties.User operator, String viewerUsername, String viewerPassword) {
+        initialize(operator, viewerUsername, viewerPassword, "admin", "");
+    }
+
+    @Transactional
+    public void initialize(SecurityProperties.User operator, String viewerUsername, String viewerPassword,
+                           String adminUsername, String adminPassword) {
         UserAccount.validateUsername(operator.getName());
         boolean provisionViewer = StringUtils.hasText(viewerPassword);
         if (provisionViewer) {
@@ -28,9 +34,19 @@ public class AccountProvisioningService {
             Assert.isTrue(!UserAccount.usernameKey(operator.getName()).equals(UserAccount.usernameKey(viewerUsername)),
                     "Viewer and operator usernames must be different");
         }
+        boolean provisionAdmin = StringUtils.hasText(adminPassword);
+        if (provisionAdmin) {
+            UserAccount.validateUsername(adminUsername);
+            Assert.isTrue(!UserAccount.usernameKey(adminUsername).equals(UserAccount.usernameKey(operator.getName()))
+                            && (!provisionViewer || !UserAccount.usernameKey(adminUsername).equals(UserAccount.usernameKey(viewerUsername))),
+                    "Administrator username must differ from other configured accounts");
+        }
         provision(operator.getName(), operator.isPasswordGenerated() ? null : operator.getPassword(), AccountRole.OPERATOR);
         if (provisionViewer) {
             provision(viewerUsername, viewerPassword, AccountRole.VIEWER);
+        }
+        if (provisionAdmin) {
+            provision(adminUsername, adminPassword, AccountRole.ADMIN);
         }
     }
 

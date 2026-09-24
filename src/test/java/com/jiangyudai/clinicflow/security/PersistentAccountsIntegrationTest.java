@@ -181,6 +181,44 @@ class PersistentAccountsIntegrationTest {
         provisioning.initialize(operator("Test.Operator", "initial-password"), "Test.Viewer", "viewer-password");
     }
 
+    @Test
+    void administratorPersistsWithoutResettingItsCredentialsOrGrantingClinicalAccess() throws Exception {
+        provisioning.initialize(operator("Test.Operator", "initial-password"), "viewer", "", "Test.Admin", "admin-password");
+        var account = accounts.findByUsernameKey("test.admin").orElseThrow();
+        assertThat(account.getRole()).isEqualTo(AccountRole.ADMIN);
+        String originalHash = account.getPasswordHash();
+        provisioning.initialize(operator("Test.Operator", null), "viewer", "", "TEST.ADMIN", "replacement-password");
+        assertThat(accounts.findByUsernameKey("test.admin").orElseThrow().getPasswordHash()).isEqualTo(originalHash);
+        var admin = login("TEST.ADMIN", "admin-password");
+        mvc.perform(get("/api/v1/physicians").session(admin)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/departments").session(admin)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/patients").session(admin)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/patients").session(admin).with(csrf()).contentType("application/json").content("{}"))
+                .andExpect(status().isForbidden());
+        assertLoginRejected("test.admin", "replacement-password");
+        jdbc.update("UPDATE user_accounts SET enabled = false WHERE username_key = ?", "test.admin");
+        provisioning.initialize(operator("Test.Operator", null), "viewer", "", "Test.Admin", "admin-password");
+        assertLoginRejected("test.admin", "admin-password");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"TEST.OPERATOR", "TEST.VIEWER"})
+    void rejectsDuplicateAdminConfigurationBeforeCreatingAccounts(String adminUsername) {
+        assertThatThrownBy(() -> provisioning.initialize(operator("Test.Operator", "initial-password"),
+                "Test.Viewer", "viewer-password", adminUsername, "admin-password"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(accounts.count()).isZero();
+    }
+
+    @Test
+    void administratorConfigurationCannotElevateAnExistingViewer() {
+        accounts.saveAndFlush(new UserAccount("existing", encoder.encode("viewer-password"), AccountRole.VIEWER));
+        assertThatThrownBy(() -> provisioning.initialize(operator("new-operator", "password"), "viewer", "",
+                "EXISTING", "admin-password")).isInstanceOf(IllegalStateException.class);
+        assertThat(accounts.findByUsernameKey("new-operator")).isEmpty();
+        assertThat(accounts.findByUsernameKey("existing").orElseThrow().getRole()).isEqualTo(AccountRole.VIEWER);
+    }
+
     private SecurityProperties.User operator(String username, String password) {
         var operator = new SecurityProperties.User();
         operator.setName(username);

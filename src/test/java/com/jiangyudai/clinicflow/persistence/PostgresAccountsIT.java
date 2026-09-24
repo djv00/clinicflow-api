@@ -8,6 +8,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -44,7 +45,7 @@ class PostgresAccountsIT {
             try {
                 Flyway.configure().dataSource(new SingleConnectionDataSource(connection, true))
                         .locations("classpath:db/migration/postgresql").defaultSchema(schema).schemas(schema)
-                        .target("1").load().migrate();
+                        .target("3").load().migrate();
                 UUID patientId = UUID.randomUUID();
                 try (var insert = connection.prepareStatement("INSERT INTO \"" + schema + "\".patients "
                         + "(id, medical_record_number, first_name, last_name, date_of_birth) VALUES (?, ?, ?, ?, ?)")) {
@@ -56,13 +57,29 @@ class PostgresAccountsIT {
                     insert.executeUpdate();
                 }
 
+                UUID operatorId = UUID.randomUUID();
+                String legacyHash = PasswordEncoderFactories.createDelegatingPasswordEncoder().encode("initial-password");
+                try (var insert = connection.prepareStatement("INSERT INTO \"" + schema + "\".user_accounts "
+                        + "(id, username, username_key, password_hash, role, enabled) VALUES (?, ?, ?, ?, ?, ?)")) {
+                    insert.setObject(1, operatorId);
+                    insert.setString(2, "Persistent.Operator");
+                    insert.setString(3, "persistent.operator");
+                    insert.setString(4, legacyHash);
+                    insert.setString(5, "OPERATOR");
+                    insert.setBoolean(6, true);
+                    insert.executeUpdate();
+                }
+
                 String originalHash;
-                try (var first = start(url, username, password, driver, schema, "initial-password", "viewer-password")) {
+                try (var first = start(url, username, password, driver, schema, "initial-password", "viewer-password", "admin-password")) {
                     var jdbc = first.getBean(JdbcTemplate.class);
-                    assertThat(jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version = '2' AND success",
+                    assertThat(jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE version = '4' AND success",
                             Integer.class)).isEqualTo(1);
                     assertThat(first.getBean(Flyway.class).migrate().migrationsExecuted).isZero();
                     originalHash = jdbc.queryForObject("SELECT password_hash FROM user_accounts WHERE role = 'OPERATOR'", String.class);
+                    assertThat(originalHash).isEqualTo(legacyHash);
+                    assertThat(jdbc.queryForObject("SELECT id FROM user_accounts WHERE role = 'OPERATOR'", UUID.class))
+                            .isEqualTo(operatorId);
                     assertThat(originalHash).startsWith("{bcrypt}");
                     assertThat(first.getBean(PasswordEncoder.class).matches("initial-password", originalHash)).isTrue();
                     var mvc = mvc(first);
@@ -70,22 +87,33 @@ class PostgresAccountsIT {
                     mvc.perform(get("/api/v1/patients/{id}", patientId).session(session)).andExpect(status().isOk())
                             .andExpect(jsonPath("$.medicalRecordNumber").value("ACCOUNT-MIGRATION-TEST"));
                     login(mvc, "persistent.viewer", "viewer-password");
+                    var admin = login(mvc, "PERSISTENT.ADMIN", "admin-password");
+                    mvc.perform(post("/api/v1/physicians").session(admin).with(csrf())
+                                    .contentType("application/json").content("""
+                                            {"physicianCode":"PG-ADMIN-001","firstName":"Maya","lastName":"Chen","departmentIds":[]}
+                                            """))
+                            .andExpect(status().isCreated());
+                    mvc.perform(post("/api/v1/physicians").session(session).with(csrf())
+                                    .contentType("application/json").content("{}"))
+                            .andExpect(status().isForbidden());
                     jdbc.update("UPDATE user_accounts SET enabled = false WHERE role = 'VIEWER'");
                 }
 
-                try (var second = start(url, username, password, driver, schema, "replacement-password", "replacement-viewer")) {
+                try (var second = start(url, username, password, driver, schema, "replacement-password", "replacement-viewer", "replacement-admin")) {
                     var jdbc = second.getBean(JdbcTemplate.class);
-                    assertThat(jdbc.queryForObject("SELECT count(*) FROM user_accounts", Integer.class)).isEqualTo(2);
+                    assertThat(jdbc.queryForObject("SELECT count(*) FROM user_accounts", Integer.class)).isEqualTo(3);
                     assertThat(jdbc.queryForObject("SELECT password_hash FROM user_accounts WHERE role = 'OPERATOR'", String.class))
                             .isEqualTo(originalHash);
                     var mvc = mvc(second);
                     login(mvc, "persistent.operator", "initial-password");
                     rejectedLogin(mvc, "persistent.operator", "replacement-password");
                     rejectedLogin(mvc, "persistent.viewer", "viewer-password");
+                    login(mvc, "persistent.admin", "admin-password");
+                    rejectedLogin(mvc, "persistent.admin", "replacement-admin");
                     assertThat(jdbc.queryForObject("SELECT enabled FROM user_accounts WHERE role = 'VIEWER'", Boolean.class)).isFalse();
                 }
 
-                try (var third = start(url, username, password, driver, schema, "", "")) {
+                try (var third = start(url, username, password, driver, schema, "", "", "")) {
                     var mvc = mvc(third);
                     var session = login(mvc, "persistent.operator", "initial-password");
                     mvc.perform(get("/api/auth/session").session(session)).andExpect(status().isOk())
@@ -93,7 +121,10 @@ class PostgresAccountsIT {
                             .andExpect(jsonPath("$.roles[0]").value("OPERATOR"));
                     mvc.perform(get("/api/v1/patients/{id}", patientId).session(session)).andExpect(status().isOk());
                     assertThat(third.getBean(JdbcTemplate.class).queryForObject("SELECT count(*) FROM user_accounts", Integer.class))
-                            .isEqualTo(2);
+                            .isEqualTo(3);
+                    var admin = login(mvc, "persistent.admin", "admin-password");
+                    mvc.perform(get("/api/v1/physicians").session(admin).param("keyword", "PG-ADMIN-001"))
+                            .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
                 }
             } finally {
                 try (var statement = connection.createStatement()) {
@@ -105,7 +136,7 @@ class PostgresAccountsIT {
     }
 
     private ConfigurableApplicationContext start(String url, String username, String password, String driver,
-            String schema, String operatorPassword, String viewerPassword) {
+            String schema, String operatorPassword, String viewerPassword, String adminPassword) {
         return new SpringApplicationBuilder(ClinicflowApiApplication.class).run(
                 "--spring.profiles.active=postgres", "--server.port=0",
                 "--spring.datasource.url=" + url, "--spring.datasource.username=" + username,
@@ -114,7 +145,8 @@ class PostgresAccountsIT {
                 "--spring.flyway.default-schema=" + schema, "--spring.flyway.schemas=" + schema,
                 "--spring.jpa.properties.hibernate.default_schema=" + schema,
                 "--spring.security.user.name=Persistent.Operator", "--spring.security.user.password=" + operatorPassword,
-                "--clinicflow.security.viewer.username=Persistent.Viewer", "--clinicflow.security.viewer.password=" + viewerPassword);
+                "--clinicflow.security.viewer.username=Persistent.Viewer", "--clinicflow.security.viewer.password=" + viewerPassword,
+                "--clinicflow.security.admin.username=Persistent.Admin", "--clinicflow.security.admin.password=" + adminPassword);
     }
 
     private MockMvc mvc(ConfigurableApplicationContext context) {

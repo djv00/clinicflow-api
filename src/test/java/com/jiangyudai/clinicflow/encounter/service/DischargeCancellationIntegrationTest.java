@@ -151,7 +151,7 @@ class DischargeCancellationIntegrationTest {
         EncounterDischarge first = encounterService.getDischarges(data.encounterId()).getFirst();
         UUID restoredId = first.getRestoredLocation().getId();
 
-        encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1));
+        encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1), "test-clerk");
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusHours(2), "second-clerk");
 
         List<EncounterDischarge> discharges = encounterService.getDischarges(data.encounterId());
@@ -193,7 +193,7 @@ class DischargeCancellationIntegrationTest {
         CancellationData data = createData(false);
         UUID originalId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
         cancel(data);
-        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT);
+        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk");
         var before = encounterService.getTimeline(data.encounterId());
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
@@ -225,9 +225,9 @@ class DischargeCancellationIntegrationTest {
         CancellationData data = createData(true);
         cancel(data);
         EncounterLocation transferred = encounterService.transferEncounter(
-                data.encounterId(), data.departmentId(), data.wardId(), null, CANCELLED_AT
+                data.encounterId(), data.departmentId(), data.wardId(), null, CANCELLED_AT, "test-clerk"
         );
-        encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT);
+        encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT, "test-clerk");
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "second-clerk");
 
         EncounterDischarge discharge = encounterService.getDischarges(data.encounterId()).getLast();
@@ -257,7 +257,7 @@ class DischargeCancellationIntegrationTest {
         CancellationData data = createData(true);
         cancel(data);
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
-            encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1));
+            encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1), "test-clerk");
             entityManager.flush();
             throw new IllegalStateException("Simulated discharge failure");
         })).isInstanceOf(IllegalStateException.class).hasMessage("Simulated discharge failure");
@@ -432,7 +432,7 @@ class DischargeCancellationIntegrationTest {
         UUID other = createOtherEncounter();
         encounterService.admitToDepartment(other, data.departmentId(), data.wardId(), data.bedId(),
                 DISCHARGED_AT.plusMinutes(minutesAfterDischarge));
-        encounterService.dischargeEncounter(other, DISCHARGED_AT.plusMinutes(30));
+        encounterService.dischargeEncounter(other, DISCHARGED_AT.plusMinutes(30), "test-clerk");
         assertThat(encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(data.bedId())).isFalse();
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
@@ -464,7 +464,7 @@ class DischargeCancellationIntegrationTest {
         assertWaitingWorkflowFails(() -> {
             encounterService.admitToDepartment(other, data.departmentId(), data.wardId(), data.bedId(),
                     DISCHARGED_AT.plusMinutes(15));
-            encounterService.dischargeEncounter(other, DISCHARGED_AT.plusMinutes(30));
+            encounterService.dischargeEncounter(other, DISCHARGED_AT.plusMinutes(30), "test-clerk");
         }, () -> cancel(data), BedHistoryConflictException.class);
 
         assertDischarged(data);
@@ -570,7 +570,7 @@ class DischargeCancellationIntegrationTest {
     private Encounter completeReadmission(CancellationData data, OffsetDateTime admittedAt, OffsetDateTime dischargedAt) {
         Encounter later = encounterService.admitPatient(data.patientId(), "ENC-" + UUID.randomUUID(), admittedAt);
         encounterService.admitToDepartment(later.getId(), data.departmentId(), data.wardId(), null, admittedAt);
-        return encounterService.dischargeEncounter(later.getId(), dischargedAt);
+        return encounterService.dischargeEncounter(later.getId(), dischargedAt, "test-clerk");
     }
 
     private String request(OffsetDateTime cancelledAt) {
@@ -611,7 +611,7 @@ class DischargeCancellationIntegrationTest {
                     encounter.getId(), department.getId(), ward.getId(), bed == null ? null : bed.getId(),
                     ADMITTED_AT.plusHours(1)
             );
-            encounterService.dischargeEncounter(encounter.getId(), DISCHARGED_AT);
+            encounterService.dischargeEncounter(encounter.getId(), DISCHARGED_AT, "test-clerk");
             return new CancellationData(patient.getId(), encounter.getId(), department.getId(), ward.getId(),
                     bed == null ? null : bed.getId(), location.getId());
         });

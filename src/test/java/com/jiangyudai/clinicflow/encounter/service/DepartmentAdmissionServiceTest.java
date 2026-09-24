@@ -73,6 +73,9 @@ class DepartmentAdmissionServiceTest {
     @Mock
     private LocationService locationService;
 
+    @Mock
+    private EncounterPhysicianService physicianService;
+
     @InjectMocks
     private EncounterService encounterService;
 

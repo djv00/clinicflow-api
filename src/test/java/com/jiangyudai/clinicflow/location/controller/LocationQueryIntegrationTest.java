@@ -161,11 +161,11 @@ class LocationQueryIntegrationTest {
         assertOccupied(secondBed, false);
 
         encounterService.transferEncounter(encounter.getId(), department.getId(), secondWard.getId(),
-                secondBed.getId(), ADMITTED_AT.plusHours(2));
+                secondBed.getId(), ADMITTED_AT.plusHours(2), "test-clerk");
         assertOccupied(firstBed, false);
         assertOccupied(secondBed, true);
 
-        encounterService.dischargeEncounter(encounter.getId(), ADMITTED_AT.plusHours(3));
+        encounterService.dischargeEncounter(encounter.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
         assertOccupied(secondBed, false);
         encounterService.cancelDischarge(encounter.getId(), ADMITTED_AT.plusHours(4), "test-clerk");
         assertOccupied(secondBed, true);
@@ -187,7 +187,7 @@ class LocationQueryIntegrationTest {
     @Test
     void closedHistoryDoesNotCountAsCurrentOccupancyButStillPreventsBackdatedAssignment() throws Exception {
         Encounter first = enterFirstBed();
-        encounterService.dischargeEncounter(first.getId(), ADMITTED_AT.plusHours(3));
+        encounterService.dischargeEncounter(first.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
         assertOccupied(firstBed, false);
         Encounter next = admit();
 

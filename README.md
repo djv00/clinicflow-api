@@ -19,6 +19,7 @@ Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
 - [Current progress and next steps](docs/roadmap.md)
+- [Physician assignment rules and delivery status](docs/physician-assignments.md)
 
 ## Workflow
 
@@ -50,8 +51,8 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 
 The API starts on port 8080. By default, it uses an in-memory H2 database that is
 cleared on shutdown. Default startup does not load reference data, so location
-list queries return empty arrays. Reference-data creation and maintenance
-endpoints are not available yet.
+list queries return empty arrays. Department, ward, and bed maintenance endpoints
+are not available yet. The physician directory API can use existing departments.
 
 ### Sign in
 
@@ -74,8 +75,9 @@ the cancellation audit fields; invalid configuration fails at startup.
 
 | Role | Access |
 | --- | --- |
-| `VIEWER` | Search patients and inpatients; view patient records, encounter history, timelines, and location dictionaries. |
+| `VIEWER` | Search patients, inpatients, and physicians; view patient records, encounter history, timelines, and location dictionaries. |
 | `OPERATOR` | All viewer access, plus registration, admission, department entry, transfer, discharge, and both cancellation workflows. |
+| `ADMIN` | Read and maintain the physician directory; read departments for affiliation selection. This role alone does not grant patient or inpatient access. |
 
 To enable a separate read-only account, set `CLINICFLOW_VIEWER_PASSWORD` before
 starting the application. Its username defaults to `viewer`; optionally set
@@ -83,10 +85,32 @@ starting the application. Its username defaults to `viewer`; optionally set
 The viewer and operator usernames must differ, ignoring case. In-memory account
 configuration changes take effect on restart.
 
+To enable a directory administrator, set `CLINICFLOW_ADMIN_PASSWORD`; the username
+defaults to `admin`, with `CLINICFLOW_ADMIN_USERNAME` as an optional override. The
+username must differ from other configured accounts, ignoring case. No default
+administrator password is supplied and existing operators/viewers are not promoted.
+The same provisioning rules below apply to the administrator. Accounts still have
+one role each; combined roles and account administration are future work.
+
+Open **Physicians** from the workbench navigation, or visit `/physicians.html`.
+Directory administrators land there after sign-in; operators and viewers can
+browse physician records but cannot edit them. Administrators can add physicians,
+edit names and service departments, and deactivate or reactivate records.
+The [physician directory API](docs/api.md#physician-directory) is also available
+for Postman or other HTTP clients. Operators can use the
+[physician responsibility API](docs/api.md#physician-responsibility) to assign,
+hand over, or release a physician for an encounter and read its history. Assignment
+controls are also available through **Physician responsibility** in the inpatient
+list or a patient's encounter history. Operators can select an active physician
+from the current department, hand over responsibility, or release it. Viewers can
+inspect current responsibility and history. Refreshing discards an unfinished
+selection; after a conflict or unconfirmed save, review the refreshed history before
+starting another change. After cancelling a discharge, select a physician explicitly.
+
 For PostgreSQL, startup only creates missing configured accounts. Existing
 passwords, roles, canonical usernames, and enabled states are preserved, even if
-the bootstrap environment values change. Removing the viewer password does not
-delete an existing viewer. After initialization, bootstrap passwords can be removed
+the bootstrap environment values change. Removing an optional account's bootstrap
+password does not delete that account. After initialization, bootstrap passwords can be removed
 from the environment; keep the configured operator username so startup finds the
 same account. Changing that username to a new value provisions another operator
 and requires an initial password. Reusing an account with a different role fails
@@ -94,7 +118,7 @@ startup instead of changing its permissions. Initialization is transactional.
 Run initial provisioning with one application instance.
 
 Database usernames are unique ignoring case; successful login returns the stored
-username for audit records. Both persistent account usernames are limited to 100
+username for audit records. Persistent account usernames are limited to 100
 characters. Changing bootstrap passwords is not a password-reset mechanism, and
 disabling an account prevents new sign-ins without revoking an existing session.
 
@@ -472,7 +496,7 @@ The timeline contains location and discharge history, not a complete audit of al
 system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs and provides
-connected patient and inpatient workbench pages for the full workflow. Physician
-assignment, outpatient scheduling, clinical orders, and billing are outside the
+connected patient and inpatient workbench pages for the full workflow, including
+physician responsibility. Outpatient scheduling, clinical orders, and billing are outside the
 implemented scope. PostgreSQL supports optional, repeatable demo-location
 initialization. The next delivery work is deployment packaging and an interview walkthrough.

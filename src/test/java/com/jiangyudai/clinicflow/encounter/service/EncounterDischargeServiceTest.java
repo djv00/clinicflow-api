@@ -58,6 +58,9 @@ class EncounterDischargeServiceTest {
     private PatientService patientService;
     @Mock
     private LocationService locationService;
+    @Mock
+    private EncounterPhysicianService physicianService;
+
     @InjectMocks
     private EncounterService encounterService;
 
@@ -84,7 +87,7 @@ class EncounterDischargeServiceTest {
     void dischargesWithoutABedAtTheCurrentLocationStartTime() {
         stubCurrentLocation();
 
-        Encounter result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT);
+        Encounter result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT, "test-clerk");
 
         assertThat(result).isSameAs(encounter);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
@@ -95,7 +98,7 @@ class EncounterDischargeServiceTest {
 
     @Test
     void rejectsMissingTimeBeforeLoadingEncounter() {
-        assertThatThrownBy(() -> encounterService.dischargeEncounter(ENCOUNTER_ID, null))
+        assertThatThrownBy(() -> encounterService.dischargeEncounter(ENCOUNTER_ID, null, "test-clerk"))
                 .isInstanceOf(InvalidDischargeTimeException.class);
 
         verifyNoInteractions(encounterRepository, encounterLocationRepository);
@@ -107,7 +110,7 @@ class EncounterDischargeServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT)
+                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT, "test-clerk")
         ).isInstanceOf(EncounterNotFoundException.class);
 
         verifyNoInteractions(encounterLocationRepository);
@@ -123,7 +126,7 @@ class EncounterDischargeServiceTest {
                 .thenReturn(Optional.of(encounter));
 
         assertThatThrownBy(() ->
-                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT)
+                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT, "test-clerk")
         ).isInstanceOf(InvalidEncounterStatusException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(status);
@@ -138,7 +141,7 @@ class EncounterDischargeServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT)
+                encounterService.dischargeEncounter(ENCOUNTER_ID, DISCHARGED_AT, "test-clerk")
         ).isInstanceOf(CurrentEncounterLocationNotFoundException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -151,7 +154,7 @@ class EncounterDischargeServiceTest {
         stubCurrentLocation();
 
         assertThatThrownBy(() ->
-                encounterService.dischargeEncounter(ENCOUNTER_ID, dischargedAt)
+                encounterService.dischargeEncounter(ENCOUNTER_ID, dischargedAt, "test-clerk")
         ).isInstanceOf(InvalidDischargeTimeException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);

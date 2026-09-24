@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.security;
 
+import com.jiangyudai.clinicflow.security.entity.UserAccount;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -44,7 +45,9 @@ public class SecurityConfiguration {
     @Profile("!postgres")
     UserDetailsService userDetailsService(SecurityProperties properties, PasswordEncoder encoder,
             @Value("${clinicflow.security.viewer.username:viewer}") String viewerUsername,
-            @Value("${clinicflow.security.viewer.password:}") String viewerPassword) {
+            @Value("${clinicflow.security.viewer.password:}") String viewerPassword,
+            @Value("${clinicflow.security.admin.username:admin}") String adminUsername,
+            @Value("${clinicflow.security.admin.password:}") String adminPassword) {
         var account = properties.getUser();
         Assert.hasText(account.getName(), "Operator username is required");
         Assert.isTrue(account.getName().length() <= 100,
@@ -62,6 +65,12 @@ public class SecurityConfiguration {
             users.createUser(User.withUsername(viewerUsername)
                     .password(encoder.encode(viewerPassword)).roles("VIEWER").build());
         }
+        if (StringUtils.hasText(adminPassword)) {
+            UserAccount.validateUsername(adminUsername);
+            Assert.isTrue(!users.userExists(adminUsername), "Administrator username must differ from other configured accounts");
+            users.createUser(User.withUsername(adminUsername)
+                    .password(encoder.encode(adminPassword)).roles("ADMIN").build());
+        }
         return users;
     }
 
@@ -73,6 +82,11 @@ public class SecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/login.html", "/login.js", "/session.js", "/patients.css",
                                 "/api/auth/csrf", "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/physicians", "/api/v1/physicians/**",
+                                "/api/v1/departments", "/api/v1/departments/**").hasAnyRole("VIEWER", "OPERATOR", "ADMIN")
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/physicians", "/api/v1/physicians/**",
+                                "/api/v1/departments", "/api/v1/departments/**").hasAnyRole("VIEWER", "OPERATOR", "ADMIN")
+                        .requestMatchers("/api/v1/physicians", "/api/v1/physicians/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole("VIEWER", "OPERATOR")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/**").hasAnyRole("VIEWER", "OPERATOR")
                         .requestMatchers("/api/v1/**").hasRole("OPERATOR")

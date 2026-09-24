@@ -86,7 +86,7 @@ class EncounterTransferIntegrationTest {
                 data.targetDepartmentId(),
                 data.targetWardId(),
                 data.targetBedId(),
-                data.transferredAt()
+                data.transferredAt(), "test-clerk"
         );
 
         assertThat(result.getId()).isNotNull();
@@ -164,7 +164,7 @@ class EncounterTransferIntegrationTest {
                             data.targetDepartmentId(),
                             data.targetWardId(),
                             data.targetBedId(),
-                            data.transferredAt()
+                            data.transferredAt(), "test-clerk"
                     );
 
                     // Force the update and insert before simulating failure.
@@ -235,7 +235,7 @@ class EncounterTransferIntegrationTest {
                                 first.targetDepartmentId(),
                                 first.targetWardId(),
                                 first.targetBedId(),
-                                first.transferredAt()
+                                first.transferredAt(), "test-clerk"
                         );
 
                         entityManager.flush();
@@ -252,7 +252,7 @@ class EncounterTransferIntegrationTest {
                                                 first.targetDepartmentId(),
                                                 first.targetWardId(),
                                                 first.targetBedId(),
-                                                second.transferredAt()
+                                                second.transferredAt(), "test-clerk"
                                         )
                                 );
 

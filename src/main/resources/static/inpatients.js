@@ -1,5 +1,7 @@
 import { element, ApiError, request, encounterStatuses, formatEncounterTime } from './workbench.js';
 import { loadPatients, openPatient } from './patients.js';
+import { accountReady, canReadClinical } from './account.js';
+import { openEncounterPhysicians } from './encounter-physicians.js';
 
 let filters = {};
 let page = 0;
@@ -36,6 +38,13 @@ function renderRow(stay) {
     view.setAttribute('aria-label', `View record for ${stay.firstName} ${stay.lastName}, ${stay.medicalRecordNumber}, ${stay.encounterNumber}`);
     view.addEventListener('click', () => openPatient(stay.patientId));
     actions.append(view);
+    const physicians = textNode('button', 'Physician responsibility', 'row-action');
+    physicians.type = 'button';
+    physicians.setAttribute('aria-label', `Physician responsibility for ${stay.encounterNumber}`);
+    physicians.addEventListener('click', () => openEncounterPhysicians(
+        { id: stay.id, encounterNumber: stay.encounterNumber },
+        `${stay.firstName} ${stay.lastName} (${stay.medicalRecordNumber})`, loadInpatients));
+    actions.append(physicians);
     row.append(patient, textNode('td', stay.encounterNumber, 'record-number'), status,
         textNode('td', formatEncounterTime(stay.admittedAt)), placement, actions);
     return row;
@@ -142,9 +151,11 @@ for (const id of ['retry-inpatients', 'refresh-inpatients']) element(id).addEven
 element('retry-inpatient-filters').addEventListener('click', loadLocationFilters);
 element('patient-dialog').addEventListener('close', loadInpatients);
 
-function showView(event) {
+async function showView(event) {
+    await accountReady;
+    if (!canReadClinical()) return;
     // In-page anchors such as Skip to content must not switch workbench views.
-    if (!['', '#patients', '#inpatients'].includes(window.location.hash)) return;
+    if (event && !['', '#patients', '#inpatients'].includes(window.location.hash)) return;
     const inpatients = window.location.hash === '#inpatients';
     element('patients-view').hidden = inpatients;
     element('inpatients-view').hidden = !inpatients;
