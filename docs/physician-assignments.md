@@ -12,7 +12,8 @@ reads. Transfer and discharge close responsibility in their existing transaction
 using the authenticated operator from those endpoints. Department entry leaves
 physician selection explicit. Secured assignment, release, and combined state/history
 endpoints are available; see the [API examples](api.md#physician-responsibility).
-Page controls are the next slice.
+The patient and inpatient workbench provides assignment, handover, release, and
+history controls through **Physician responsibility**.
 
 The workflow references establish that department entry and transfer identify a
 responsible inpatient physician. They do not fully specify concurrency, doctor
@@ -41,7 +42,7 @@ outside this slice. A physician can be responsible for several encounters.
 After a discharge correction, a new assignment may start at the restored care
 period's start only after an operator confirms it and eligibility/history checks
 pass. Until then, no open physician assignment exists. The API returns a null
-`currentAssignmentId`; the upcoming page must display that unassigned state explicitly.
+`currentAssignmentId`; the page displays that unassigned state explicitly.
 
 Assign/release operations require the caller's last-seen location ID and current
 assignment ID. A null assignment ID means the caller saw no current physician;
@@ -59,6 +60,27 @@ department entry and after discharge; a missing current assignment is normal whi
 physician selection is pending. Physician and department display names reflect
 their current directory values; the responsibility record retains the reference
 IDs, effective times, and operators, not a snapshot of every directory field.
+
+## Workbench behaviour
+
+- Open responsibility from an inpatient row or any encounter in a patient record.
+  Operators can change responsibility while the encounter is in a department;
+  viewers can inspect it. Before department entry and after closure, history remains
+  available without write controls.
+- The picker searches active physicians affiliated with the current department and
+  supports pagination. The current physician cannot be selected as their own replacement.
+  An inactive department prevents new assignments but still permits release.
+- The form shows the proposed change and local effective time. Handover ends the
+  previous period and starts the new period at that same time. Release leaves the
+  patient in care without a responsible physician.
+- Saves use the displayed location and assignment as preconditions. A conflict or
+  uncertain response blocks further saves until responsibility is refreshed. Refresh
+  clears the unfinished form, so a replacement must be selected again. No write is
+  replayed automatically. A confirmed save followed by a failed refresh remains
+  labelled as saved, with a separate refresh error.
+- History retains effective times, closure reasons, and recorded operators. Directory
+  names are current values. The page identifies the current assignment by its ID,
+  rather than assuming the final row is current.
 
 ## Data and transaction rules
 

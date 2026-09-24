@@ -135,8 +135,8 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
 #encounters-table th, #encounters-table td { padding: 12px; width: 20%; }
 #encounters-table td { font-size: 13px; font-weight: 400; }
 #encounters-table { min-width: 740px; }
-#encounters-table .row-action { display: block; }
-#encounters-table .row-action + .row-action { margin-top: 6px; }
+#encounters-table .row-action, #inpatient-table .row-action { display: block; }
+#encounters-table .row-action + .row-action, #inpatient-table .row-action + .row-action { margin-top: 6px; }
 .placement-summary { margin: 22px 0; }
 .placement-summary div { margin-bottom: 12px; }
 .placement-summary dd { font-size: 14px; }
@@ -201,5 +201,19 @@ dd { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
     .current-placement .placement-summary { grid-template-columns: 1fr; }
     #department-form .dialog-actions, #discharge-form .dialog-actions,
     #admission-cancellation-form .dialog-actions, #discharge-cancellation-form .dialog-actions { flex-wrap: wrap; }
+}
+#responsibility-dialog { width: 980px; }
+.responsibility-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.responsibility-search { display: flex; align-items: end; gap: 12px; margin-bottom: 12px; }
+.responsibility-search .field { flex: 1; margin: 0; }
+.responsibility-choice { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 6px; border: 1px solid #d6dfe3; border-radius: 5px; }
+.responsibility-choice:has(input:checked) { background: #edf5f5; border-color: #17646b; }
+.responsibility-choice:has(input:disabled) { color: #5c6b72; }
+.responsibility-choice input { width: auto; margin: 0; flex: 0 0 auto; }
+#responsibility-form { margin-top: 20px; }
+#responsibility-dialog .dialog-actions { flex-wrap: wrap; }
+@media (max-width: 700px) {
+    .responsibility-search { flex-wrap: wrap; }
+    .responsibility-search .field { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }

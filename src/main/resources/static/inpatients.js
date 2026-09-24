@@ -1,6 +1,7 @@
 import { element, ApiError, request, encounterStatuses, formatEncounterTime } from './workbench.js';
 import { loadPatients, openPatient } from './patients.js';
 import { accountReady, canReadClinical } from './account.js';
+import { openEncounterPhysicians } from './encounter-physicians.js';
 
 let filters = {};
 let page = 0;
@@ -37,6 +38,13 @@ function renderRow(stay) {
     view.setAttribute('aria-label', `View record for ${stay.firstName} ${stay.lastName}, ${stay.medicalRecordNumber}, ${stay.encounterNumber}`);
     view.addEventListener('click', () => openPatient(stay.patientId));
     actions.append(view);
+    const physicians = textNode('button', 'Physician responsibility', 'row-action');
+    physicians.type = 'button';
+    physicians.setAttribute('aria-label', `Physician responsibility for ${stay.encounterNumber}`);
+    physicians.addEventListener('click', () => openEncounterPhysicians(
+        { id: stay.id, encounterNumber: stay.encounterNumber },
+        `${stay.firstName} ${stay.lastName} (${stay.medicalRecordNumber})`, loadInpatients));
+    actions.append(physicians);
     row.append(patient, textNode('td', stay.encounterNumber, 'record-number'), status,
         textNode('td', formatEncounterTime(stay.admittedAt)), placement, actions);
     return row;

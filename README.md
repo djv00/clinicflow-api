@@ -100,7 +100,12 @@ The [physician directory API](docs/api.md#physician-directory) is also available
 for Postman or other HTTP clients. Operators can use the
 [physician responsibility API](docs/api.md#physician-responsibility) to assign,
 hand over, or release a physician for an encounter and read its history. Assignment
-controls on the encounter page are the next delivery step.
+controls are also available through **Physician responsibility** in the inpatient
+list or a patient's encounter history. Operators can select an active physician
+from the current department, hand over responsibility, or release it. Viewers can
+inspect current responsibility and history. Refreshing discards an unfinished
+selection; after a conflict or unconfirmed save, review the refreshed history before
+starting another change. After cancelling a discharge, select a physician explicitly.
 
 For PostgreSQL, startup only creates missing configured accounts. Existing
 passwords, roles, canonical usernames, and enabled states are preserved, even if
@@ -491,7 +496,7 @@ The timeline contains location and discharge history, not a complete audit of al
 system activity.
 
 The project currently covers inpatient flow through REST/JSON APIs and provides
-connected patient and inpatient workbench pages for the full workflow. Physician
-assignment, outpatient scheduling, clinical orders, and billing are outside the
+connected patient and inpatient workbench pages for the full workflow, including
+physician responsibility. Outpatient scheduling, clinical orders, and billing are outside the
 implemented scope. PostgreSQL supports optional, repeatable demo-location
 initialization. The next delivery work is deployment packaging and an interview walkthrough.
