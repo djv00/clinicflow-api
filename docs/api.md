@@ -739,3 +739,19 @@ and reactivated. There is no physician DELETE endpoint.
 
 On a version conflict, reload the profile and review the latest department
 selection before resubmitting. Do not silently retry an old edit with a new version.
+
+## Patient and encounter number normalization
+
+Patient medical record numbers and encounter numbers are case-sensitive. Before
+lookup and persistence, the server removes leading/trailing characters through
+U+0020 (Java `String.trim()`, including spaces, tabs and line breaks). Internal
+spaces and case are preserved. Existing request length limits still apply to the
+submitted value. Sending a padded form of an existing number returns `409`.
+Concurrent registrations using the same number also return `409` when the
+PostgreSQL unique constraint resolves the race; unrelated integrity errors are
+not reported as duplicate numbers.
+
+Migration V6 applies the same normalization to existing PostgreSQL numbers without
+changing record IDs or references. If normalization would produce duplicate or
+empty numbers, the migration fails and rolls back. Review and resolve those
+records explicitly before retrying; the migration never merges patients or stays.

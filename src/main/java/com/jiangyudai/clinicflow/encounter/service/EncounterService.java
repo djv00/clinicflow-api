@@ -76,6 +76,7 @@ public class EncounterService {
             String encounterNumber,
             OffsetDateTime admittedAt
     ) {
+        encounterNumber = encounterNumber.trim();
         if (admittedAt.isAfter(OffsetDateTime.now())) {
             throw new InvalidAdmissionTimeException(admittedAt);
         }

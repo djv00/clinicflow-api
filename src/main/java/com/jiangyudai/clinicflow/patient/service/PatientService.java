@@ -41,6 +41,7 @@ public class PatientService {
             String lastName,
             LocalDate dateOfBirth
     ) {
+        medicalRecordNumber = medicalRecordNumber.trim();
         if (patientRepository.existsByMedicalRecordNumber(medicalRecordNumber)) {
             throw new DuplicateMedicalRecordNumberException(
                     medicalRecordNumber

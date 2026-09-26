@@ -1067,4 +1067,69 @@ class PostgresWorkflowIT {
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
     }
+
+    @Test
+    void numberMigrationTrimsLegacyValuesAndPreservesReferences() {
+        String schema = "clinicflow_numbers_" + UUID.randomUUID().toString().replace("-", "");
+        UUID patientId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+        try {
+            Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("5").load().migrate();
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Maya', 'Chen', DATE '1990-05-14')",
+                    patientId, "\t Legacy-Mrn A \r\n");
+            jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                    + "VALUES (?, ?, ?, 'ADMITTED', ?)", encounterId, "\t Legacy-Enc B \r\n", patientId, ADMITTED_AT);
+            Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("6").load();
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            assertThat(jdbc.queryForObject("SELECT medical_record_number FROM " + schema + ".patients WHERE id = ?",
+                    String.class, patientId)).isEqualTo("Legacy-Mrn A");
+            assertThat(jdbc.queryForObject("SELECT encounter_number FROM " + schema + ".encounters WHERE id = ?",
+                    String.class, encounterId)).isEqualTo("Legacy-Enc B");
+            assertThat(jdbc.queryForObject("SELECT patient_id FROM " + schema + ".encounters WHERE id = ?",
+                    UUID.class, encounterId)).isEqualTo(patientId);
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"patient-duplicate", "encounter-duplicate", "patient-blank", "encounter-blank"})
+    void numberMigrationRefusesAmbiguousLegacyDataWithoutChangingIt(String problem) {
+        String schema = "clinicflow_numbers_" + UUID.randomUUID().toString().replace("-", "");
+        UUID patientId = UUID.randomUUID();
+        UUID otherPatientId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+        try {
+            Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("5").load().migrate();
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Maya', 'Chen', DATE '1990-05-14')",
+                    patientId, " LEGACY-P ");
+            String otherNumber = problem.equals("patient-duplicate") ? "LEGACY-P"
+                    : problem.equals("patient-blank") ? " \t" : "OTHER-P";
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Alex', 'Martin', DATE '1985-01-01')",
+                    otherPatientId, otherNumber);
+            jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                    + "VALUES (?, ?, ?, 'ADMITTED', ?)", encounterId, " LEGACY-E ", patientId, ADMITTED_AT);
+            if (problem.startsWith("encounter")) {
+                jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                        + "VALUES (?, ?, ?, 'ADMITTED', ?)", UUID.randomUUID(),
+                        problem.equals("encounter-duplicate") ? "LEGACY-E" : " \t", otherPatientId, ADMITTED_AT);
+            }
+            Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("6").load();
+            assertThatThrownBy(upgrade::migrate).isInstanceOf(org.flywaydb.core.api.FlywayException.class)
+                    .hasStackTraceContaining("Resolve the existing records before migrating.");
+            assertThat(jdbc.queryForObject("SELECT medical_record_number FROM " + schema + ".patients WHERE id = ?",
+                    String.class, patientId)).isEqualTo(" LEGACY-P ");
+            assertThat(jdbc.queryForObject("SELECT encounter_number FROM " + schema + ".encounters WHERE id = ?",
+                    String.class, encounterId)).isEqualTo(" LEGACY-E ");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + schema + ".flyway_schema_history WHERE version = '6'",
+                    Integer.class)).isZero();
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
 }

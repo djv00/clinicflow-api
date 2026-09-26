@@ -78,7 +78,7 @@ public class Encounter {
             Patient patient,
             OffsetDateTime admittedAt
     ) {
-        this.encounterNumber = encounterNumber;
+        this.encounterNumber = encounterNumber.trim();
         this.patient = patient;
         this.admittedAt = admittedAt;
         this.status = EncounterStatus.ADMITTED;
