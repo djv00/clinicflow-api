@@ -208,7 +208,8 @@ public class EncounterService {
             UUID wardId,
             UUID bedId,
             OffsetDateTime transferredAt,
-            String operator
+            String operator,
+            UUID expectedLocationId
     ) {
         if (transferredAt == null) {
             throw new InvalidEncounterTransferTimeException(
@@ -237,6 +238,8 @@ public class EncounterService {
                                 encounterId
                         )
                 );
+
+        checkExpectedLocation(currentLocation, expectedLocationId);
 
         if (transferredAt.isBefore(currentLocation.getStartedAt())) {
             throw new InvalidEncounterTransferTimeException(
@@ -302,7 +305,8 @@ public class EncounterService {
     public Encounter dischargeEncounter(
             UUID encounterId,
             OffsetDateTime dischargedAt,
-            String operator
+            String operator,
+            UUID expectedLocationId
     ) {
         if (dischargedAt == null) {
             throw new InvalidDischargeTimeException(
@@ -327,6 +331,8 @@ public class EncounterService {
                 .orElseThrow(() ->
                         new CurrentEncounterLocationNotFoundException(encounterId)
                 );
+
+        checkExpectedLocation(currentLocation, expectedLocationId);
 
         if (dischargedAt.isBefore(currentLocation.getStartedAt())) {
             throw new InvalidDischargeTimeException(
@@ -490,6 +496,13 @@ public class EncounterService {
         PageRequest pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "admittedAt", "encounterNumber"));
         return EncounterPageResponse.from(encounterRepository.findAllByPatient_Id(patientId, pageable));
+    }
+
+    // The caller's placement must still be current after acquiring the encounter lock.
+    private void checkExpectedLocation(EncounterLocation currentLocation, UUID expectedLocationId) {
+        if (expectedLocationId == null || !expectedLocationId.equals(currentLocation.getId())) {
+            throw new EncounterLocationChangedException();
+        }
     }
 
     private void checkBedHistory(UUID bedId, OffsetDateTime startedAt) {

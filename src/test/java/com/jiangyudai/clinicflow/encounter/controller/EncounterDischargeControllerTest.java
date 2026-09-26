@@ -32,13 +32,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterDischargeControllerTest {
 
+    private static final UUID EXPECTED_LOCATION_ID = UUID.fromString("99999999-1111-2222-3333-444444444444");
+
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "22222222-2222-2222-2222-222222222222"
     );
     private static final OffsetDateTime DISCHARGED_AT =
             OffsetDateTime.parse("2025-09-03T10:00:00-04:00");
     private static final String REQUEST = """
-            {"dischargedAt": "2025-09-03T10:00:00-04:00"}
+            {"dischargedAt": "2025-09-03T10:00:00-04:00", "expectedLocationId": "99999999-1111-2222-3333-444444444444"}
             """;
 
     @Autowired
@@ -87,7 +89,7 @@ class EncounterDischargeControllerTest {
     void returnsNotFoundForUnknownEncounter() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        ), eq("test-operator")))
+        ), eq("test-operator"), eq(EXPECTED_LOCATION_ID)))
                 .thenThrow(new EncounterNotFoundException(ENCOUNTER_ID));
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
@@ -100,7 +102,7 @@ class EncounterDischargeControllerTest {
     void returnsConflictForMissingLocation() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        ), eq("test-operator")))
+        ), eq("test-operator"), eq(EXPECTED_LOCATION_ID)))
                 .thenThrow(new CurrentEncounterLocationNotFoundException(ENCOUNTER_ID));
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
@@ -113,7 +115,7 @@ class EncounterDischargeControllerTest {
     void returnsBadRequestForInvalidDischargeTime() throws Exception {
         when(encounterService.dischargeEncounter(eq(ENCOUNTER_ID), argThat(
                 time -> time != null && time.isEqual(DISCHARGED_AT)
-        ), eq("test-operator")))
+        ), eq("test-operator"), eq(EXPECTED_LOCATION_ID)))
                 .thenThrow(new InvalidDischargeTimeException(
                         "Discharge time cannot be before the current location start time"
                 ));
@@ -124,5 +126,16 @@ class EncounterDischargeControllerTest {
                 .andExpect(jsonPath("$.title").value("Invalid discharge time"))
                 .andExpect(jsonPath("$.detail")
                         .value("Discharge time cannot be before the current location start time"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", ", \"expectedLocationId\": null"})
+    void requiresExpectedLocation(String locationField) throws Exception {
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharges", ENCOUNTER_ID).with(csrf())
+                        .contentType("application/json")
+                        .content("{\"dischargedAt\":\"2025-09-03T10:00:00-04:00\"" + locationField + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.expectedLocationId").value("Expected location ID is required"));
+        verifyNoInteractions(encounterService);
     }
 }

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.location.controller;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.exception.BedHistoryConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
@@ -40,6 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class LocationQueryIntegrationTest {
+
+    @Autowired
+    private EncounterLocationRepository locations;
 
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T08:00:00-04:00");
 
@@ -161,11 +165,11 @@ class LocationQueryIntegrationTest {
         assertOccupied(secondBed, false);
 
         encounterService.transferEncounter(encounter.getId(), department.getId(), secondWard.getId(),
-                secondBed.getId(), ADMITTED_AT.plusHours(2), "test-clerk");
+                secondBed.getId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(encounter.getId()));
         assertOccupied(firstBed, false);
         assertOccupied(secondBed, true);
 
-        encounterService.dischargeEncounter(encounter.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
+        encounterService.dischargeEncounter(encounter.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(encounter.getId()));
         assertOccupied(secondBed, false);
         encounterService.cancelDischarge(encounter.getId(), ADMITTED_AT.plusHours(4), "test-clerk");
         assertOccupied(secondBed, true);
@@ -187,7 +191,7 @@ class LocationQueryIntegrationTest {
     @Test
     void closedHistoryDoesNotCountAsCurrentOccupancyButStillPreventsBackdatedAssignment() throws Exception {
         Encounter first = enterFirstBed();
-        encounterService.dischargeEncounter(first.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
+        encounterService.dischargeEncounter(first.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(first.getId()));
         assertOccupied(firstBed, false);
         Encounter next = admit();
 
@@ -259,5 +263,10 @@ class LocationQueryIntegrationTest {
         entityManager.persist(patient);
         entityManager.flush();
         return encounterService.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ADMITTED_AT);
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }

@@ -107,7 +107,8 @@ public class EncounterController {
         Encounter encounter = encounterService.dischargeEncounter(
                 encounterId,
                 request.dischargedAt(),
-                principal.getName()
+                principal.getName(),
+                request.expectedLocationId()
         );
 
         return EncounterResponse.from(encounter);
@@ -144,7 +145,8 @@ public class EncounterController {
                         request.wardId(),
                         request.bedId(),
                         request.transferredAt(),
-                        principal.getName()
+                        principal.getName(),
+                        request.expectedLocationId()
                 );
 
         return EncounterLocationResponse.from(location);

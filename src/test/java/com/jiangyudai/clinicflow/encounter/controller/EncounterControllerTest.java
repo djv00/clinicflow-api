@@ -40,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterControllerTest {
 
+    private static final UUID EXPECTED_LOCATION_ID = UUID.fromString("99999999-1111-2222-3333-444444444444");
+
     private static final UUID PATIENT_ID = UUID.fromString(
             "11111111-1111-1111-1111-111111111111"
     );
@@ -338,7 +340,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
         )).thenReturn(location);
 
         mockMvc.perform(post(
@@ -368,7 +370,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
         );
     }
 
@@ -383,7 +385,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 isNull(),
-                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
         )).thenReturn(location);
 
         mockMvc.perform(post(
@@ -410,7 +412,7 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 isNull(),
-                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
         );
     }
 
@@ -450,6 +452,7 @@ class EncounterControllerTest {
                           "departmentId": "%s",
                           "wardId": "%s",
                           "bedId": "%s",
+                          "expectedLocationId": "99999999-1111-2222-3333-444444444444",
                           "transferredAt": "2099-09-03T10:00:00-04:00"
                         }
                         """.formatted(
@@ -639,6 +642,7 @@ class EncounterControllerTest {
                   "departmentId": "%s",
                   "wardId": "%s",
                   "bedId": "%s",
+                  "expectedLocationId": "99999999-1111-2222-3333-444444444444",
                   "transferredAt": "%s"
                 }
                 """.formatted(
@@ -654,6 +658,7 @@ class EncounterControllerTest {
                 {
                   "departmentId": "%s",
                   "wardId": "%s",
+                  "expectedLocationId": "99999999-1111-2222-3333-444444444444",
                   "transferredAt": "%s"
                 }
                 """.formatted(
@@ -669,7 +674,18 @@ class EncounterControllerTest {
                 eq(DEPARTMENT_ID),
                 eq(WARD_ID),
                 eq(BED_ID),
-                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator")
+                argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
         )).thenThrow(exception);
+    }
+
+    @Test
+    void requiresExpectedLocationForTransfer() throws Exception {
+        String request = validTransferJsonWithBed().replace(
+                "\"expectedLocationId\": \"" + EXPECTED_LOCATION_ID + "\",", "");
+        mockMvc.perform(post("/api/v1/encounters/{id}/transfers", ENCOUNTER_ID).with(csrf())
+                        .contentType("application/json").content(request))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.expectedLocationId").value("Expected location ID is required"));
+        verifyNoInteractions(encounterService);
     }
 }

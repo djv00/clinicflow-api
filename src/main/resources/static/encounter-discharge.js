@@ -146,7 +146,7 @@ element('discharge-form').addEventListener('submit', async (event) => {
         }
         saved = await request(`./api/v1/encounters/${encodeURIComponent(encounter.id)}/discharges`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dischargedAt: dischargedAt.toISOString() })
+            body: JSON.stringify({ dischargedAt: dischargedAt.toISOString(), expectedLocationId: currentLocation.id })
         });
     } catch (error) {
         let message = error instanceof ApiError ? error.message

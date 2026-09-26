@@ -286,13 +286,19 @@ Content-Type: application/json
   "departmentId": "10000000-0000-0000-0000-000000000002",
   "wardId": "20000000-0000-0000-0000-000000000002",
   "bedId": "30000000-0000-0000-0000-000000000002",
-  "transferredAt": "2025-09-02T10:00:00-04:00"
+  "transferredAt": "2025-09-02T10:00:00-04:00",
+  "expectedLocationId": "<currentLocationId>"
 }
 ```
 
 Returns `201 Created` with the new location in the same shape as department
 admission. The encounter remains `IN_DEPARTMENT`. The previous location ends
 and the next one starts at `transferredAt`; both changes commit together.
+
+Read the timeline and pass its open location ID as `expectedLocationId`. This field
+is required; omission or null returns `400`. The ID is checked after acquiring the
+encounter lock. If a transfer occurred since that read, the request returns `409`
+without changing location or physician history. Refresh and review before retrying.
 
 The encounter must have a current location. The destination must change at least
 one of department, ward, or bed. Department and ward remain required; `bedId`
@@ -489,7 +495,8 @@ POST /api/v1/encounters/{id}/discharges
 Content-Type: application/json
 
 {
-  "dischargedAt": "2025-09-03T14:00:00-04:00"
+  "dischargedAt": "2025-09-03T14:00:00-04:00",
+  "expectedLocationId": "<currentLocationId>"
 }
 ```
 
@@ -497,6 +504,9 @@ Returns `200 OK` with the updated encounter, including `status: "DISCHARGED"`
 and `dischargedAt`.
 
 - The encounter must be `IN_DEPARTMENT` and have a current location.
+- `expectedLocationId` is required and must be the open location ID the caller
+  reviewed in the timeline. Missing/null returns `400`; a changed location returns
+  `409` under the encounter lock, including when the request waited for a transfer.
 - The timestamp must include an offset, cannot be in the future, and cannot
   precede hospital admission or the current location's start time. Equal times
   are allowed.

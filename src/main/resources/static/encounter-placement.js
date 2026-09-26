@@ -243,6 +243,7 @@ element('department-form').addEventListener('submit', async (event) => {
         bedId: element('bedId').value === 'none' ? null : element('bedId').value,
         [workflow.timeField]: startedAt.toISOString()
     };
+    if (currentLocation) body.expectedLocationId = currentLocation.id;
     if (currentLocation && body.departmentId === currentLocation.departmentId
         && body.wardId === currentLocation.wardId && body.bedId === currentLocation.bedId) {
         element('department-error').textContent = 'Choose a different department, ward, or bed. The destination is the same as the current placement.';
