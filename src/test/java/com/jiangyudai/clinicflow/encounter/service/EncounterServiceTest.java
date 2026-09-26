@@ -11,12 +11,15 @@ import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.location.service.LocationService;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -73,7 +76,7 @@ class EncounterServiceTest {
                 PATIENT_ID,
                 ACTIVE_STATUSES
         )).thenReturn(false);
-        when(encounterRepository.save(any(Encounter.class)))
+        when(encounterRepository.saveAndFlush(any(Encounter.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Encounter encounter = encounterService.admitPatient(
@@ -88,7 +91,7 @@ class EncounterServiceTest {
         assertThat(encounter.getStatus())
                 .isEqualTo(EncounterStatus.ADMITTED);
 
-        verify(encounterRepository).save(any(Encounter.class));
+        verify(encounterRepository).saveAndFlush(any(Encounter.class));
     }
 
     @Test
@@ -119,7 +122,7 @@ class EncounterServiceTest {
                 OffsetDateTime.parse("2025-09-02T16:30:00-04:00")
         )).isInstanceOf(DuplicateEncounterNumberException.class);
 
-        verify(encounterRepository, never()).save(any(Encounter.class));
+        verify(encounterRepository, never()).saveAndFlush(any(Encounter.class));
     }
 
     @Test
@@ -140,7 +143,7 @@ class EncounterServiceTest {
                 OffsetDateTime.parse("2025-09-02T16:30:00-04:00")
         )).isInstanceOf(ActiveEncounterExistsException.class);
 
-        verify(encounterRepository, never()).save(any(Encounter.class));
+        verify(encounterRepository, never()).saveAndFlush(any(Encounter.class));
     }
 
     @Test
@@ -161,5 +164,27 @@ class EncounterServiceTest {
                 "Chen",
                 LocalDate.of(1990, 5, 14)
         );
+    }
+
+    @Test
+    void translatesConcurrentEncounterNumberConflict() {
+        when(patientService.getPatientForUpdate(PATIENT_ID)).thenReturn(createPatient());
+        var failure = new DataIntegrityViolationException("duplicate", new ConstraintViolationException(
+                "duplicate", new SQLException("duplicate", "23505"), "uk_encounters_encounter_number"));
+        when(encounterRepository.saveAndFlush(any(Encounter.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-RACE", OffsetDateTime.now().minusHours(1)))
+                .isInstanceOf(DuplicateEncounterNumberException.class).hasMessageContaining("ENC-RACE");
+    }
+
+    @Test
+    void preservesUnrelatedPersistenceFailure() {
+        when(patientService.getPatientForUpdate(PATIENT_ID)).thenReturn(createPatient());
+        var failure = new DataIntegrityViolationException("invalid reference", new ConstraintViolationException(
+                "invalid reference", new SQLException("invalid reference", "23503"), "fk_encounters_patient"));
+        when(encounterRepository.saveAndFlush(any(Encounter.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-100001", OffsetDateTime.now().minusHours(1)))
+                .isSameAs(failure);
     }
 }

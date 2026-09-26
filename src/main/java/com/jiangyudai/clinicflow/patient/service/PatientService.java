@@ -5,6 +5,8 @@ import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
 import com.jiangyudai.clinicflow.patient.repository.PatientRepository;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -52,7 +54,18 @@ public class PatientService {
                 dateOfBirth
         );
 
-        return patientRepository.save(patient);
+        try {
+            return patientRepository.saveAndFlush(patient);
+        } catch (DataIntegrityViolationException exception) {
+            // Concurrent registrations can both pass the existence check.
+            for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+                if (cause instanceof ConstraintViolationException violation
+                        && "uk_patients_medical_record_number".equalsIgnoreCase(violation.getConstraintName())) {
+                    throw new DuplicateMedicalRecordNumberException(medicalRecordNumber);
+                }
+            }
+            throw exception;
+        }
     }
 
     /**

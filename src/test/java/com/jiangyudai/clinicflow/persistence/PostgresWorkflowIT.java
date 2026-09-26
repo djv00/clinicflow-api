@@ -10,6 +10,8 @@ import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterPhysicianAssignmentRepository;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
+import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
+import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
@@ -341,6 +343,74 @@ class PostgresWorkflowIT {
                     .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicatePhysicianCodeException.class);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM physicians WHERE physician_code = ?",
                     Integer.class, code)).isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void concurrentRegistrationOfTheSameMedicalRecordNumberReturnsABusinessConflict() throws Exception {
+        String number = "MRN-RACE-" + UUID.randomUUID().toString().substring(0, 16);
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var patient = patientService.createPatient(number, "Maya", "Chen", LocalDate.of(1990, 5, 14));
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return patient;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> patientService.createPatient(number, "Alex", "Martin", LocalDate.of(1985, 1, 1)));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).getMedicalRecordNumber()).isEqualTo(number);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicateMedicalRecordNumberException.class);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM patients WHERE medical_record_number = ?",
+                    Integer.class, number)).isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void concurrentAdmissionNumbersAcrossDifferentPatientsReturnABusinessConflict() throws Exception {
+        String number = "ENC-RACE-" + UUID.randomUUID().toString().substring(0, 16);
+        UUID firstPatient = patientService.createPatient(number + "-A", "Maya", "Chen", LocalDate.of(1990, 5, 14)).getId();
+        UUID secondPatient = patientService.createPatient(number + "-B", "Alex", "Martin", LocalDate.of(1985, 1, 1)).getId();
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var encounter = encounterService.admitPatient(firstPatient, number, ADMITTED_AT);
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return encounter;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> encounterService.admitPatient(secondPatient, number, ADMITTED_AT));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).getEncounterNumber()).isEqualTo(number);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicateEncounterNumberException.class);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounters WHERE encounter_number = ?",
+                    Integer.class, number)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounters WHERE patient_id = ?",
+                    Integer.class, secondPatient)).isZero();
         } finally {
             releaseFirst.countDown();
             executor.shutdownNow();

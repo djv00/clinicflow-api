@@ -17,6 +17,8 @@ import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.service.LocationService;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -103,7 +105,18 @@ public class EncounterService {
                 admittedAt
         );
 
-        return encounterRepository.save(encounter);
+        try {
+            return encounterRepository.saveAndFlush(encounter);
+        } catch (DataIntegrityViolationException exception) {
+            // The patient lock does not serialize admission numbers across different patients.
+            for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+                if (cause instanceof ConstraintViolationException violation
+                        && "uk_encounters_encounter_number".equalsIgnoreCase(violation.getConstraintName())) {
+                    throw new DuplicateEncounterNumberException(encounterNumber);
+                }
+            }
+            throw exception;
+        }
     }
 
     /**
