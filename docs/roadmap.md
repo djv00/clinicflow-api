@@ -23,13 +23,11 @@ history. Business rules are implemented in one Spring Boot backend.
 
 ## Remaining delivery sequence
 
-1. **Measure current queries.** Check SQL counts and representative PostgreSQL query
-   plans before deciding whether additional performance indexes are justified.
-2. **Automate key browser regressions.** Cover role differences, stale requests,
+1. **Automate key browser regressions.** Cover role differences, stale requests,
    physician closure during care changes, and recovery after unconfirmed saves.
-3. **Package deployment.** Provide a repeatable application-and-database startup,
+2. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
-4. **Prepare the interview walkthrough.** Explain the workflow, transaction
+3. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits after a tested slice,
@@ -60,6 +58,12 @@ to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
 
+- Query measurements use a fixed fictional dataset and real service SQL/bindings.
+  V8 adds the patient-history index; the existing inpatient projection and physician
+  batch fetch remain. Tests compare service responses before/after migration and
+  verify bounded SQL counts at different page sizes. EXPLAIN reports also retain
+  an unshipped worklist-index candidate for comparison. The full build passed 483
+  regular tests and 67 PostgreSQL tests. See [query performance](query-performance.md).
 - V7 adds database guarantees for active stays, open locations, current bed
   occupancy, and location time intervals. `PostgresInpatientIntegrityIT` covers
   preserved history during upgrade, refusal of inconsistent legacy records,
@@ -121,7 +125,7 @@ to user accounts only when a physician-specific login use case is implemented.
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).
 - IDEA's JUnit run-all action can include `PostgresWorkflowIT`,
-  `PostgresAccountsIT`, `PostgresDemoDataIT`, and `PostgresInpatientIntegrityIT`
+  `PostgresAccountsIT`, `PostgresDemoDataIT`, `PostgresInpatientIntegrityIT`, and `PostgresQueryPlansIT`
   directly. They still need that
   database environment; IDEA does not follow Maven's default test-file selection.
 - Browser checks cover empty and populated records, pagination, cancelled
