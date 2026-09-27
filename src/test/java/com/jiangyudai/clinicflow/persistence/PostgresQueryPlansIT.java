@@ -5,6 +5,7 @@ import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
 import com.jiangyudai.clinicflow.physician.service.PhysicianService;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -84,6 +85,8 @@ class PostgresQueryPlansIT {
         properties.add("spring.datasource.hikari.schema", () -> SCHEMA);
         properties.add("spring.flyway.default-schema", () -> SCHEMA);
         properties.add("spring.flyway.schemas", () -> SCHEMA);
+        // Seed and measure the same rows before applying the query indexes.
+        properties.add("spring.flyway.target", () -> "7");
         properties.add("spring.jpa.properties.hibernate.default_schema", () -> SCHEMA);
         // Fail instead of silently paginating a collection fetch in memory.
         properties.add("spring.jpa.properties.hibernate.query.fail_on_pagination_over_collection_fetch", () -> true);
@@ -166,10 +169,24 @@ class PostgresQueryPlansIT {
 
     @Test
     void recordsPlansForRealServiceQueries() throws Exception {
-        writePlans("current");
+        var before = writePlans("v7");
+        Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource())
+                .locations("classpath:db/migration/postgresql").schemas(SCHEMA).defaultSchema(SCHEMA).target("8").load();
+        assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(upgrade.migrate().migrationsExecuted).isZero();
+        assertThat(writePlans("v8")).isEqualTo(before);
+
+        // Measure the rejected candidate too: first-page gains can hide regressions in count/search queries.
+        jdbc.execute("CREATE INDEX idx_encounters_active_order_candidate ON encounters (admitted_at, encounter_number) "
+                + "WHERE status IN ('ADMITTED', 'IN_DEPARTMENT')");
+        try {
+            assertThat(writePlans("candidate-active-order")).isEqualTo(before);
+        } finally {
+            jdbc.execute("DROP INDEX " + SCHEMA + ".idx_encounters_active_order_candidate");
+        }
     }
 
-    private void writePlans(String label) throws Exception {
+    private Map<String, Object> writePlans(String label) throws Exception {
         var cases = new LinkedHashMap<String, Supplier<?>>();
         cases.put("history-first", () -> encounters.getPatientEncounters(patient, 0, 20));
         cases.put("history-next", () -> encounters.getPatientEncounters(patient, 1, 20));
@@ -182,15 +199,19 @@ class PostgresQueryPlansIT {
         cases.put("physicians-all", () -> physicians.search(null, null, null, 0, 20));
         cases.put("physicians-department", () -> physicians.search(null, department, true, 0, 20));
         var measurements = new LinkedHashMap<String, Object>();
+        var responses = new LinkedHashMap<String, Object>();
         for (var entry : cases.entrySet()) {
             var observation = QueryCapture.observe(entry.getValue());
             assertThat(observation.queries()).isNotEmpty();
+            responses.put(entry.getKey(), observation.result());
             var plans = new ArrayList<Object>();
             try (var connection = jdbc.getDataSource().getConnection()) {
                 connection.setAutoCommit(false);
                 try {
                     // These are parameter-specific plans, not a benchmark of generic prepared plans or concurrent load.
-                    connection.createStatement().execute("SET LOCAL plan_cache_mode = force_custom_plan");
+                    try (var statement = connection.createStatement()) {
+                        statement.execute("SET LOCAL plan_cache_mode = force_custom_plan");
+                    }
                     for (var query : observation.queries()) {
                         query.explain(connection); // Warm the same query before recording five samples.
                         var samples = new ArrayList<Object>();
@@ -213,10 +234,16 @@ class PostgresQueryPlansIT {
         report.put("dataset", Map.of("patients", 5000, "encounters", 151000, "locations", 150800,
                 "activeEncounters", 1000, "physicians", 1000, "affiliations", 2000));
         report.put("method", "Actual service SELECTs and JDBC bindings; one EXPLAIN warmup and five parameter-specific samples; no time thresholds.");
+        report.put("settings", jdbc.queryForList("SELECT name, setting, unit FROM pg_settings "
+                + "WHERE name IN ('shared_buffers', 'work_mem', 'random_page_cost', 'effective_cache_size', 'default_statistics_target') ORDER BY name"));
+        report.put("indexes", jdbc.queryForList("SELECT indexname, pg_relation_size(indexrelid) AS bytes "
+                + "FROM pg_indexes JOIN pg_stat_user_indexes ON indexname = indexrelname AND pg_indexes.schemaname = pg_stat_user_indexes.schemaname "
+                + "WHERE pg_indexes.schemaname = ? ORDER BY indexname", SCHEMA));
         report.put("cases", measurements);
         Path output = Path.of("target", "query-plans", label + ".json");
         Files.createDirectories(output.getParent());
         Files.writeString(output, JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report));
+        return responses;
     }
 
     private static String requiredEnvironment(String name) {
