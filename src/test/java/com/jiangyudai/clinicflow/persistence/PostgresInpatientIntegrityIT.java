@@ -1,11 +1,19 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
+import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
+import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
+import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
+import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,12 +23,21 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +56,14 @@ class PostgresInpatientIntegrityIT {
 
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+    @Autowired
+    private EncounterService encounterService;
+    @Autowired
+    private EncounterPhysicianService physicianService;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry properties) {
@@ -216,6 +241,236 @@ class PostgresInpatientIntegrityIT {
         jdbc.update("UPDATE encounter_locations SET ended_at = started_at WHERE id = ?", open);
         assertThatThrownBy(() -> jdbc.update("UPDATE encounter_locations SET started_at = ? WHERE id = ?", START.plusSeconds(1), open))
                 .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_encounter_locations_time");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"active-patient, false", "active-patient, true", "open-encounter, false",
+            "open-encounter, true", "open-bed, false", "open-bed, true"})
+    void competingDirectWritesWaitForCommitOrRollback(String rule, boolean rollBackFirst) throws Exception {
+        Fixture fixture = fixture(SCHEMA);
+        Supplier<UUID> firstWrite;
+        Supplier<UUID> secondWrite;
+        String table;
+        String constraint;
+        switch (rule) {
+            case "active-patient" -> {
+                jdbc.update("UPDATE encounters SET status = 'DISCHARGED' WHERE id = ?", fixture.encounter());
+                firstWrite = () -> encounter(SCHEMA, fixture.patient(), "ADMITTED");
+                secondWrite = () -> encounter(SCHEMA, fixture.patient(), "IN_DEPARTMENT");
+                table = "encounters";
+                constraint = "uk_encounters_active_patient";
+            }
+            case "open-encounter" -> {
+                firstWrite = () -> location(SCHEMA, fixture.encounter(), fixture, null, START, null);
+                secondWrite = () -> location(SCHEMA, fixture.encounter(), fixture, null, START, null);
+                table = "encounter_locations";
+                constraint = "uk_encounter_locations_open_encounter";
+            }
+            case "open-bed" -> {
+                UUID otherEncounter = encounter(SCHEMA, patient(SCHEMA), "IN_DEPARTMENT");
+                firstWrite = () -> location(SCHEMA, fixture.encounter(), fixture, fixture.bed(), START, null);
+                secondWrite = () -> location(SCHEMA, otherEncounter, fixture, fixture.bed(), START, null);
+                table = "encounter_locations";
+                constraint = "uk_encounter_locations_open_bed";
+            }
+            default -> throw new IllegalArgumentException(rule);
+        }
+        var transactions = transactions();
+        var firstWritten = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                UUID id = firstWrite.get();
+                firstWritten.countDown();
+                awaitRelease(releaseFirst);
+                if (rollBackFirst) {
+                    status.setRollbackOnly();
+                }
+                return id;
+            }));
+            assertThat(firstWritten.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> transactions.execute(status -> secondWrite.get()));
+            // No service or explicit row lock: the unique index itself must serialize these writes.
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            UUID firstId = first.get(10, TimeUnit.SECONDS);
+            if (rollBackFirst) {
+                UUID secondId = second.get(10, TimeUnit.SECONDS);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE id = ?", Integer.class, firstId)).isZero();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE id = ?", Integer.class, secondId)).isEqualTo(1);
+            } else {
+                assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS)).isInstanceOf(ExecutionException.class)
+                        .hasCauseInstanceOf(DataIntegrityViolationException.class).hasStackTraceContaining(constraint);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE id = ?", Integer.class, firstId)).isEqualTo(1);
+            }
+            String count = switch (rule) {
+                case "active-patient" -> "SELECT count(*) FROM encounters WHERE patient_id = ? AND status IN ('ADMITTED', 'IN_DEPARTMENT')";
+                case "open-encounter" -> "SELECT count(*) FROM encounter_locations WHERE encounter_id = ? AND ended_at IS NULL";
+                default -> "SELECT count(*) FROM encounter_locations WHERE bed_id = ? AND ended_at IS NULL";
+            };
+            UUID key = switch (rule) {
+                case "active-patient" -> fixture.patient();
+                case "open-encounter" -> fixture.encounter();
+                default -> fixture.bed();
+            };
+            assertThat(jdbc.queryForObject(count, Integer.class, key)).isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"same-bed", "different-bed", "no-bed"})
+    void transfersDepartmentsWithoutViolatingOpenLocationOrBedUniqueness(String destination) {
+        Fixture fixture = fixture(SCHEMA);
+        UUID initial = location(SCHEMA, fixture.encounter(), fixture, fixture.bed(), START, null);
+        UUID assignment = assignPhysician(fixture, initial);
+        UUID department = department();
+        UUID targetBed = switch (destination) {
+            case "same-bed" -> fixture.bed();
+            case "different-bed" -> {
+                UUID bed = UUID.randomUUID();
+                jdbc.update("INSERT INTO beds VALUES (?, '02', ?, true)", bed, fixture.ward());
+                yield bed;
+            }
+            default -> null;
+        };
+
+        var next = encounterService.transferEncounter(fixture.encounter(), department, fixture.ward(), targetBed,
+                START.plusHours(1), "test-clerk", initial);
+
+        var timeline = encounterService.getTimeline(fixture.encounter());
+        assertThat(timeline.locations()).hasSize(2);
+        assertThat(timeline.locations().getFirst().id()).isEqualTo(initial);
+        assertThat(timeline.locations().getFirst().endedAt()).isEqualTo(START.plusHours(1));
+        assertThat(timeline.locations().getLast().id()).isEqualTo(next.getId());
+        assertThat(timeline.locations().getLast().endedAt()).isNull();
+        assertThat(timeline.locations().getLast().bedId()).isEqualTo(targetBed);
+        var responsibility = physicianService.getAssignments(fixture.encounter());
+        assertThat(responsibility.currentAssignmentId()).isNull();
+        assertThat(responsibility.assignments()).singleElement().satisfies(row -> {
+            assertThat(row.id()).isEqualTo(assignment);
+            assertThat(row.endReason()).isEqualTo(PhysicianAssignmentEndReason.DEPARTMENT_TRANSFER);
+        });
+    }
+
+    @Test
+    void rollsBackLocationAndPhysicianClosureAfterReplacementHasBeenFlushed() {
+        Fixture fixture = fixture(SCHEMA);
+        UUID initial = location(SCHEMA, fixture.encounter(), fixture, fixture.bed(), START, null);
+        assignPhysician(fixture, initial);
+        UUID nextDepartment = department();
+        var before = encounterService.getTimeline(fixture.encounter());
+        var responsibility = physicianService.getAssignments(fixture.encounter());
+
+        assertThatThrownBy(() -> transactions().executeWithoutResult(status -> {
+            encounterService.transferEncounter(fixture.encounter(), nextDepartment, fixture.ward(), fixture.bed(),
+                    START.plusHours(1), "test-clerk", initial);
+            entityManager.flush();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_locations WHERE encounter_id = ?",
+                    Integer.class, fixture.encounter())).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_physician_assignments "
+                    + "WHERE encounter_id = ? AND ended_at IS NULL", Integer.class, fixture.encounter())).isZero();
+            throw new IllegalStateException("Failure after transfer reached the database");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after transfer reached the database");
+
+        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(before);
+        assertThat(physicianService.getAssignments(fixture.encounter())).isEqualTo(responsibility);
+        assertThat(jdbc.queryForObject("SELECT id FROM encounter_locations WHERE bed_id = ? AND ended_at IS NULL",
+                UUID.class, fixture.bed())).isEqualTo(initial);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void dischargeCorrectionAndReadmissionReuseReleasedKeys(boolean withBed) {
+        Fixture fixture = fixture(SCHEMA);
+        UUID bed = withBed ? fixture.bed() : null;
+        UUID initial = location(SCHEMA, fixture.encounter(), fixture, bed, START, null);
+        assignPhysician(fixture, initial);
+        encounterService.dischargeEncounter(fixture.encounter(), START.plusHours(1), "test-clerk", initial);
+        var discharged = encounterService.getTimeline(fixture.encounter());
+        UUID dischargeId = discharged.discharges().getFirst().id();
+
+        assertThatThrownBy(() -> transactions().executeWithoutResult(status -> {
+            encounterService.cancelDischarge(fixture.encounter(), START.plusHours(2), "test-clerk", dischargeId);
+            entityManager.flush();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_locations WHERE encounter_id = ? AND ended_at IS NULL",
+                    Integer.class, fixture.encounter())).isEqualTo(1);
+            throw new IllegalStateException("Failure after discharge correction reached the database");
+        })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after discharge correction reached the database");
+        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(discharged);
+
+        encounterService.cancelDischarge(fixture.encounter(), START.plusHours(2), "test-clerk", dischargeId);
+        var restored = encounterService.getTimeline(fixture.encounter());
+        assertThat(restored.encounter().status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        assertThat(restored.locations()).hasSize(2);
+        assertThat(restored.locations().getLast().bedId()).isEqualTo(bed);
+        assertThat(restored.locations().getLast().endedAt()).isNull();
+        assertThat(physicianService.getAssignments(fixture.encounter()).currentAssignmentId()).isNull();
+        encounterService.dischargeEncounter(fixture.encounter(), START.plusHours(3), "test-clerk", restored.locations().getLast().id());
+        var finalHistory = encounterService.getTimeline(fixture.encounter());
+        var readmitted = encounterService.admitPatient(fixture.patient(), UUID.randomUUID().toString(), START.plusHours(4));
+        encounterService.admitToDepartment(readmitted.getId(), fixture.department(), fixture.ward(), bed, START.plusHours(5));
+
+        assertThatThrownBy(() -> encounterService.cancelDischarge(fixture.encounter(), START.plusHours(6), "test-clerk"))
+                .isInstanceOf(ActiveEncounterExistsException.class);
+        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(finalHistory);
+        assertThat(jdbc.queryForObject("SELECT id FROM encounters WHERE patient_id = ? AND status IN ('ADMITTED', 'IN_DEPARTMENT')",
+                UUID.class, fixture.patient())).isEqualTo(readmitted.getId());
+    }
+
+    private UUID assignPhysician(Fixture fixture, UUID location) {
+        UUID physician = UUID.randomUUID();
+        jdbc.update("INSERT INTO physicians VALUES (?, ?, 'Test', 'Doctor', true, 0)", physician, physician.toString().substring(0, 20));
+        jdbc.update("INSERT INTO physician_departments VALUES (?, ?)", physician, fixture.department());
+        return physicianService.assign(fixture.encounter(), physician, location, null, START, "test-clerk").getId();
+    }
+
+    private UUID department() {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO departments VALUES (?, ?, 'Test Rehabilitation', true)", id, id.toString().substring(0, 20));
+        return id;
+    }
+
+    private TransactionTemplate transactions() {
+        var transactions = new TransactionTemplate(transactionManager);
+        transactions.setTimeout(20);
+        return transactions;
+    }
+
+    private void awaitBlockedBy(Future<?> contender, int blocker) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (contender.isDone()) {
+                contender.get();
+                throw new AssertionError("The second write completed without waiting for the first transaction");
+            }
+            if (Boolean.TRUE.equals(jdbc.queryForObject("""
+                    SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+                    WHERE datname = current_database() AND ? = ANY(pg_blocking_pids(pid)))
+                    """, Boolean.class, blocker))) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("PostgreSQL did not report the expected blocked write");
+    }
+
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(15, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting to finish the first transaction");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("First transaction was interrupted", exception);
+        }
     }
 
     private Flyway migrateTo(String schema, String version) {
