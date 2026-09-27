@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-23. This describes implemented behaviour and the next delivery
+Updated: 2026-09-26. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -56,6 +56,13 @@ to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
 
+- Workflow conflict fixes passed 483 regular tests and 36 PostgreSQL tests.
+  Transfer/discharge require the caller's last-seen location ID and reject it
+  under the encounter lock after a competing transfer. Patient/encounter number
+  races produce business conflicts. V6 normalizes existing numbers, retaining
+  IDs/references and rolling back when trimming would create blank or duplicate
+  values. Live HTTP checks confirmed the 400/409 contracts, and browser checks
+  confirmed successful transfer/discharge with the updated forms.
 - Responsibility page checks cover both entry points, department-filtered physician
   search and pagination, effective-time validation, assignment, handover, release,
   stale-form rejection, blocked duplicate saves, failed reads, and a committed save
