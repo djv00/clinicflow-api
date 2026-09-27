@@ -54,7 +54,7 @@ public class Patient {
             String lastName,
             LocalDate dateOfBirth
     ) {
-        this.medicalRecordNumber = medicalRecordNumber;
+        this.medicalRecordNumber = medicalRecordNumber.trim();
         this.firstName = firstName;
         this.lastName = lastName;
         this.dateOfBirth = dateOfBirth;

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
 import com.jiangyudai.clinicflow.encounter.service.InpatientQueryService;
@@ -10,7 +11,10 @@ import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterPhysicianAssignmentRepository;
 import com.jiangyudai.clinicflow.encounter.exception.BedOccupiedException;
+import com.jiangyudai.clinicflow.encounter.exception.DuplicateEncounterNumberException;
+import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
+import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationChangedException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
@@ -71,6 +75,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PostgresWorkflowIT {
+
+    @Autowired
+    private EncounterLocationRepository locations;
 
     private static final String SCHEMA = "clinicflow_it_" + UUID.randomUUID().toString().replace("-", "");
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");
@@ -154,7 +161,7 @@ class PostgresWorkflowIT {
                 EncounterStatus.IN_DEPARTMENT, locations.departmentId(), locations.wardId()), 0, 1);
         assertThat(filtered.totalElements()).isEqualTo(1);
         assertThat(filtered.items().getFirst().bedId()).isEqualTo(locations.firstBedId());
-        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1), "test-clerk");
+        encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1), "test-clerk", currentLocationId(placed));
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
         encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
@@ -349,6 +356,74 @@ class PostgresWorkflowIT {
     }
 
     @Test
+    void concurrentRegistrationOfTheSameMedicalRecordNumberReturnsABusinessConflict() throws Exception {
+        String number = "MRN-RACE-" + UUID.randomUUID().toString().substring(0, 16);
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var patient = patientService.createPatient(number, "Maya", "Chen", LocalDate.of(1990, 5, 14));
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return patient;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> patientService.createPatient(number, "Alex", "Martin", LocalDate.of(1985, 1, 1)));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).getMedicalRecordNumber()).isEqualTo(number);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicateMedicalRecordNumberException.class);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM patients WHERE medical_record_number = ?",
+                    Integer.class, number)).isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void concurrentAdmissionNumbersAcrossDifferentPatientsReturnABusinessConflict() throws Exception {
+        String number = "ENC-RACE-" + UUID.randomUUID().toString().substring(0, 16);
+        UUID firstPatient = patientService.createPatient(number + "-A", "Maya", "Chen", LocalDate.of(1990, 5, 14)).getId();
+        UUID secondPatient = patientService.createPatient(number + "-B", "Alex", "Martin", LocalDate.of(1985, 1, 1)).getId();
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var encounter = encounterService.admitPatient(firstPatient, number, ADMITTED_AT);
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return encounter;
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> encounterService.admitPatient(secondPatient, number, ADMITTED_AT));
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).getEncounterNumber()).isEqualTo(number);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(DuplicateEncounterNumberException.class);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounters WHERE encounter_number = ?",
+                    Integer.class, number)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounters WHERE patient_id = ?",
+                    Integer.class, secondPatient)).isZero();
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
     void searchesPatientsWithLiteralKeywordsAndStablePages() {
         String prefix = "SEARCH-" + UUID.randomUUID().toString().substring(0, 12);
         LocalDate dateOfBirth = LocalDate.of(1990, 5, 14);
@@ -399,7 +474,7 @@ class PostgresWorkflowIT {
         EncounterLocation initial = enterDepartment(encounterId, locations);
         OffsetDateTime dischargedAt = ENTERED_AT.plusDays(1);
 
-        encounterService.dischargeEncounter(encounterId, dischargedAt, "test-clerk");
+        encounterService.dischargeEncounter(encounterId, dischargedAt, "test-clerk", currentLocationId(encounterId));
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isFalse());
         encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk");
@@ -428,10 +503,10 @@ class PostgresWorkflowIT {
         UUID encounterId = admitPatient();
         enterDepartment(encounterId, createLocations());
         OffsetDateTime time = ENTERED_AT.plusDays(1);
-        encounterService.dischargeEncounter(encounterId, time, "test-clerk");
+        encounterService.dischargeEncounter(encounterId, time, "test-clerk", currentLocationId(encounterId));
         UUID originalId = encounterService.getTimeline(encounterId).discharges().getFirst().id();
         encounterService.cancelDischarge(encounterId, time.plusHours(1), "first-clerk", originalId);
-        encounterService.dischargeEncounter(encounterId, time, "test-clerk");
+        encounterService.dischargeEncounter(encounterId, time, "test-clerk", currentLocationId(encounterId));
         var before = encounterService.getTimeline(encounterId);
 
         assertThatThrownBy(() -> encounterService.cancelDischarge(
@@ -724,7 +799,7 @@ class PostgresWorkflowIT {
         var firstBackend = new AtomicInteger();
         var executor = Executors.newFixedThreadPool(2);
         Runnable assign = () -> encounterPhysicianService.assign(encounterId, physicianId, locationId, null, ENTERED_AT, "assign-clerk");
-        Runnable discharge = () -> encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk");
+        Runnable discharge = () -> encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk", currentLocationId(encounterId));
         try {
             var first = executor.submit(() -> transactions.executeWithoutResult(status -> {
                 firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
@@ -811,7 +886,7 @@ class PostgresWorkflowIT {
         try {
             var discharge = executor.submit(() -> transactions.executeWithoutResult(status -> {
                 firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
-                encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk");
+                encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(1), "discharge-clerk", currentLocationId(encounterId));
                 entityManager.flush();
                 firstFlushed.countDown();
                 awaitRelease(releaseFirst);
@@ -905,7 +980,7 @@ class PostgresWorkflowIT {
 
     private void transfer(UUID encounterId, Locations locations) {
         encounterService.transferEncounter(encounterId, locations.departmentId(),
-                locations.wardId(), locations.secondBedId(), ENTERED_AT.plusHours(1), "test-clerk");
+                locations.wardId(), locations.secondBedId(), ENTERED_AT.plusHours(1), "test-clerk", currentLocationId(encounterId));
     }
 
     private Locations createLocations() {
@@ -932,5 +1007,129 @@ class PostgresWorkflowIT {
     }
 
     private record Locations(UUID departmentId, UUID wardId, UUID firstBedId, UUID secondBedId) {
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void staleWorkflowWaitsForTransferThenPreservesTheNewCareState(boolean discharge) throws Exception {
+        Locations placement = createLocations();
+        UUID encounterId = admitPatient();
+        UUID seenLocationId = enterDepartment(encounterId, placement).getId();
+        UUID physicianId = createPhysician(placement.departmentId());
+        var assignment = encounterPhysicianService.assign(encounterId, physicianId, seenLocationId, null,
+                ENTERED_AT, "test-operator");
+        var firstFlushed = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var firstBackend = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> transactions.execute(status -> {
+                firstBackend.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                var moved = encounterService.transferEncounter(encounterId, placement.departmentId(),
+                        placement.wardId(), placement.secondBedId(), ENTERED_AT.plusHours(1), "other-clerk", seenLocationId);
+                entityManager.flush();
+                firstFlushed.countDown();
+                awaitRelease(releaseFirst);
+                return moved.getId();
+            }));
+            assertThat(firstFlushed.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> {
+                if (discharge) {
+                    encounterService.dischargeEncounter(encounterId, ENTERED_AT.plusHours(2), "stale-clerk", seenLocationId);
+                } else {
+                    encounterService.transferEncounter(encounterId, placement.departmentId(), placement.wardId(),
+                            placement.firstBedId(), ENTERED_AT.plusHours(2), "stale-clerk", seenLocationId);
+                }
+            });
+            awaitBlockedBy(second, firstBackend.get());
+            releaseFirst.countDown();
+
+            UUID movedId = first.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(EncounterLocationChangedException.class);
+            assertThat(encounterService.getEncounter(encounterId).getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+            assertThat(currentLocationId(encounterId)).isEqualTo(movedId);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_locations WHERE encounter_id = ?",
+                    Integer.class, encounterId)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_discharges WHERE encounter_id = ?",
+                    Integer.class, encounterId)).isZero();
+            assertThat(assignmentRepository.findById(assignment.getId()).orElseThrow().getEndedAt()).isNull();
+            assertThat(locations.existsByBed_IdAndEndedAtIsNull(placement.firstBedId())).isFalse();
+            assertThat(locations.existsByBed_IdAndEndedAtIsNull(placement.secondBedId())).isTrue();
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void numberMigrationTrimsLegacyValuesAndPreservesReferences() {
+        String schema = "clinicflow_numbers_" + UUID.randomUUID().toString().replace("-", "");
+        UUID patientId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+        try {
+            Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("5").load().migrate();
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Maya', 'Chen', DATE '1990-05-14')",
+                    patientId, "\t Legacy-Mrn A \r\n");
+            jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                    + "VALUES (?, ?, ?, 'ADMITTED', ?)", encounterId, "\t Legacy-Enc B \r\n", patientId, ADMITTED_AT);
+            Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("6").load();
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            assertThat(jdbc.queryForObject("SELECT medical_record_number FROM " + schema + ".patients WHERE id = ?",
+                    String.class, patientId)).isEqualTo("Legacy-Mrn A");
+            assertThat(jdbc.queryForObject("SELECT encounter_number FROM " + schema + ".encounters WHERE id = ?",
+                    String.class, encounterId)).isEqualTo("Legacy-Enc B");
+            assertThat(jdbc.queryForObject("SELECT patient_id FROM " + schema + ".encounters WHERE id = ?",
+                    UUID.class, encounterId)).isEqualTo(patientId);
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"patient-duplicate", "encounter-duplicate", "patient-blank", "encounter-blank"})
+    void numberMigrationRefusesAmbiguousLegacyDataWithoutChangingIt(String problem) {
+        String schema = "clinicflow_numbers_" + UUID.randomUUID().toString().replace("-", "");
+        UUID patientId = UUID.randomUUID();
+        UUID otherPatientId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+        try {
+            Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("5").load().migrate();
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Maya', 'Chen', DATE '1990-05-14')",
+                    patientId, " LEGACY-P ");
+            String otherNumber = problem.equals("patient-duplicate") ? "LEGACY-P"
+                    : problem.equals("patient-blank") ? " \t" : "OTHER-P";
+            jdbc.update("INSERT INTO " + schema + ".patients VALUES (?, ?, 'Alex', 'Martin', DATE '1985-01-01')",
+                    otherPatientId, otherNumber);
+            jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                    + "VALUES (?, ?, ?, 'ADMITTED', ?)", encounterId, " LEGACY-E ", patientId, ADMITTED_AT);
+            if (problem.startsWith("encounter")) {
+                jdbc.update("INSERT INTO " + schema + ".encounters (id, encounter_number, patient_id, status, admitted_at) "
+                        + "VALUES (?, ?, ?, 'ADMITTED', ?)", UUID.randomUUID(),
+                        problem.equals("encounter-duplicate") ? "LEGACY-E" : " \t", otherPatientId, ADMITTED_AT);
+            }
+            Flyway upgrade = Flyway.configure().dataSource(jdbc.getDataSource()).locations("classpath:db/migration/postgresql")
+                    .schemas(schema).defaultSchema(schema).target("6").load();
+            assertThatThrownBy(upgrade::migrate).isInstanceOf(org.flywaydb.core.api.FlywayException.class)
+                    .hasStackTraceContaining("Resolve the existing records before migrating.");
+            assertThat(jdbc.queryForObject("SELECT medical_record_number FROM " + schema + ".patients WHERE id = ?",
+                    String.class, patientId)).isEqualTo(" LEGACY-P ");
+            assertThat(jdbc.queryForObject("SELECT encounter_number FROM " + schema + ".encounters WHERE id = ?",
+                    String.class, encounterId)).isEqualTo(" LEGACY-E ");
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + schema + ".flyway_schema_history WHERE version = '6'",
+                    Integer.class)).isZero();
+        } finally {
+            jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
     }
 }

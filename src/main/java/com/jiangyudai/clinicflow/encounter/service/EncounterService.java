@@ -17,6 +17,8 @@ import com.jiangyudai.clinicflow.location.entity.Ward;
 import com.jiangyudai.clinicflow.location.service.LocationService;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -74,6 +76,7 @@ public class EncounterService {
             String encounterNumber,
             OffsetDateTime admittedAt
     ) {
+        encounterNumber = encounterNumber.trim();
         if (admittedAt.isAfter(OffsetDateTime.now())) {
             throw new InvalidAdmissionTimeException(admittedAt);
         }
@@ -103,7 +106,18 @@ public class EncounterService {
                 admittedAt
         );
 
-        return encounterRepository.save(encounter);
+        try {
+            return encounterRepository.saveAndFlush(encounter);
+        } catch (DataIntegrityViolationException exception) {
+            // The patient lock does not serialize admission numbers across different patients.
+            for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+                if (cause instanceof ConstraintViolationException violation
+                        && "uk_encounters_encounter_number".equalsIgnoreCase(violation.getConstraintName())) {
+                    throw new DuplicateEncounterNumberException(encounterNumber);
+                }
+            }
+            throw exception;
+        }
     }
 
     /**
@@ -195,7 +209,8 @@ public class EncounterService {
             UUID wardId,
             UUID bedId,
             OffsetDateTime transferredAt,
-            String operator
+            String operator,
+            UUID expectedLocationId
     ) {
         if (transferredAt == null) {
             throw new InvalidEncounterTransferTimeException(
@@ -224,6 +239,8 @@ public class EncounterService {
                                 encounterId
                         )
                 );
+
+        checkExpectedLocation(currentLocation, expectedLocationId);
 
         if (transferredAt.isBefore(currentLocation.getStartedAt())) {
             throw new InvalidEncounterTransferTimeException(
@@ -289,7 +306,8 @@ public class EncounterService {
     public Encounter dischargeEncounter(
             UUID encounterId,
             OffsetDateTime dischargedAt,
-            String operator
+            String operator,
+            UUID expectedLocationId
     ) {
         if (dischargedAt == null) {
             throw new InvalidDischargeTimeException(
@@ -314,6 +332,8 @@ public class EncounterService {
                 .orElseThrow(() ->
                         new CurrentEncounterLocationNotFoundException(encounterId)
                 );
+
+        checkExpectedLocation(currentLocation, expectedLocationId);
 
         if (dischargedAt.isBefore(currentLocation.getStartedAt())) {
             throw new InvalidDischargeTimeException(
@@ -477,6 +497,13 @@ public class EncounterService {
         PageRequest pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "admittedAt", "encounterNumber"));
         return EncounterPageResponse.from(encounterRepository.findAllByPatient_Id(patientId, pageable));
+    }
+
+    // The caller's placement must still be current after acquiring the encounter lock.
+    private void checkExpectedLocation(EncounterLocation currentLocation, UUID expectedLocationId) {
+        if (expectedLocationId == null || !expectedLocationId.equals(currentLocation.getId())) {
+            throw new EncounterLocationChangedException();
+        }
     }
 
     private void checkBedHistory(UUID bedId, OffsetDateTime startedAt) {

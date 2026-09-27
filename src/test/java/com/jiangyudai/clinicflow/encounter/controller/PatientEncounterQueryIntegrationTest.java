@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Department;
@@ -34,6 +35,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class PatientEncounterQueryIntegrationTest {
 
+    @Autowired
+    private EncounterLocationRepository locations;
+
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");
     private static final String PATH = "/api/v1/patients/{patientId}/encounters";
 
@@ -64,7 +68,7 @@ class PatientEncounterQueryIntegrationTest {
         Encounter discharged = encounterService.admitPatient(patient.getId(), "VISIT-002", ADMITTED_AT.minusDays(1));
         encounterService.admitToDepartment(discharged.getId(), department.getId(), ward.getId(), null,
                 ADMITTED_AT.minusDays(1).plusHours(1));
-        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.minusDays(1).plusHours(2), "test-clerk");
+        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.minusDays(1).plusHours(2), "test-clerk", currentLocationId(discharged.getId()));
         current = encounterService.admitPatient(patient.getId(), "VISIT-003", ADMITTED_AT);
 
         Patient other = patientService.createPatient("HISTORY-002", "Maya", "Chen", LocalDate.of(1980, 6, 15));
@@ -171,7 +175,7 @@ class PatientEncounterQueryIntegrationTest {
         mockMvc.perform(get(PATH, patient.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("IN_DEPARTMENT"));
-        encounterService.dischargeEncounter(current.getId(), ADMITTED_AT.plusHours(2), "test-clerk");
+        encounterService.dischargeEncounter(current.getId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(current.getId()));
         mockMvc.perform(get(PATH, patient.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("DISCHARGED"))
@@ -182,5 +186,10 @@ class PatientEncounterQueryIntegrationTest {
                 .andExpect(jsonPath("$.items[0].status").value("IN_DEPARTMENT"))
                 .andExpect(jsonPath("$.items[0].dischargedAt").isEmpty())
                 .andExpect(jsonPath("$.totalElements").value(3));
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }

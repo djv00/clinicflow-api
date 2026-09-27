@@ -25,7 +25,10 @@ public record TransferEncounterRequest(
         @PastOrPresent(
                 message = "Transfer time cannot be in the future"
         )
-        OffsetDateTime transferredAt
+        OffsetDateTime transferredAt,
+
+        @NotNull(message = "Expected location ID is required")
+        UUID expectedLocationId
 ) {
 
 }

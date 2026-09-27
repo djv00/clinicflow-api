@@ -6,6 +6,7 @@ import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
+import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationChangedException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -78,7 +79,7 @@ class EncounterDischargeIntegrationTest {
     @ValueSource(booleans = {true, false})
     void dischargesThroughApiAndRejectsRepeat(boolean withBed) throws Exception {
         DischargeData data = createDischargeData(withBed);
-        String request = "{\"dischargedAt\": \"" + data.dischargedAt() + "\"}";
+        String request = "{\"dischargedAt\": \"" + data.dischargedAt() + "\", \"expectedLocationId\": \"" + currentLocationId(data.encounterId()) + "\"}";
 
         MvcResult result = mockMvc.perform(post(
                         "/api/v1/encounters/{id}/discharges", data.encounterId()
@@ -112,10 +113,10 @@ class EncounterDischargeIntegrationTest {
         DischargeData first = createDischargeData(true);
         DischargeData second = createDischargeData(false);
 
-        encounterService.dischargeEncounter(first.encounterId(), first.dischargedAt(), "test-clerk");
+        encounterService.dischargeEncounter(first.encounterId(), first.dischargedAt(), "test-clerk", currentLocationId(first.encounterId()));
         encounterService.transferEncounter(
                 second.encounterId(), first.departmentId(), first.wardId(),
-                first.bedId(), second.dischargedAt(), "test-clerk"
+                first.bedId(), second.dischargedAt(), "test-clerk", currentLocationId(second.encounterId())
         );
 
         Encounter readmission = encounterService.admitPatient(
@@ -141,10 +142,10 @@ class EncounterDischargeIntegrationTest {
         OffsetDateTime transferredAt = data.startedAt().plusHours(1);
         encounterService.transferEncounter(
                 data.encounterId(), data.departmentId(), data.wardId(),
-                data.otherBedId(), transferredAt, "test-clerk"
+                data.otherBedId(), transferredAt, "test-clerk", currentLocationId(data.encounterId())
         );
 
-        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk", currentLocationId(data.encounterId()));
 
         assertDischarged(data, 2);
         transactions.executeWithoutResult(status -> {
@@ -163,7 +164,7 @@ class EncounterDischargeIntegrationTest {
         DischargeData data = createDischargeData(true);
 
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
-            encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
+            encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk", currentLocationId(data.encounterId()));
             entityManager.flush();
             throw new IllegalStateException("Simulated failure after discharge");
         })).isInstanceOf(IllegalStateException.class)
@@ -191,7 +192,7 @@ class EncounterDischargeIntegrationTest {
 
         try {
             Future<?> secondAttempt = transactions.execute(status -> {
-                encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
+                encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk", currentLocationId(data.encounterId()));
                 entityManager.flush();
                 int sessionId = ((Number) entityManager.createNativeQuery("select session_id()")
                         .getSingleResult()).intValue();
@@ -200,10 +201,10 @@ class EncounterDischargeIntegrationTest {
                     if (transfer) {
                         encounterService.transferEncounter(
                                 data.encounterId(), data.departmentId(), data.wardId(),
-                                data.otherBedId(), data.dischargedAt(), "test-clerk"
+                                data.otherBedId(), data.dischargedAt(), "test-clerk", currentLocationId(data.encounterId())
                         );
                     } else {
-                        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk");
+                        encounterService.dischargeEncounter(data.encounterId(), data.dischargedAt(), "test-clerk", currentLocationId(data.encounterId()));
                     }
                 });
                 awaitBlockedWorkflow(sessionId, attempt);
@@ -222,7 +223,7 @@ class EncounterDischargeIntegrationTest {
     }
 
     @Test
-    void dischargeWaitingForTransferValidatesTheNewLocationTime() throws Exception {
+    void dischargeWaitingForTransferRejectsTheOldLocation() throws Exception {
         DischargeData data = createDischargeData(true);
         OffsetDateTime transferredAt = data.startedAt().plusHours(1);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -231,13 +232,13 @@ class EncounterDischargeIntegrationTest {
             Future<?> discharge = transactions.execute(status -> {
                 encounterService.transferEncounter(
                         data.encounterId(), data.departmentId(), data.wardId(),
-                        data.otherBedId(), transferredAt, "test-clerk"
+                        data.otherBedId(), transferredAt, "test-clerk", currentLocationId(data.encounterId())
                 );
                 entityManager.flush();
                 int sessionId = ((Number) entityManager.createNativeQuery("select session_id()")
                         .getSingleResult()).intValue();
                 Future<?> attempt = executor.submit(() ->
-                        encounterService.dischargeEncounter(data.encounterId(), data.startedAt(), "test-clerk")
+                        encounterService.dischargeEncounter(data.encounterId(), data.startedAt(), "test-clerk", currentLocationId(data.encounterId()))
                 );
                 awaitBlockedWorkflow(sessionId, attempt);
                 return attempt;
@@ -246,7 +247,7 @@ class EncounterDischargeIntegrationTest {
             assertThat(discharge).isNotNull();
             assertThatThrownBy(() -> discharge.get(10, TimeUnit.SECONDS))
                     .isInstanceOf(ExecutionException.class)
-                    .hasCauseInstanceOf(InvalidDischargeTimeException.class);
+                    .hasCauseInstanceOf(EncounterLocationChangedException.class);
 
             transactions.executeWithoutResult(status -> {
                 Encounter encounter = encounterRepository.findById(data.encounterId()).orElseThrow();
@@ -350,5 +351,30 @@ class EncounterDischargeIntegrationTest {
             OffsetDateTime startedAt,
             OffsetDateTime dischargedAt
     ) {
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return encounterLocationRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void apiRejectsStalePlacementAfterAnotherTransfer(boolean discharge) throws Exception {
+        DischargeData data = createDischargeData(true);
+        UUID seenLocation = currentLocationId(data.encounterId());
+        encounterService.transferEncounter(data.encounterId(), data.departmentId(), data.wardId(),
+                data.otherBedId(), data.startedAt().plusHours(1), "other-clerk", seenLocation);
+        var before = encounterService.getTimeline(data.encounterId());
+        String body = discharge
+                ? "{\"dischargedAt\":\"%s\",\"expectedLocationId\":\"%s\"}"
+                    .formatted(data.dischargedAt(), seenLocation)
+                : "{\"departmentId\":\"%s\",\"wardId\":\"%s\",\"transferredAt\":\"%s\",\"expectedLocationId\":\"%s\"}"
+                    .formatted(data.departmentId(), data.wardId(), data.dischargedAt(), seenLocation);
+        mockMvc.perform(post("/api/v1/encounters/{id}/" + (discharge ? "discharges" : "transfers"), data.encounterId())
+                        .with(csrf()).contentType("application/json").content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("The current placement has changed. Reload it before saving."));
+        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
     }
 }

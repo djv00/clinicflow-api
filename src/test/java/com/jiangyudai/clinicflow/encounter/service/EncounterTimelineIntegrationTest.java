@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
@@ -45,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterTimelineIntegrationTest {
+
+    @Autowired
+    private EncounterLocationRepository locations;
 
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T08:00:00-04:00");
 
@@ -103,9 +107,9 @@ class EncounterTimelineIntegrationTest {
         TimelineData data = createData();
         EncounterLocation first = enter(data, withBed ? data.bedId() : null);
         EncounterLocation transferred = encounterService.transferEncounter(
-                data.encounterId(), data.departmentId(), data.wardId(), data.otherBedId(), ADMITTED_AT.plusHours(2), "test-clerk"
+                data.encounterId(), data.departmentId(), data.wardId(), data.otherBedId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(data.encounterId())
         );
-        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(3), "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(data.encounterId()));
         EncounterTimelineResponse discharged = encounterService.getTimeline(data.encounterId());
         assertThat(discharged.encounter().status()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(discharged.locations()).allSatisfy(location -> assertThat(location.endedAt()).isNotNull());
@@ -134,7 +138,7 @@ class EncounterTimelineIntegrationTest {
         assertInstant(response, "$.discharges[0].cancelledAt", ADMITTED_AT.plusHours(4));
         assertThat(readJson(data.encounterId())).isEqualTo(response);
 
-        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(5), "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(5), "test-clerk", currentLocationId(data.encounterId()));
         EncounterTimelineResponse finalTimeline = encounterService.getTimeline(data.encounterId());
         assertThat(finalTimeline.encounter().dischargedAt()).isEqualTo(ADMITTED_AT.plusHours(5));
         assertThat(finalTimeline.locations()).hasSize(3);
@@ -151,12 +155,12 @@ class EncounterTimelineIntegrationTest {
         OffsetDateTime time = ADMITTED_AT.plusHours(1);
         EncounterLocation first = enter(data, data.bedId());
         EncounterLocation transferred = encounterService.transferEncounter(
-                data.encounterId(), data.departmentId(), data.wardId(), data.otherBedId(), time, "test-clerk"
+                data.encounterId(), data.departmentId(), data.wardId(), data.otherBedId(), time, "test-clerk", currentLocationId(data.encounterId())
         );
-        encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk", currentLocationId(data.encounterId()));
         encounterService.cancelDischarge(data.encounterId(), time.plusHours(1), "first-clerk");
         UUID firstRestored = encounterService.getDischarges(data.encounterId()).getFirst().getRestoredLocation().getId();
-        encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk", currentLocationId(data.encounterId()));
         encounterService.cancelDischarge(data.encounterId(), time.plusHours(2), "second-clerk");
 
         EncounterTimelineResponse timeline = encounterService.getTimeline(data.encounterId());
@@ -183,7 +187,7 @@ class EncounterTimelineIntegrationTest {
     void doesNotIncludeAnotherEncounterForTheSamePatient() {
         TimelineData first = createData();
         EncounterLocation firstLocation = enter(first, null);
-        encounterService.dischargeEncounter(first.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk");
+        encounterService.dischargeEncounter(first.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(first.encounterId()));
         Encounter later = encounterService.admitPatient(first.patientId(), "ENC-" + UUID.randomUUID(), ADMITTED_AT.plusDays(1));
         EncounterLocation laterLocation = encounterService.admitToDepartment(
                 later.getId(), first.departmentId(), first.wardId(), first.bedId(), ADMITTED_AT.plusDays(1)
@@ -205,7 +209,7 @@ class EncounterTimelineIntegrationTest {
     void retainsHistoricalReferencesAfterTheyAreDeactivated() throws Exception {
         TimelineData data = createData();
         enter(data, data.bedId());
-        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk");
+        encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(data.encounterId()));
         transactions.executeWithoutResult(status -> {
             entityManager.createNativeQuery("update departments set active = false where id = ?1")
                     .setParameter(1, data.departmentId()).executeUpdate();
@@ -242,7 +246,7 @@ class EncounterTimelineIntegrationTest {
         var executor = Executors.newSingleThreadExecutor();
         try {
             Future<EncounterTimelineResponse> read = transactions.execute(status -> {
-                encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk");
+                encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(data.encounterId()));
                 entityManager.flush();
                 int sessionId = currentSessionId();
                 Future<EncounterTimelineResponse> pending = executor.submit(() -> encounterService.getTimeline(data.encounterId()));
@@ -274,7 +278,7 @@ class EncounterTimelineIntegrationTest {
             ConcurrentRead read = transactions.execute(status -> {
                 EncounterTimelineResponse timeline = encounterService.getTimeline(data.encounterId());
                 int sessionId = currentSessionId();
-                Future<?> writer = executor.submit(() -> encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk"));
+                Future<?> writer = executor.submit(() -> encounterService.dischargeEncounter(data.encounterId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(data.encounterId())));
                 awaitBlockedWorkflow(sessionId, writer);
                 return new ConcurrentRead(timeline, writer);
             });
@@ -352,5 +356,10 @@ class EncounterTimelineIntegrationTest {
     }
 
     private record ConcurrentRead(EncounterTimelineResponse timeline, Future<?> writer) {
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }

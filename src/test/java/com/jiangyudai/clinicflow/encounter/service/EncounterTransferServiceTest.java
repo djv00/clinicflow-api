@@ -33,6 +33,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EncounterTransferServiceTest {
 
+    private static final UUID CURRENT_LOCATION_ID = UUID.fromString("99999999-1111-2222-3333-444444444444");
+
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "11111111-1111-1111-1111-111111111111"
     );
@@ -172,6 +174,7 @@ class EncounterTransferServiceTest {
                 currentBed,
                 CURRENT_STARTED_AT
         );
+        ReflectionTestUtils.setField(currentLocation, "id", CURRENT_LOCATION_ID);
     }
 
     @Test
@@ -194,7 +197,7 @@ class EncounterTransferServiceTest {
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
                         TARGET_BED_ID,
-                        TRANSFERRED_AT, "test-clerk"
+                        TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -235,7 +238,7 @@ class EncounterTransferServiceTest {
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
                         null,
-                        TRANSFERRED_AT, "test-clerk"
+                        TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -265,7 +268,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                null, "test-clerk"
+                null, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("required");
 
@@ -286,7 +289,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT, "test-clerk"
+                TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(EncounterNotFoundException.class);
 
         verifyNoInteractions(
@@ -316,7 +319,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT, "test-clerk"
+                TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterStatusException.class)
                 .hasMessageContaining("IN_DEPARTMENT");
 
@@ -340,7 +343,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT, "test-clerk"
+                TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(
                 CurrentEncounterLocationNotFoundException.class
         );
@@ -359,7 +362,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                CURRENT_STARTED_AT.minusSeconds(1), "test-clerk"
+                CURRENT_STARTED_AT.minusSeconds(1), "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining(
                         "before the current location start time"
@@ -380,7 +383,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                OffsetDateTime.now().plusDays(1), "test-clerk"
+                OffsetDateTime.now().plusDays(1), "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("future");
 
@@ -421,7 +424,7 @@ class EncounterTransferServiceTest {
                         CURRENT_DEPARTMENT_ID,
                         CURRENT_WARD_ID,
                         TARGET_BED_ID,
-                        TRANSFERRED_AT, "test-clerk"
+                        TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
                 );
 
         assertThat(currentLocation.getEndedAt())
@@ -457,7 +460,7 @@ class EncounterTransferServiceTest {
                 CURRENT_DEPARTMENT_ID,
                 CURRENT_WARD_ID,
                 CURRENT_BED_ID,
-                TRANSFERRED_AT, "test-clerk"
+                TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(SameEncounterLocationException.class);
 
         assertThat(currentLocation.getEndedAt()).isNull();
@@ -493,7 +496,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                TRANSFERRED_AT, "test-clerk"
+                TRANSFERRED_AT, "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(BedOccupiedException.class);
 
         assertThat(currentLocation.getEndedAt()).isNull();
@@ -518,5 +521,19 @@ class EncounterTransferServiceTest {
 
         when(locationService.getActiveWard(TARGET_WARD_ID))
                 .thenReturn(targetWard);
+    }
+
+    @Test
+    void rejectsStaleOrMissingLocationWithoutChangingCare() {
+        when(encounterRepository.findByIdForUpdate(ENCOUNTER_ID)).thenReturn(Optional.of(encounter));
+        when(encounterLocationRepository.findByEncounter_IdAndEndedAtIsNull(ENCOUNTER_ID))
+                .thenReturn(Optional.of(currentLocation));
+        for (UUID expected : new UUID[]{UUID.randomUUID(), null}) {
+            assertThatThrownBy(() -> encounterService.transferEncounter(ENCOUNTER_ID, TARGET_DEPARTMENT_ID, TARGET_WARD_ID, TARGET_BED_ID, TRANSFERRED_AT, "test-clerk", expected))
+                    .isInstanceOf(EncounterLocationChangedException.class);
+        }
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        assertThat(currentLocation.getEndedAt()).isNull();
+        verifyNoInteractions(locationService, physicianService);
     }
 }

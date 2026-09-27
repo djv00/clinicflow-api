@@ -86,7 +86,7 @@ class EncounterTransferIntegrationTest {
                 data.targetDepartmentId(),
                 data.targetWardId(),
                 data.targetBedId(),
-                data.transferredAt(), "test-clerk"
+                data.transferredAt(), "test-clerk", currentLocationId(data.encounterId())
         );
 
         assertThat(result.getId()).isNotNull();
@@ -164,7 +164,7 @@ class EncounterTransferIntegrationTest {
                             data.targetDepartmentId(),
                             data.targetWardId(),
                             data.targetBedId(),
-                            data.transferredAt(), "test-clerk"
+                            data.transferredAt(), "test-clerk", currentLocationId(data.encounterId())
                     );
 
                     // Force the update and insert before simulating failure.
@@ -235,7 +235,7 @@ class EncounterTransferIntegrationTest {
                                 first.targetDepartmentId(),
                                 first.targetWardId(),
                                 first.targetBedId(),
-                                first.transferredAt(), "test-clerk"
+                                first.transferredAt(), "test-clerk", currentLocationId(first.encounterId())
                         );
 
                         entityManager.flush();
@@ -252,7 +252,7 @@ class EncounterTransferIntegrationTest {
                                                 first.targetDepartmentId(),
                                                 first.targetWardId(),
                                                 first.targetBedId(),
-                                                second.transferredAt(), "test-clerk"
+                                                second.transferredAt(), "test-clerk", currentLocationId(second.encounterId())
                                         )
                                 );
 
@@ -359,13 +359,15 @@ class EncounterTransferIntegrationTest {
                           "departmentId": "%s",
                           "wardId": "%s",
                           "bedId": "%s",
-                          "transferredAt": "%s"
+                          "transferredAt": "%s",
+                          "expectedLocationId": "%s"
                         }
                         """.formatted(
                                 data.targetDepartmentId(),
                                 data.targetWardId(),
                                 data.targetBedId(),
-                                transferredAtJson
+                                transferredAtJson,
+                                currentLocationId(data.encounterId())
                         )))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
@@ -575,5 +577,10 @@ class EncounterTransferIntegrationTest {
             OffsetDateTime currentStartedAt,
             OffsetDateTime transferredAt
     ) {
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return encounterLocationRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }

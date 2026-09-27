@@ -220,6 +220,7 @@ public class ApiExceptionHandler {
             CurrentEncounterLocationNotFoundException.class,
             EncounterLocationAlreadyEndedException.class,
             EncounterLocationHistoryExistsException.class,
+            EncounterLocationChangedException.class,
             DischargeRecordConflictException.class,
             SameEncounterLocationException.class,
             InvalidEncounterStatusException.class

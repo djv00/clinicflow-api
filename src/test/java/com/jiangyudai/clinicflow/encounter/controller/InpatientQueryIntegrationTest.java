@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -32,6 +33,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class InpatientQueryIntegrationTest {
+
+    @Autowired
+    private EncounterLocationRepository locations;
     private static final String PATH = "/api/v1/inpatients";
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");
 
@@ -62,10 +66,10 @@ class InpatientQueryIntegrationTest {
         waiting = admit("STAY-001", "MRN-001", "Maya", "Chen");
         placed = admit("STAY-002", "MRN-002", "Evan", "Cole");
         encounterService.admitToDepartment(placed.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
-        encounterService.transferEncounter(placed.getId(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2), "test-clerk");
+        encounterService.transferEncounter(placed.getId(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(placed.getId()));
         Encounter discharged = admit("STAY-003", "MRN-003", "Theo", "Gray");
         encounterService.admitToDepartment(discharged.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(2));
-        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.plusHours(3), "test-clerk");
+        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(discharged.getId()));
         Encounter cancelled = admit("STAY-004", "MRN-004", "Lena", "Ross");
         encounterService.cancelAdmission(cancelled.getId(), ADMITTED_AT.plusMinutes(30), "test-clerk");
         entityManager.flush();
@@ -156,7 +160,7 @@ class InpatientQueryIntegrationTest {
     @Test
     void reflectsEntryDischargeAndCancellationWithoutDuplicatingHistoricalLocations() throws Exception {
         encounterService.admitToDepartment(waiting.getId(), medicine.getId(), firstWard.getId(), null, ADMITTED_AT.plusHours(1));
-        encounterService.dischargeEncounter(placed.getId(), ADMITTED_AT.plusHours(4), "test-clerk");
+        encounterService.dischargeEncounter(placed.getId(), ADMITTED_AT.plusHours(4), "test-clerk", currentLocationId(placed.getId()));
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         encounterService.cancelDischarge(placed.getId(), ADMITTED_AT.plusHours(5), "test-clerk");
@@ -192,5 +196,10 @@ class InpatientQueryIntegrationTest {
     private Encounter admit(String encounterNumber, String mrn, String firstName, String lastName) {
         Patient patient = patientService.createPatient(mrn, firstName, lastName, LocalDate.of(1990, 5, 14));
         return encounterService.admitPatient(patient.getId(), encounterNumber, ADMITTED_AT);
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.dto.PhysicianAssignmentResponse;
 import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
@@ -45,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class EncounterPhysicianApiIntegrationTest {
+
+    @Autowired
+    private EncounterLocationRepository locations;
     private static final OffsetDateTime ENTERED = OffsetDateTime.parse("2025-09-01T10:00:00-04:00");
     @Autowired private MockMvc mvc;
     @Autowired private JsonMapper mapper;
@@ -135,7 +139,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(get(path(encounterId)).with(user("operator").roles("OPERATOR")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.currentAssignmentId").value(first.toString()))
                 .andExpect(jsonPath("$.assignments.length()").value(1));
-        encounters.dischargeEncounter(encounterId, ENTERED.plusHours(1), "discharge-clerk");
+        encounters.dischargeEncounter(encounterId, ENTERED.plusHours(1), "discharge-clerk", currentLocationId(encounterId));
         mvc.perform(get(path(encounterId)).with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISCHARGED"))
                 .andExpect(jsonPath("$.currentLocation").value(nullValue()))
@@ -281,11 +285,11 @@ class EncounterPhysicianApiIntegrationTest {
             entityManager.persist(ward);
             return ward.getId();
         });
-        encounters.transferEncounter(encounterId, departmentId, otherWard, null, ENTERED.plusHours(1), "transfer-clerk");
+        encounters.transferEncounter(encounterId, departmentId, otherWard, null, ENTERED.plusHours(1), "transfer-clerk", currentLocationId(encounterId));
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(request))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.title").value("Physician assignment conflict"));
-        encounters.dischargeEncounter(encounterId, ENTERED.plusHours(3), "discharge-clerk");
+        encounters.dischargeEncounter(encounterId, ENTERED.plusHours(3), "discharge-clerk", currentLocationId(encounterId));
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(request)).andExpect(status().isConflict());
         assertThat(assignments.getHistory(encounterId)).isEmpty();
@@ -323,5 +327,10 @@ class EncounterPhysicianApiIntegrationTest {
     private UUID admit() {
         var patient = patients.createPatient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 1, 1));
         return encounters.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ENTERED.minusHours(1)).getId();
+    }
+
+    private UUID currentLocationId(UUID encounterId) {
+        return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
+                .map(location -> location.getId()).orElse(null);
     }
 }
