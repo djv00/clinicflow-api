@@ -455,7 +455,11 @@ Location changes lock the encounter before the target bed. Admission and
 discharge cancellation also lock the patient to coordinate competing encounters.
 These checks and their writes share a transaction. PostgreSQL foreign keys,
 unique constraints, and history indexes are defined in the
-[Flyway migration](src/main/resources/db/migration/postgresql/V1__create_patient_flow_schema.sql).
+[Flyway migrations](src/main/resources/db/migration/postgresql).
+V7 additionally enforces one active encounter per patient, one open location per
+encounter, one open occupancy per bed, and valid location time intervals. See
+[inpatient data integrity](docs/data-integrity.md) for transfer write ordering,
+migration checks, diagnostic queries, and PostgreSQL-specific verification.
 
 ## Tests
 

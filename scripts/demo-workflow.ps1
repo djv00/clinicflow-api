@@ -106,7 +106,7 @@ try {
         admittedAt = Get-EventTime
     }
     $encounterPath = "/encounters/$($encounter.id)"
-    $null = Invoke-Api POST "$encounterPath/department-admissions" @{
+    $firstLocation = Invoke-Api POST "$encounterPath/department-admissions" @{
         departmentId = $firstDepartment.id
         wardId = $firstWard.id
         bedId = $firstBed.id
@@ -116,6 +116,7 @@ try {
 
     Write-Host '4. Transfer to the second ward; the first bed becomes available.'
     $secondLocation = Invoke-Api POST "$encounterPath/transfers" @{
+        expectedLocationId = $firstLocation.id
         departmentId = $secondDepartment.id
         wardId = $secondWard.id
         bedId = $secondBed.id
@@ -126,6 +127,7 @@ try {
 
     Write-Host '5. Discharge, then cancel discharge and restore the second bed.'
     $discharged = Invoke-Api POST "$encounterPath/discharges" @{
+        expectedLocationId = $secondLocation.id
         dischargedAt = Get-EventTime
     }
     Assert-Demo ($discharged.status -eq 'DISCHARGED') 'Encounter was not discharged.'
@@ -145,6 +147,7 @@ try {
 
     Write-Host '6. Discharge again and inspect the completed encounter timeline.'
     $completed = Invoke-Api POST "$encounterPath/discharges" @{
+        expectedLocationId = $currentLocations[0].id
         dischargedAt = Get-EventTime
     }
     Assert-Demo ($completed.status -eq 'DISCHARGED') 'Final discharge failed.'
