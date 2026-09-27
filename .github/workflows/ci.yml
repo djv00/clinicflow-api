@@ -46,4 +46,5 @@ jobs:
           path: |
             target/surefire-reports/
             target/failsafe-reports/
+            target/query-plans/
           retention-days: 7

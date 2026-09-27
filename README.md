@@ -460,6 +460,9 @@ V7 additionally enforces one active encounter per patient, one open location per
 encounter, one open occupancy per bed, and valid location time intervals. See
 [inpatient data integrity](docs/data-integrity.md) for transfer write ordering,
 migration checks, diagnostic queries, and PostgreSQL-specific verification.
+V8 adds a patient-history index after measuring the actual page/count queries.
+[Query measurements](docs/query-performance.md) explain the fixed test dataset,
+SQL counts, before/after plans, and the worklist index candidate that was rejected.
 
 ## Tests
 
