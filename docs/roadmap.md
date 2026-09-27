@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-26. This describes implemented behaviour and the next delivery
+Updated: 2026-09-27. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -23,9 +23,13 @@ history. Business rules are implemented in one Spring Boot backend.
 
 ## Remaining delivery sequence
 
-1. **Package deployment.** Provide a repeatable application-and-database startup,
+1. **Measure current queries.** Check SQL counts and representative PostgreSQL query
+   plans before deciding whether additional performance indexes are justified.
+2. **Automate key browser regressions.** Cover role differences, stale requests,
+   physician closure during care changes, and recovery after unconfirmed saves.
+3. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
-2. **Prepare the interview walkthrough.** Explain the workflow, transaction
+4. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits after a tested slice,
@@ -56,6 +60,15 @@ to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
 
+- V7 adds database guarantees for active stays, open locations, current bed
+  occupancy, and location time intervals. `PostgresInpatientIntegrityIT` covers
+  preserved history during upgrade, refusal of inconsistent legacy records,
+  insert/update enforcement, competing direct writes on commit and rollback,
+  and transfer/discharge correction compatibility. The full build passed 483
+  regular tests and 59 PostgreSQL tests. The authenticated demo script also ran
+  against a fresh V7 PostgreSQL database, leaving three closed locations, two
+  discharge records (one cancelled), and both demo beds free. The script now
+  supplies the required last-seen location IDs. See [data integrity](data-integrity.md).
 - Workflow conflict fixes passed 483 regular tests and 36 PostgreSQL tests.
   Transfer/discharge require the caller's last-seen location ID and reject it
   under the encounter lock after a competing transfer. Patient/encounter number
@@ -108,7 +121,8 @@ to user accounts only when a physician-specific login use case is implemented.
   require a working Docker runtime or the `TEST_DATABASE_*` connection settings
   described in the [README](../README.md#postgresql-integration-tests).
 - IDEA's JUnit run-all action can include `PostgresWorkflowIT`,
-  `PostgresAccountsIT`, and `PostgresDemoDataIT` directly. They still need that
+  `PostgresAccountsIT`, `PostgresDemoDataIT`, and `PostgresInpatientIntegrityIT`
+  directly. They still need that
   database environment; IDEA does not follow Maven's default test-file selection.
 - Browser checks cover empty and populated records, pagination, cancelled
   admissions, and switching between patients. Admission checks cover successful
