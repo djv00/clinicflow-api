@@ -295,6 +295,8 @@ public class EncounterService {
 
         // Location and physician history change within the same transaction.
         currentLocation.endAt(transferredAt);
+        // Hibernate inserts before updates; release the open-location keys before inserting the replacement.
+        encounterLocationRepository.flush();
 
         return encounterLocationRepository.save(nextLocation);
     }
