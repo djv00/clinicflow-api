@@ -20,14 +20,18 @@ history. Business rules are implemented in one Spring Boot backend.
 | Persistent demo setup | Implemented | An explicit PostgreSQL setting initializes fictional departments, wards, and beds transactionally. Repeated startup preserves existing references and patient history. |
 | Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
 | Encounter physician responsibility | API and page implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Patient and inpatient pages show current responsibility and history, with a paginated department physician picker and recovery after conflicts or unconfirmed saves. Writes use session operators; viewers can read. |
-| Deployment and interview walkthrough | Planned | Local instructions and API examples exist; a hosted demo and a concise architecture/business walkthrough remain. |
+| Container deployment | Implemented; CI verifies the packaged stack | Java runtime image, app/PostgreSQL Compose startup, health checks, persistent volume, configuration guide, and container-recreation acceptance. Public hosting is not provisioned. |
+| Interview walkthrough | Planned | A concise architecture/business walkthrough and an English interview demo remain. |
 
 ## Remaining delivery sequence
 
-1. **Package deployment.** Provide a repeatable application-and-database startup,
-   document configuration, and verify the demonstration in its target environment.
-2. **Prepare the interview walkthrough.** Explain the workflow, transaction
+1. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
+
+Container packaging is documented in the [deployment guide](deployment.md).
+The repeatable target is the local Compose stack, also exercised on a clean Linux
+CI runner. A public hosted demo can be a separate choice of provider and access
+policy; no public deployment has been made.
 
 Each step should be delivered through small, runnable commits after a tested slice,
 rather than accumulating the whole feature before committing.
@@ -56,6 +60,12 @@ certificate modules remain outside this delivery sequence. Link physician record
 to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
+
+- The container job runs the existing inpatient demo, records active care through
+  authenticated APIs, then recreates the app and database containers using their
+  retained volume. It verifies history, bed occupancy, physician responsibility,
+  unchanged migration versions and all three original account logins after removing
+  bootstrap passwords. See [deployment acceptance](deployment.md#deployment-acceptance).
 
 - Automated browser scenarios and local/CI commands are listed in the
   [browser test guide](../e2e/README.md). Older browser checks below describe the
