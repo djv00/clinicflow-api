@@ -36,3 +36,29 @@ test sessions, but should still be treated as test artifacts.
 These checks exercise Chromium against H2. PostgreSQL locking, migrations, and
 constraints remain covered by `mvnw -Ppostgres-it clean verify`; browser tests
 do not replace that suite or establish cross-browser compatibility.
+
+## Scenarios
+
+| Area | Automated coverage |
+| --- | --- |
+| Clinical flow | Register, admit, occupy a bed, transfer to care without a bed, verify bed release, discharge, and inspect retained location/discharge history. Admission cancellation retains the record and removes it from the worklist. |
+| Roles and sessions | Viewer reads without write controls; a write with valid CSRF is still forbidden. Administrators maintain the directory without clinical access. Failed permission reads hide writes. Signing out invalidates another tab. |
+| Physician directory | Multiple affiliations, profile changes, deactivation without deleting departments, stale-edit rejection/reload, and recovery of an unconfirmed creation by exact code. |
+| Responsibility | Assign, hand over, release, and retain history. Department transfer and discharge close responsibility. Discharge correction restores care without automatically restoring a physician. Both patient and inpatient entry points are exercised. |
+| Lists | Inpatient pagination, combined current-location filters, waiting patients, failed search retry, and cancellation of an earlier search so it cannot replace newer results. |
+| Write recovery | A competing transfer after the browser's precheck returns 409 and requires refresh. A discharge commits but its response is lost; the form blocks another save until refresh confirms discharge. |
+
+Fault injection uses Playwright routes only for the selected request. Lost-response
+tests first forward the write to the real server and wait for success, then drop
+the browser response. The transfer conflict uses a separate authenticated API
+session to make an actual competing change. No successful business responses are
+fabricated. Test records have unique identifiers; the database is discarded when
+the test application stops.
+
+GitHub Actions builds the jar and runs both the PostgreSQL suite and browser tests.
+Its `test-reports` artifact includes the Playwright HTML report and failure traces.
+The configuration deliberately has no retries, so an intermittent failure fails
+CI instead of being hidden by a second attempt.
+
+Runner configuration follows Playwright's [web server lifecycle](https://playwright.dev/docs/test-webserver)
+and [network interception](https://playwright.dev/docs/network) APIs.
