@@ -50,9 +50,9 @@ export async function signIn(page, role = 'operator') {
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
 }
 
-export async function seedEncounter(api, { placed = true } = {}) {
+export async function seedEncounter(api, { placed = true, prefix = 'MRN' } = {}) {
   const patient = await api.write('/api/v1/patients', {
-    medicalRecordNumber: uniqueCode('MRN'), firstName: 'Browser', lastName: 'Test', dateOfBirth: '1990-01-01'
+    medicalRecordNumber: uniqueCode(prefix), firstName: 'Browser', lastName: 'Test', dateOfBirth: '1990-01-01'
   });
   const encounter = await api.write('/api/v1/encounters', {
     patientId: patient.id, encounterNumber: uniqueCode('ENC'), admittedAt: minutesAgo(60)
@@ -81,4 +81,16 @@ export async function choosePlacement(page, departmentId, wardId, bedId = 'none'
   await page.getByLabel('Department', { exact: true }).selectOption(departmentId);
   await page.getByLabel('Ward', { exact: true }).selectOption(wardId);
   await page.getByLabel('Bed assignment', { exact: true }).selectOption(bedId);
+}
+
+export async function seedPhysician(api, departmentIds) {
+  return api.write('/api/v1/physicians', {
+    physicianCode: uniqueCode('DR'), firstName: 'Test', lastName: 'Physician', departmentIds
+  });
+}
+
+export async function selectResponsiblePhysician(page, physician) {
+  await page.getByLabel('Find a physician in this department', { exact: true }).fill(physician.physicianCode);
+  await page.locator('#search-responsibility').click();
+  await page.getByRole('radio', { name: `Test Physician (${physician.physicianCode})`, exact: true }).check();
 }
