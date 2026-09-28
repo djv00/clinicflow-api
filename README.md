@@ -14,6 +14,7 @@ PostgreSQL, and Flyway. H2 supports the local demo and regular tests; JUnit,
 Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 
 - [Run the demo](#demo-workflow)
+- [Run the app and PostgreSQL with Docker](docs/deployment.md)
 - [Open the patient workbench](#patient-workbench)
 - [Use PostgreSQL](#postgresql)
 - [API reference and business rules](docs/api.md)
@@ -255,6 +256,10 @@ The `postgres` profile stores data in PostgreSQL. Flyway applies versioned SQL
 migrations on startup; Hibernate validates the schema without creating or dropping
 tables. The default H2 configuration and its tests continue to use Hibernate.
 
+To run the application and database together without a host JDK, follow the
+[container deployment guide](docs/deployment.md). The database-only setup below
+remains useful when running Java from your IDE.
+
 With Docker Desktop running, start the local database in the same terminal used
 to run the application:
 
@@ -380,6 +385,11 @@ The same workflow then installs Node.js 24 and Chromium and runs the
 [browser regressions](e2e/README.md) against an isolated H2 application. The
 `test-reports` artifact includes the browser report and failure traces in addition
 to the Java test and query-plan reports.
+
+A separate deployment job builds the Docker image, exercises the application
+against PostgreSQL, recreates both containers with the same volume, and verifies
+retained care records and account access. Its `deployment-reports` artifact contains
+the fictional snapshot, migration versions and container logs.
 
 Surefire and Failsafe reports are uploaded as the `test-reports` artifact for
 seven days, including when tests fail. Open a workflow run in the repository's

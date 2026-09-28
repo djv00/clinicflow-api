@@ -69,3 +69,73 @@ jobs:
             e2e/playwright-report/
             e2e/test-results/
           retention-days: 7
+
+  deployment:
+    name: Container deployment / persistence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: clinicflow-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      APP_PORT: '18082'
+      POSTGRES_PORT: '15432'
+      DB_PASSWORD: ci-database-only
+      SPRING_SECURITY_USER_PASSWORD: ci-operator-only
+      CLINICFLOW_VIEWER_PASSWORD: ci-viewer-only
+      CLINICFLOW_ADMIN_PASSWORD: ci-admin-only
+      CLINICFLOW_DEMO_DATA_ENABLED: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate and build deployment
+        run: |
+          docker compose --profile app config --quiet
+          docker compose --profile app build --pull app
+
+      - name: Start application and PostgreSQL
+        run: |
+          docker compose --profile app up -d --no-build --wait --wait-timeout 180
+          test "$(docker compose exec -T app id -u)" = '10001'
+          test "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$(docker compose ps -q app)")" = 'true'
+
+      - name: Exercise the existing inpatient demo
+        shell: pwsh
+        run: |
+          $password = ConvertTo-SecureString $env:SPRING_SECURITY_USER_PASSWORD -AsPlainText -Force
+          $credential = [pscredential]::new('operator', $password)
+          ./scripts/demo-workflow.ps1 -BaseUrl 'http://127.0.0.1:18082' -Credential $credential
+
+      - name: Record active care before container recreation
+        run: |
+          python3 scripts/deployment-smoke.py seed --base-url http://127.0.0.1:18082 --state target/deployment/state.json
+          docker compose exec -T postgres psql -U clinicflow -d clinicflow -tAc 'SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank' > target/deployment/migrations-before.txt
+
+      - name: Recreate containers using the existing volume and accounts
+        run: |
+          docker compose --profile app down
+          SPRING_SECURITY_USER_PASSWORD= CLINICFLOW_VIEWER_PASSWORD= CLINICFLOW_ADMIN_PASSWORD= \
+            docker compose --profile app up -d --no-build --wait --wait-timeout 180
+          python3 scripts/deployment-smoke.py verify --base-url http://127.0.0.1:18082 --state target/deployment/state.json
+          docker compose exec -T postgres psql -U clinicflow -d clinicflow -tAc 'SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank' > target/deployment/migrations-after.txt
+          diff target/deployment/migrations-before.txt target/deployment/migrations-after.txt
+
+      - name: Collect container diagnostics
+        if: ${{ always() }}
+        run: |
+          mkdir -p target/deployment
+          docker compose --profile app ps --all > target/deployment/containers.txt
+          docker compose --profile app logs --no-color > target/deployment/compose.log
+
+      - name: Upload deployment evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-reports
+          path: target/deployment/
+          retention-days: 7
+
+      - name: Remove this run's disposable stack
+        if: ${{ always() }}
+        run: docker compose --profile app down --volumes --remove-orphans

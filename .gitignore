@@ -41,6 +41,7 @@ replay_pid*
 .vscode/
 .env
 application-local.properties
+/backups/
 
 # Keep Maven Wrapper
 !.mvn/wrapper/maven-wrapper.jar

@@ -1,0 +1,11 @@
+**
+!Dockerfile
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/**
+!src/
+!src/**
+# Local configuration never belongs in an image, even when kept under resources.
+**/application-local.*
+**/.env*
