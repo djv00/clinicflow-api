@@ -38,6 +38,25 @@ jobs:
       - name: Build and run all tests
         run: bash ./mvnw --batch-mode --no-transfer-progress -Ppostgres-it clean verify
 
+      - name: Set up Node.js for browser tests
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install browser test dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser regressions
+        working-directory: e2e
+        run: npm test
+
       - name: Upload test reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -47,4 +66,6 @@ jobs:
             target/surefire-reports/
             target/failsafe-reports/
             target/query-plans/
+            e2e/playwright-report/
+            e2e/test-results/
           retention-days: 7

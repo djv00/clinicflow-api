@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-27. This describes implemented behaviour and the next delivery
+Updated: 2026-09-28. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -13,6 +13,7 @@ history. Business rules are implemented in one Spring Boot backend.
 | --- | --- | --- |
 | Core patient flow | Implemented | Registration, admission, department entry, transfer, discharge, admission cancellation, discharge cancellation, and timeline APIs. |
 | Persistence and verification | Implemented | PostgreSQL profile, Flyway migration, H2 tests, PostgreSQL tests, and GitHub Actions configuration. |
+| Browser regressions | Implemented | Playwright runs real Chromium against an isolated application/H2 database. It covers core workflows, roles, stale changes, responsibility closure, pagination, and recovery after lost responses. CI retains failure traces and screenshots. |
 | Patient workbench | Implemented | Registration, search, pagination, details, paginated hospital encounter history, and hospital admission from the patient record. |
 | Inpatient workbench | Implemented | Admission, department entry, transfer, discharge, both cancellation workflows, and timeline are connected to the page. The inpatient list supports search, status/current-location filters, pagination, and opening patient records. |
 | Authentication and roles | Implemented | Session login/logout, operator/viewer clinical permissions, directory administrator permissions, CSRF protection, authenticated cancellation operators, and PostgreSQL account persistence with initial provisioning. Accounts have one role each. Account administration and password reset are not implemented. |
@@ -23,11 +24,9 @@ history. Business rules are implemented in one Spring Boot backend.
 
 ## Remaining delivery sequence
 
-1. **Automate key browser regressions.** Cover role differences, stale requests,
-   physician closure during care changes, and recovery after unconfirmed saves.
-2. **Package deployment.** Provide a repeatable application-and-database startup,
+1. **Package deployment.** Provide a repeatable application-and-database startup,
    document configuration, and verify the demonstration in its target environment.
-3. **Prepare the interview walkthrough.** Explain the workflow, transaction
+2. **Prepare the interview walkthrough.** Explain the workflow, transaction
    boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
 
 Each step should be delivered through small, runnable commits after a tested slice,
@@ -57,6 +56,13 @@ certificate modules remain outside this delivery sequence. Link physician record
 to user accounts only when a physician-specific login use case is implemented.
 
 ## Verification entry points
+
+- Automated browser scenarios and local/CI commands are listed in the
+  [browser test guide](../e2e/README.md). Older browser checks below describe the
+  manual verification of those slices; the new suite automates the listed key
+  scenarios, not every historical manual check. It uses H2 and complements the
+  PostgreSQL-specific suite. On 2026-09-28 all 16 Chromium scenarios passed twice
+  (32 executions, no retries), alongside 483 regular and 67 PostgreSQL tests.
 
 - Query measurements use a fixed fictional dataset and real service SQL/bindings.
   V8 adds the patient-history index; the existing inpatient projection and physician

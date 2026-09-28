@@ -1,0 +1,11 @@
+{
+  "name": "clinicflow-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "engines": { "node": ">=22" },
+  "devDependencies": { "@playwright/test": "1.63.0" }
+}

@@ -18,6 +18,7 @@ Mockito, MockMvc, and Testcontainers cover API and database behaviour.
 - [Use PostgreSQL](#postgresql)
 - [API reference and business rules](docs/api.md)
 - [Tests and CI](#tests)
+- [Browser regression tests](e2e/README.md)
 - [Current progress and next steps](docs/roadmap.md)
 - [Physician assignment rules and delivery status](docs/physician-assignments.md)
 
@@ -375,6 +376,11 @@ This builds the application and runs both the regular tests and PostgreSQL
 integration tests. Testcontainers starts PostgreSQL 17 using the runner's Docker
 daemon; no shared database or repository database secrets are required.
 
+The same workflow then installs Node.js 24 and Chromium and runs the
+[browser regressions](e2e/README.md) against an isolated H2 application. The
+`test-reports` artifact includes the browser report and failure traces in addition
+to the Java test and query-plan reports.
+
 Surefire and Failsafe reports are uploaded as the `test-reports` artifact for
 seven days, including when tests fail. Open a workflow run in the repository's
 Actions tab to inspect its logs and download the reports.
@@ -485,6 +491,10 @@ broader H2 suite still runs separately within the same build.
 [CI](#continuous-integration) runs both groups with Java 21 and PostgreSQL 17.
 Test configuration and expected behaviour are in
 [`src/test/java`](src/test/java/com/jiangyudai/clinicflow).
+
+[Browser tests](e2e/README.md) additionally verify the workbench with real Chromium
+and authenticated backend requests. They run separately with `npm --prefix e2e test`
+after packaging the application and installing the browser dependencies.
 
 ## Current scope
 
