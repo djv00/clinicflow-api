@@ -5,6 +5,7 @@ test('operator registers, admits, places, transfers and discharges a patient thr
   const number = uniqueCode('ENC');
   const departments = await operatorApi.get('/api/v1/departments?active=true');
   const wards = await operatorApi.get('/api/v1/wards?active=true');
+  const [bed] = await operatorApi.get(`/api/v1/beds?wardId=${wards[0].id}&active=true&occupied=false`);
   await signIn(page);
   await page.getByRole('button', { name: 'Register patient', exact: true }).click();
   await page.getByLabel('Medical record number', { exact: true }).fill(mrn);
@@ -19,13 +20,15 @@ test('operator registers, admits, places, transfers and discharges a patient thr
   await page.getByRole('button', { name: 'Save admission', exact: true }).click();
   const row = page.locator('#encounter-rows tr').filter({ hasText: number });
   await row.getByRole('button', { name: /^Enter department for / }).click();
-  await choosePlacement(page, departments[0].id, wards[0].id);
+  await choosePlacement(page, departments[0].id, wards[0].id, bed.id);
   await page.getByRole('button', { name: 'Save department entry', exact: true }).click();
   await expect(page.locator('#department-dialog')).not.toBeVisible();
+  expect((await operatorApi.get(`/api/v1/beds/${bed.id}`)).occupied).toBe(true);
   await row.getByRole('button', { name: /^Transfer for / }).click();
   await choosePlacement(page, departments[1].id, wards[1].id);
   await page.getByRole('button', { name: 'Save transfer', exact: true }).click();
   await expect(page.locator('#department-dialog')).not.toBeVisible();
+  expect((await operatorApi.get(`/api/v1/beds/${bed.id}`)).occupied).toBe(false);
   await row.getByRole('button', { name: /^Discharge for / }).click();
   await page.getByRole('button', { name: 'Save discharge', exact: true }).click();
   await expect(page.locator('#discharge-dialog')).not.toBeVisible();
@@ -39,6 +42,8 @@ test('operator registers, admits, places, transfers and discharges a patient thr
   expect(history.items).toHaveLength(1);
   const timeline = await operatorApi.get(`/api/v1/encounters/${history.items[0].id}/timeline`);
   expect(timeline.locations.every(location => location.endedAt !== null)).toBeTruthy();
+  expect(timeline.locations.map(location => location.bedId)).toContain(bed.id);
+  expect(timeline.locations.map(location => location.bedId)).toContain(null);
   expect(timeline.encounter.status).toBe('DISCHARGED');
 });
 
