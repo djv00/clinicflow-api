@@ -16,10 +16,10 @@ import java.util.UUID;
 @RequestMapping("/api/v1/patients/{patientId}/encounters")
 public class PatientEncounterController {
 
-    private final EncounterQueryService encounterService;
+    private final EncounterQueryService encounterQueries;
 
-    public PatientEncounterController(EncounterQueryService encounterService) {
-        this.encounterService = encounterService;
+    public PatientEncounterController(EncounterQueryService encounterQueries) {
+        this.encounterQueries = encounterQueries;
     }
 
     @GetMapping
@@ -27,6 +27,6 @@ public class PatientEncounterController {
             @PathVariable UUID patientId,
             @Valid @ModelAttribute EncounterPageRequest request
     ) {
-        return encounterService.getPatientEncounters(patientId, request.page(), request.size());
+        return encounterQueries.getPatientEncounters(patientId, request.page(), request.size());
     }
 }

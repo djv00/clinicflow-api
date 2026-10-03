@@ -47,6 +47,7 @@ do not replace that suite or establish cross-browser compatibility.
 | Responsibility | Assign, hand over, release, and retain history. Department transfer and discharge close responsibility. Discharge correction restores care without automatically restoring a physician. Both patient and inpatient entry points are exercised. |
 | Lists | Inpatient pagination, combined current-location filters, waiting patients, failed search retry, and cancellation of an earlier search so it cannot replace newer results. |
 | Write recovery | A competing transfer after the browser's precheck returns 409 and requires refresh. A discharge commits but its response is lost; the form blocks another save until refresh confirms discharge. |
+| Error contract | A real duplicate-admission rejection retains its stable code while its title/detail are reworded; the form still identifies the encounter-number conflict. |
 
 Fault injection uses Playwright routes only for the selected request. Lost-response
 tests first forward the write to the real server and wait for success, then drop

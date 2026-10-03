@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Updated: 2026-09-28. This describes implemented behaviour and the next delivery
+Updated: 2026-10-03. This describes implemented behaviour and the next delivery
 steps; planned items are not claims about existing features.
 
 The target is a demonstrable Java inpatient workflow application: register a
@@ -21,12 +21,14 @@ history. Business rules are implemented in one Spring Boot backend.
 | Physician directory | API and page implemented | Paginated keyword/department/active filters, details, creation, profile/affiliation updates, activation/deactivation, and administrator-only maintenance. The page supports read-only roles, version-conflict recovery, and checking an unconfirmed save. |
 | Encounter physician responsibility | API and page implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Patient and inpatient pages show current responsibility and history, with a paginated department physician picker and recovery after conflicts or unconfirmed saves. Writes use session operators; viewers can read. |
 | Container deployment | Implemented; CI verifies the packaged stack | Java runtime image, app/PostgreSQL Compose startup, health checks, persistent volume, configuration guide, and container-recreation acceptance. Public hosting is not provisioned. |
-| Interview walkthrough | Planned | A concise architecture/business walkthrough and an English interview demo remain. |
+| Architecture consistency | Implemented | Dedicated encounter queries, transactional response DTOs, stable error codes, injectable time, patient page modules and dependency guard tests. See [architecture](architecture.md). |
+| Interview walkthrough | Written; rehearsal remains | An English demo script, code reading route, tradeoffs and evidence are in the [walkthrough](interview-walkthrough.md). |
 
 ## Remaining delivery sequence
 
-1. **Prepare the interview walkthrough.** Explain the workflow, transaction
-   boundaries, concurrency behaviour, tests, and tradeoffs in a concise English demo.
+1. **Rehearse the interview walkthrough.** Run the implemented patient/physician
+   workflow and explain transaction boundaries, concurrency behaviour and tradeoffs
+   using the linked tests. No further module is required for this demonstration.
 
 Container packaging is documented in the [deployment guide](deployment.md).
 The repeatable target is the local Compose stack, also exercised on a clean Linux

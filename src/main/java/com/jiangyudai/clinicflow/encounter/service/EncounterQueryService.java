@@ -51,6 +51,7 @@ public class EncounterQueryService {
         return EncounterTimelineResponse.from(encounter, locations, discharges);
     }
 
+    /** Returns discharge and correction audit for an existing encounter. */
     public List<EncounterDischargeResponse> getDischarges(UUID encounterId) {
         getEncounter(encounterId);
         return encounterDischargeRepository.findAllByEncounter_IdOrderByDischargedAtAscIdAsc(encounterId).stream()
