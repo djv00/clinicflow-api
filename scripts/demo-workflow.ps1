@@ -132,8 +132,11 @@ try {
     }
     Assert-Demo ($discharged.status -eq 'DISCHARGED') 'Encounter was not discharged.'
     Assert-BedOccupancy $secondBed.id $false
+    $dischargeTimeline = Invoke-Api GET "$encounterPath/timeline"
+    $currentDischarge = $dischargeTimeline.discharges | Where-Object { $null -eq $_.cancelledAt }
     $restored = Invoke-Api POST "$encounterPath/discharge-cancellations" @{
         cancelledAt = Get-EventTime
+        expectedDischargeId = $currentDischarge.id
     }
     Assert-Demo ($restored.status -eq 'IN_DEPARTMENT' -and $null -eq $restored.dischargedAt) 'Discharge cancellation did not restore the encounter.'
     Assert-BedOccupancy $secondBed.id $true

@@ -170,7 +170,7 @@ class PostgresWorkflowIT {
         encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1), "test-clerk", currentLocationId(placed));
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
-        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
+        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk", currentDischargeId(placed));
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, null, null), 1, 1).items().getFirst().id()).isEqualTo(placed);
     }
@@ -483,7 +483,7 @@ class PostgresWorkflowIT {
         encounterService.dischargeEncounter(encounterId, dischargedAt, "test-clerk", currentLocationId(encounterId));
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isFalse());
-        encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk");
+        encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk", currentDischargeId(encounterId));
 
         var timeline = encounterQueries.getTimeline(encounterId);
         assertThat(timeline.encounter().status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -1137,5 +1137,9 @@ class PostgresWorkflowIT {
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

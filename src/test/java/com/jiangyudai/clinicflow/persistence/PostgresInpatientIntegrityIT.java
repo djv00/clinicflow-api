@@ -422,7 +422,7 @@ class PostgresInpatientIntegrityIT {
         var readmitted = encounterService.admitPatient(fixture.patient(), UUID.randomUUID().toString(), START.plusHours(4));
         encounterService.admitToDepartment(readmitted.id(), fixture.department(), fixture.ward(), bed, START.plusHours(5));
 
-        assertThatThrownBy(() -> encounterService.cancelDischarge(fixture.encounter(), START.plusHours(6), "test-clerk"))
+        assertThatThrownBy(() -> encounterService.cancelDischarge(fixture.encounter(), START.plusHours(6), "test-clerk", currentDischargeId(fixture.encounter())))
                 .isInstanceOf(ActiveEncounterExistsException.class);
         assertThat(encounterQueries.getTimeline(fixture.encounter())).isEqualTo(finalHistory);
         assertThat(jdbc.queryForObject("SELECT id FROM encounters WHERE patient_id = ? AND status IN ('ADMITTED', 'IN_DEPARTMENT')",
@@ -535,5 +535,9 @@ class PostgresInpatientIntegrityIT {
     }
 
     private record Fixture(UUID patient, UUID encounter, UUID department, UUID ward, UUID bed) {
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

@@ -149,7 +149,7 @@ class EncounterPhysicianApiIntegrationTest {
                 .andExpect(jsonPath("$.currentLocation").value(nullValue()))
                 .andExpect(jsonPath("$.currentAssignmentId").value(nullValue()))
                 .andExpect(jsonPath("$.assignments[0].endReason").value("DISCHARGE"));
-        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk");
+        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk", currentDischargeId(encounterId));
         var restored = encounterQueries.getTimeline(encounterId).locations().getLast();
         mvc.perform(get(path(encounterId)).with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.currentLocation.id").value(restored.id().toString()))
@@ -336,5 +336,9 @@ class EncounterPhysicianApiIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

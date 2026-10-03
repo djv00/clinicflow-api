@@ -119,7 +119,7 @@ class EncounterTimelineIntegrationTest {
         assertThat(discharged.encounter().status()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(discharged.locations()).allSatisfy(location -> assertThat(location.endedAt()).isNotNull());
 
-        encounterService.cancelDischarge(data.encounterId(), ADMITTED_AT.plusHours(4), "discharge-clerk");
+        encounterService.cancelDischarge(data.encounterId(), ADMITTED_AT.plusHours(4), "discharge-clerk", currentDischargeId(data.encounterId()));
         String response = mockMvc.perform(get("/api/v1/encounters/{id}/timeline", data.encounterId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.encounter.status").value("IN_DEPARTMENT"))
@@ -163,10 +163,10 @@ class EncounterTimelineIntegrationTest {
                 data.encounterId(), data.departmentId(), data.wardId(), data.otherBedId(), time, "test-clerk", currentLocationId(data.encounterId())
         );
         encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk", currentLocationId(data.encounterId()));
-        encounterService.cancelDischarge(data.encounterId(), time.plusHours(1), "first-clerk");
+        encounterService.cancelDischarge(data.encounterId(), time.plusHours(1), "first-clerk", currentDischargeId(data.encounterId()));
         UUID firstRestored = encounterQueries.getDischarges(data.encounterId()).getFirst().restoredLocationId();
         encounterService.dischargeEncounter(data.encounterId(), time, "test-clerk", currentLocationId(data.encounterId()));
-        encounterService.cancelDischarge(data.encounterId(), time.plusHours(2), "second-clerk");
+        encounterService.cancelDischarge(data.encounterId(), time.plusHours(2), "second-clerk", currentDischargeId(data.encounterId()));
 
         EncounterTimelineResponse timeline = encounterQueries.getTimeline(data.encounterId());
         assertThat(timeline.locations()).hasSize(4);
@@ -366,5 +366,9 @@ class EncounterTimelineIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

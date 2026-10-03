@@ -102,7 +102,7 @@ class DischargeCancellationIntegrationTest {
         CancellationData data = createData(withBed);
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(CANCELLED_AT)))
+                        .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(data.encounterId().toString()))
                 .andExpect(jsonPath("$.patientId").value(data.patientId().toString()))
@@ -125,7 +125,7 @@ class DischargeCancellationIntegrationTest {
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .with(user("second-operator").roles("OPERATOR"))
-                        .contentType("application/json").content(request(CANCELLED_AT)))
+                        .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                 .andExpect(status().isConflict());
         assertThat(mockMvc.perform(get("/api/v1/encounters/{id}/discharges", data.encounterId()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).isEqualTo(response);
@@ -140,8 +140,7 @@ class DischargeCancellationIntegrationTest {
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId())
                         .with(user(username).roles("OPERATOR")).with(csrf())
                         .contentType("application/json")
-                        .content(request(CANCELLED_AT).replace("}",
-                                ", \"cancelledBy\": \"forged-operator\", \"expectedDischargeId\": \"" + dischargeId + "\"}")))
+                        .content(request(CANCELLED_AT, dischargeId).replace("}", ", \"cancelledBy\": \"forged-operator\"}")))
                 .andExpect(status().isOk());
 
         assertRestored(data);
@@ -159,7 +158,7 @@ class DischargeCancellationIntegrationTest {
         UUID restoredId = first.restoredLocationId();
 
         encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1), "test-clerk", currentLocationId(data.encounterId()));
-        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusHours(2), "second-clerk");
+        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusHours(2), "second-clerk", currentDischargeId(data.encounterId()));
 
         List<EncounterDischargeResponse> discharges = encounterQueries.getDischarges(data.encounterId());
         assertThat(discharges).hasSize(2);
@@ -189,10 +188,25 @@ class DischargeCancellationIntegrationTest {
         UUID dischargeId = encounterQueries.getDischarges(data.encounterId()).getFirst().id();
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
-                        .content(request(CANCELLED_AT).replace("}",
-                                ", \"expectedDischargeId\": \"" + dischargeId + "\"}")))
+                        .content(request(CANCELLED_AT, dischargeId)))
                 .andExpect(status().isOk());
         assertRestored(data);
+    }
+
+    @Test
+    void missingExpectedRecordCannotCancelALaterDischarge() throws Exception {
+        CancellationData data = createData(true);
+        cancel(data);
+        encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk", currentLocationId(data.encounterId()));
+        var before = encounterQueries.getTimeline(data.encounterId());
+
+        mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
+                        .contentType("application/json").content("{\"cancelledAt\":\"" + CANCELLED_AT + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.expectedDischargeId").value("Expected discharge ID is required"));
+
+        assertThat(encounterQueries.getTimeline(data.encounterId())).isEqualTo(before);
+        assertThat(encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(data.bedId())).isFalse();
     }
 
     @Test
@@ -205,8 +219,7 @@ class DischargeCancellationIntegrationTest {
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
-                        .content(request(CANCELLED_AT.plusHours(1)).replace("}",
-                                ", \"expectedDischargeId\": \"" + originalId + "\"}")))
+                        .content(request(CANCELLED_AT.plusHours(1), originalId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("The discharge record has changed. Reload it before cancelling."));
 
@@ -221,8 +234,7 @@ class DischargeCancellationIntegrationTest {
         var before = encounterQueries.getTimeline(data.encounterId());
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
-                        .content(request(CANCELLED_AT).replace("}",
-                                ", \"expectedDischargeId\": \"" + otherId + "\"}")))
+                        .content(request(CANCELLED_AT, otherId)))
                 .andExpect(status().isConflict());
         assertThat(encounterQueries.getTimeline(data.encounterId())).isEqualTo(before);
     }
@@ -235,7 +247,7 @@ class DischargeCancellationIntegrationTest {
                 data.encounterId(), data.departmentId(), data.wardId(), null, CANCELLED_AT, "test-clerk", currentLocationId(data.encounterId())
         );
         encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT, "test-clerk", currentLocationId(data.encounterId()));
-        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "second-clerk");
+        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "second-clerk", currentDischargeId(data.encounterId()));
 
         EncounterDischargeResponse discharge = encounterQueries.getDischarges(data.encounterId()).getLast();
         assertThat(discharge.locationId()).isEqualTo(transferred.id());
@@ -276,7 +288,7 @@ class DischargeCancellationIntegrationTest {
     void rejectsCancellationBeforeDischargeWithoutChangingHistory() throws Exception {
         CancellationData data = createData(true);
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(DISCHARGED_AT.minusSeconds(1))))
+                        .contentType("application/json").content(request(DISCHARGED_AT.minusSeconds(1), data.dischargeId())))
                 .andExpect(status().isBadRequest());
         assertDischarged(data);
     }
@@ -294,7 +306,7 @@ class DischargeCancellationIntegrationTest {
                 .createNativeQuery("update " + table + " set active = false where id = ?1")
                 .setParameter(1, id).executeUpdate());
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(CANCELLED_AT)))
+                        .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                 .andExpect(status().isBadRequest());
         assertDischarged(data);
     }
@@ -304,7 +316,7 @@ class DischargeCancellationIntegrationTest {
         CancellationData data = createData(true);
         EncounterResponse readmission = readmit(data);
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(CANCELLED_AT)))
+                        .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                 .andExpect(status().isConflict());
         mockMvc.perform(get("/api/v1/encounters/{id}/discharges", readmission.id()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
@@ -363,7 +375,7 @@ class DischargeCancellationIntegrationTest {
         } else {
             assertDischarged(data);
             mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                            .contentType("application/json").content(request(CANCELLED_AT)))
+                            .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                     .andExpect(status().isConflict());
         }
         transactions.executeWithoutResult(status -> {
@@ -383,7 +395,7 @@ class DischargeCancellationIntegrationTest {
         OffsetDateTime cancelledAt = operationAfterLaterDischarge ? DISCHARGED_AT.plusDays(3) : CANCELLED_AT;
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(cancelledAt)))
+                        .contentType("application/json").content(request(cancelledAt, data.dischargeId())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
@@ -407,7 +419,7 @@ class DischargeCancellationIntegrationTest {
         EncounterResponse later = readmit(data);
         encounterService.cancelAdmission(later.id(), CANCELLED_AT.plusMinutes(10), "admission-clerk");
 
-        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusMinutes(20), "first-clerk");
+        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusMinutes(20), "first-clerk", currentDischargeId(data.encounterId()));
 
         assertRestored(data);
         EncounterResponse cancelledAdmission = encounterQueries.getEncounter(later.id());
@@ -422,7 +434,7 @@ class DischargeCancellationIntegrationTest {
         CancellationData earlier = createData(false);
         EncounterResponse latest = completeReadmission(earlier, DISCHARGED_AT, CANCELLED_AT);
 
-        encounterService.cancelDischarge(latest.id(), CANCELLED_AT.plusHours(1), "latest-clerk");
+        encounterService.cancelDischarge(latest.id(), CANCELLED_AT.plusHours(1), "latest-clerk", currentDischargeId(latest.id()));
 
         assertDischarged(earlier);
         EncounterLocation current = encounterLocationRepository
@@ -443,7 +455,7 @@ class DischargeCancellationIntegrationTest {
         assertThat(encounterLocationRepository.existsByBed_IdAndEndedAtIsNull(data.bedId())).isFalse();
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
-                        .contentType("application/json").content(request(CANCELLED_AT)))
+                        .contentType("application/json").content(request(CANCELLED_AT, data.dischargeId())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
@@ -567,7 +579,7 @@ class DischargeCancellationIntegrationTest {
     }
 
     private void cancel(CancellationData data) {
-        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "first-clerk");
+        encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "first-clerk", data.dischargeId());
     }
 
     private EncounterResponse readmit(CancellationData data) {
@@ -580,10 +592,10 @@ class DischargeCancellationIntegrationTest {
         return encounterService.dischargeEncounter(later.id(), dischargedAt, "test-clerk", currentLocationId(later.id()));
     }
 
-    private String request(OffsetDateTime cancelledAt) {
+    private String request(OffsetDateTime cancelledAt, UUID expectedDischargeId) {
         return """
-                {"cancelledAt": "%s"}
-                """.formatted(cancelledAt);
+                {"cancelledAt": "%s", "expectedDischargeId": "%s"}
+                """.formatted(cancelledAt, expectedDischargeId);
     }
 
     private UUID createOtherEncounter() {
@@ -620,16 +632,20 @@ class DischargeCancellationIntegrationTest {
             );
             encounterService.dischargeEncounter(encounter.id(), DISCHARGED_AT, "test-clerk", currentLocationId(encounter.id()));
             return new CancellationData(patient.getId(), encounter.id(), department.getId(), ward.getId(),
-                    bed == null ? null : bed.getId(), location.id());
+                    bed == null ? null : bed.getId(), location.id(), currentDischargeId(encounter.id()));
         });
     }
 
     private record CancellationData(UUID patientId, UUID encounterId, UUID departmentId,
-                                    UUID wardId, UUID bedId, UUID locationId) {
+                                    UUID wardId, UUID bedId, UUID locationId, UUID dischargeId) {
     }
 
     private UUID currentLocationId(UUID encounterId) {
         return encounterLocationRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

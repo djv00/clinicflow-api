@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.location.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.exception.BedHistoryConflictException;
@@ -41,6 +42,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class LocationQueryIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterLocationRepository locations;
@@ -171,7 +175,7 @@ class LocationQueryIntegrationTest {
 
         encounterService.dischargeEncounter(encounter.id(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(encounter.id()));
         assertOccupied(secondBed, false);
-        encounterService.cancelDischarge(encounter.id(), ADMITTED_AT.plusHours(4), "test-clerk");
+        encounterService.cancelDischarge(encounter.id(), ADMITTED_AT.plusHours(4), "test-clerk", currentDischargeId(encounter.id()));
         assertOccupied(secondBed, true);
         mockMvc.perform(get("/api/v1/beds").param("occupied", "true"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
@@ -268,5 +272,9 @@ class LocationQueryIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

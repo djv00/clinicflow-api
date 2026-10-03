@@ -200,9 +200,7 @@ class EncounterHistoryIntegrationTest {
         enter(other, data, data.bedId(), DISCHARGED_AT.plusHours(1));
         encounterService.dischargeEncounter(other, DISCHARGED_AT.plusHours(3), "test-clerk", currentLocationId(other));
 
-        assertThatThrownBy(() -> encounterService.cancelDischarge(
-                data.encounterId(), DISCHARGED_AT.plusHours(2), "test-clerk"
-        )).isInstanceOf(BedHistoryConflictException.class);
+        assertThatThrownBy(() -> encounterService.cancelDischarge(data.encounterId(), DISCHARGED_AT.plusHours(2), "test-clerk", currentDischargeId(data.encounterId()))).isInstanceOf(BedHistoryConflictException.class);
 
         transactions.executeWithoutResult(status -> {
             Encounter encounter = encounterRepository.findById(data.encounterId()).orElseThrow();
@@ -216,9 +214,7 @@ class EncounterHistoryIntegrationTest {
         });
 
         // A later operation time cannot remove a conflict in effective bed history.
-        assertThatThrownBy(() -> encounterService.cancelDischarge(
-                data.encounterId(), DISCHARGED_AT.plusHours(3), "retry-clerk"
-        )).isInstanceOf(BedHistoryConflictException.class);
+        assertThatThrownBy(() -> encounterService.cancelDischarge(data.encounterId(), DISCHARGED_AT.plusHours(3), "retry-clerk", currentDischargeId(data.encounterId()))).isInstanceOf(BedHistoryConflictException.class);
     }
 
     @Test
@@ -342,5 +338,9 @@ class EncounterHistoryIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locationRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

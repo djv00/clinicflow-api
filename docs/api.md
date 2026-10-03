@@ -590,19 +590,22 @@ POST /api/v1/encounters/{id}/discharge-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-03T15:00:00-04:00"
+  "cancelledAt": "2025-09-03T15:00:00-04:00",
+  "expectedDischargeId": "44444444-4444-4444-4444-444444444444"
 }
 ```
 
 Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
 
-Clients reviewing a particular discharge can also send the optional UUID
+Clients must send the UUID
 `expectedDischargeId`, obtained from the timeline or discharge history. It must
 match the current uncancelled discharge record under the encounter write lock;
 a mismatch returns `409` without changing care or audit. This distinguishes
 repeated discharge/cancellation cycles even when discharge timestamps are equal.
-The workbench always sends it. Omitting it preserves the existing operation on
-the current discharge for API callers and demo scripts.
+Omitting it or sending null returns `400` without changing care or audit.
+This tightens the earlier optional-field contract: API callers and scripts must
+read the intended record before requesting its cancellation. The workbench
+already sends this ID.
 
 - The encounter must be `DISCHARGED`, have a matching uncancelled discharge
   record, and have no current location. The patient cannot have another active

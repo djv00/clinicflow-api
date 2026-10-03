@@ -236,7 +236,7 @@ class EncounterPhysicianIntegrationTest {
         encounters.dischargeEncounter(encounterId, ENTERED.plusHours(1), "discharge-clerk", currentLocationId(encounterId));
         var physician = physicians.get(physicianId);
         physicians.changeActive(physicianId, false, physician.version());
-        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk");
+        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk", currentDischargeId(encounterId));
         var restored = encounterQueries.getTimeline(encounterId).locations().getLast();
         assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
         var ended = service.getHistory(encounterId).getFirst();
@@ -312,5 +312,9 @@ class EncounterPhysicianIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

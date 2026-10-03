@@ -24,7 +24,6 @@ import java.util.stream.Stream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -43,9 +42,10 @@ class DischargeCancellationControllerTest {
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "22222222-2222-2222-2222-222222222222"
     );
+    private static final UUID DISCHARGE_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final String REQUEST = """
-            {"cancelledAt": "2025-09-03T10:00:00-04:00"}
-            """;
+            {"cancelledAt": "2025-09-03T10:00:00-04:00", "expectedDischargeId": "%s"}
+            """.formatted(DISCHARGE_ID);
 
     @Autowired
     private MockMvc mockMvc;
@@ -87,7 +87,7 @@ class DischargeCancellationControllerTest {
     @ParameterizedTest
     @MethodSource("businessErrors")
     void mapsBusinessErrors(RuntimeException exception, int code, String title) throws Exception {
-        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("test-operator"), isNull()))
+        when(encounterService.cancelDischarge(eq(ENCOUNTER_ID), any(OffsetDateTime.class), eq("test-operator"), eq(DISCHARGE_ID)))
                 .thenThrow(exception);
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
@@ -101,13 +101,15 @@ class DischargeCancellationControllerTest {
     void rejectsMalformedExpectedDischargeId() throws Exception {
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", ENCOUNTER_ID).with(csrf())
                         .contentType("application/json")
-                        .content(REQUEST.replace("}", ", \"expectedDischargeId\": \"not-a-uuid\"}")))
+                        .content(REQUEST.replace(DISCHARGE_ID.toString(), "not-a-uuid")))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(encounterService);
     }
 
     private static Stream<Arguments> invalidRequests() {
         return Stream.of(
+                Arguments.of("{\"cancelledAt\": \"2025-09-03T10:00:00-04:00\"}", "expectedDischargeId"),
+                Arguments.of(REQUEST.replace("\"" + DISCHARGE_ID + "\"", "null"), "expectedDischargeId"),
                 Arguments.of("{\"cancelledAt\": null}", "cancelledAt"),
                 Arguments.of(REQUEST.replace("2025-09-03T10:00:00-04:00", OffsetDateTime.now().plusDays(1).toString()), "cancelledAt")
         );
