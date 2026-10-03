@@ -1,5 +1,8 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -49,6 +52,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterHistoryIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T08:00:00-04:00");
     private static final OffsetDateTime STARTED_AT = ADMITTED_AT.plusHours(1);
@@ -89,7 +95,7 @@ class EncounterHistoryIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
         assertThat(encounterRepository.existsByEncounterNumber(number)).isFalse();
-        assertThat(encounterService.getEncounter(data.encounterId()).getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
+        assertThat(encounterQueries.getEncounter(data.encounterId()).status()).isEqualTo(EncounterStatus.DISCHARGED);
     }
 
     @ParameterizedTest
@@ -98,10 +104,10 @@ class EncounterHistoryIntegrationTest {
         HistoryData data = dischargedPatient();
         OffsetDateTime admittedAt = DISCHARGED_AT.plusHours(hoursFromDischarge).withOffsetSameInstant(ZoneOffset.UTC);
 
-        Encounter encounter = admit(data.patientId(), admittedAt);
+        EncounterResponse encounter = admit(data.patientId(), admittedAt);
 
-        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ADMITTED);
-        assertThat(encounter.getAdmittedAt()).isEqualTo(admittedAt);
+        assertThat(encounter.status()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(encounter.admittedAt()).isEqualTo(admittedAt);
     }
 
     @Test
@@ -109,10 +115,10 @@ class EncounterHistoryIntegrationTest {
         HistoryData data = createData();
         encounterService.cancelAdmission(data.encounterId(), DISCHARGED_AT, "test-clerk");
 
-        Encounter replacement = admit(data.patientId(), ADMITTED_AT.minusHours(1));
+        EncounterResponse replacement = admit(data.patientId(), ADMITTED_AT.minusHours(1));
 
-        assertThat(replacement.getStatus()).isEqualTo(EncounterStatus.ADMITTED);
-        assertThat(encounterService.getEncounter(data.encounterId()).getStatus())
+        assertThat(replacement.status()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(encounterQueries.getEncounter(data.encounterId()).status())
                 .isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
     }
 
@@ -130,7 +136,7 @@ class EncounterHistoryIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
-        assertThat(encounterService.getEncounter(other).getStatus()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(encounterQueries.getEncounter(other).status()).isEqualTo(EncounterStatus.ADMITTED);
         assertThat(locationRepository.existsByEncounter_Id(other)).isFalse();
     }
 
@@ -141,10 +147,10 @@ class EncounterHistoryIntegrationTest {
         UUID other = newEncounter(ADMITTED_AT);
         OffsetDateTime startedAt = DISCHARGED_AT.plusHours(hoursFromDischarge).withOffsetSameInstant(ZoneOffset.UTC);
 
-        EncounterLocation location = enter(other, data, data.bedId(), startedAt);
+        EncounterLocationResponse location = enter(other, data, data.bedId(), startedAt);
 
-        assertThat(location.getStartedAt()).isEqualTo(startedAt);
-        assertThat(location.getBed().getId()).isEqualTo(data.bedId());
+        assertThat(location.startedAt()).isEqualTo(startedAt);
+        assertThat(location.bedId()).isEqualTo(data.bedId());
     }
 
     @Test
@@ -153,8 +159,8 @@ class EncounterHistoryIntegrationTest {
         UUID other = newEncounter(ADMITTED_AT);
         UUID withoutBed = newEncounter(ADMITTED_AT);
 
-        assertThat(enter(other, data, data.otherBedId(), STARTED_AT).getBed().getId()).isEqualTo(data.otherBedId());
-        assertThat(enter(withoutBed, data, null, STARTED_AT).getBed()).isNull();
+        assertThat(enter(other, data, data.otherBedId(), STARTED_AT).bedId()).isEqualTo(data.otherBedId());
+        assertThat(enter(withoutBed, data, null, STARTED_AT).bedId()).isNull();
     }
 
     @Test
@@ -164,27 +170,27 @@ class EncounterHistoryIntegrationTest {
         encounterService.dischargeEncounter(data.encounterId(), STARTED_AT, "test-clerk", currentLocationId(data.encounterId()));
         UUID other = newEncounter(ADMITTED_AT);
 
-        assertThat(enter(other, data, data.bedId(), ADMITTED_AT).getBed().getId()).isEqualTo(data.bedId());
+        assertThat(enter(other, data, data.bedId(), ADMITTED_AT).bedId()).isEqualTo(data.bedId());
     }
 
     @Test
     void failedTransferPreservesCurrentLocationAndCanRetryAtTheBoundary() {
         HistoryData data = dischargedPatient();
         UUID other = newEncounter(ADMITTED_AT);
-        EncounterLocation current = enter(other, data, data.otherBedId(), STARTED_AT);
+        EncounterLocationResponse current = enter(other, data, data.otherBedId(), STARTED_AT);
 
         assertThatThrownBy(() -> encounterService.transferEncounter(
                 other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT.minusHours(1), "test-clerk", currentLocationId(other)
         )).isInstanceOf(BedHistoryConflictException.class);
 
         EncounterLocation unchanged = locationRepository.findByEncounter_IdAndEndedAtIsNull(other).orElseThrow();
-        assertThat(unchanged.getId()).isEqualTo(current.getId());
+        assertThat(unchanged.getId()).isEqualTo(current.id());
         assertThat(locationRepository.findAllByEncounter_IdOrderByStartedAtAsc(other)).hasSize(1);
-        EncounterLocation next = encounterService.transferEncounter(
+        EncounterLocationResponse next = encounterService.transferEncounter(
                 other, data.departmentId(), data.wardId(), data.bedId(), DISCHARGED_AT, "test-clerk", currentLocationId(other)
         );
-        assertThat(next.getBed().getId()).isEqualTo(data.bedId());
-        assertThat(locationRepository.findById(current.getId()).orElseThrow().getEndedAt()).isEqualTo(DISCHARGED_AT);
+        assertThat(next.bedId()).isEqualTo(data.bedId());
+        assertThat(locationRepository.findById(current.id()).orElseThrow().getEndedAt()).isEqualTo(DISCHARGED_AT);
     }
 
     @Test
@@ -238,7 +244,7 @@ class EncounterHistoryIntegrationTest {
                 BedHistoryConflictException.class, data.patientId());
 
         assertThat(locationRepository.existsByEncounter_Id(other)).isFalse();
-        assertThat(encounterService.getEncounter(other).getStatus()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(encounterQueries.getEncounter(other).status()).isEqualTo(EncounterStatus.ADMITTED);
     }
 
     private void assertWaitingWorkflowFails(Runnable first, Runnable second,
@@ -285,12 +291,12 @@ class EncounterHistoryIntegrationTest {
         throw new AssertionError("Concurrent workflow did not wait for the workflow lock");
     }
 
-    private Encounter admit(UUID patientId, OffsetDateTime admittedAt) {
+    private EncounterResponse admit(UUID patientId, OffsetDateTime admittedAt) {
         return encounterService.admitPatient(patientId, "ENC-" + UUID.randomUUID(), admittedAt);
     }
 
     private UUID newEncounter(OffsetDateTime admittedAt) {
-        return transactions.execute(status -> admit(createPatient().getId(), admittedAt).getId());
+        return transactions.execute(status -> admit(createPatient().getId(), admittedAt).id());
     }
 
     private Patient createPatient() {
@@ -300,7 +306,7 @@ class EncounterHistoryIntegrationTest {
         return patient;
     }
 
-    private EncounterLocation enter(UUID encounterId, HistoryData data, UUID bedId, OffsetDateTime startedAt) {
+    private EncounterLocationResponse enter(UUID encounterId, HistoryData data, UUID bedId, OffsetDateTime startedAt) {
         return encounterService.admitToDepartment(encounterId, data.departmentId(), data.wardId(), bedId, startedAt);
     }
 
@@ -324,7 +330,7 @@ class EncounterHistoryIntegrationTest {
             entityManager.persist(bed);
             entityManager.persist(otherBed);
             entityManager.flush();
-            return new HistoryData(patient.getId(), admit(patient.getId(), ADMITTED_AT).getId(),
+            return new HistoryData(patient.getId(), admit(patient.getId(), ADMITTED_AT).id(),
                     department.getId(), ward.getId(), bed.getId(), otherBed.getId());
         });
     }

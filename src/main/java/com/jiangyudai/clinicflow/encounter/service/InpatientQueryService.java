@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.common.query.SearchPatterns;
+
 import com.jiangyudai.clinicflow.encounter.dto.InpatientPageResponse;
 import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -22,7 +24,7 @@ public class InpatientQueryService {
     public InpatientPageResponse searchInpatients(InpatientSearchRequest search, int page, int size) {
         String keyword = search.keyword() == null ? "" : search.keyword().strip();
         // Search literal fragments, including identifiers containing LIKE metacharacters.
-        String pattern = "%" + keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        String pattern = SearchPatterns.containing(keyword);
         return InpatientPageResponse.from(encounterRepository.searchInpatients(
                 List.of(EncounterStatus.ADMITTED, EncounterStatus.IN_DEPARTMENT), search.status(),
                 search.departmentId(), search.wardId(), pattern, PageRequest.of(page, size)));

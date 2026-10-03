@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.PhysicianAssignmentResponse;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterPhysicianAssignment;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -44,6 +46,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class EncounterPhysicianIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterLocationRepository locations;
@@ -93,24 +98,24 @@ class EncounterPhysicianIntegrationTest {
         replacementId = physicians.create("PHY-" + UUID.randomUUID().toString().substring(0, 16),
                 "Alex", "Martin", Set.of(departmentId)).id();
         encounterId = admit();
-        locationId = encounters.admitToDepartment(encounterId, departmentId, wardId, bedId, ENTERED).getId();
+        locationId = encounters.admitToDepartment(encounterId, departmentId, wardId, bedId, ENTERED).id();
     }
 
     @Test
     void handsOverAndReleasesWithoutErasingHistory() {
         var first = assign(physicianId, null, ENTERED);
-        var next = assign(replacementId, first.getId(), ENTERED.plusHours(1));
-        service.release(encounterId, locationId, next.getId(), ENTERED.plusHours(2), "Release.Clerk");
+        var next = assign(replacementId, first.id(), ENTERED.plusHours(1));
+        service.release(encounterId, locationId, next.id(), ENTERED.plusHours(2), "Release.Clerk");
 
         var history = service.getHistory(encounterId);
-        assertThat(history).extracting(EncounterPhysicianAssignment::getId).containsExactly(first.getId(), next.getId());
+        assertThat(history).extracting(EncounterPhysicianAssignment::getId).containsExactly(first.id(), next.id());
         assertThat(history.getFirst().getAssignedBy()).isEqualTo("Assignment.Clerk");
         assertThat(history.getFirst().getEndReason()).isEqualTo(PhysicianAssignmentEndReason.REASSIGNED);
-        assertThat(history.getFirst().getEndedAt()).isEqualTo(next.getStartedAt());
+        assertThat(history.getFirst().getEndedAt()).isEqualTo(next.startedAt());
         assertThat(history.getLast().getEndReason()).isEqualTo(PhysicianAssignmentEndReason.RELEASED);
         assertThat(history.getLast().getEndedBy()).isEqualTo("Release.Clerk");
         assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
-        assertThat(encounters.getEncounter(encounterId).getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        assertThat(encounterQueries.getEncounter(encounterId).status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
         assertThat(service.getHistory(admit())).isEmpty();
     }
 
@@ -118,15 +123,15 @@ class EncounterPhysicianIntegrationTest {
     void rejectsStaleAssignmentLocationAndRepeatedSaves() {
         var first = assign(physicianId, null, ENTERED);
         assertThatThrownBy(() -> assign(replacementId, null, ENTERED)).isInstanceOf(PhysicianAssignmentConflictException.class);
-        assertThatThrownBy(() -> assign(physicianId, first.getId(), ENTERED)).isInstanceOf(PhysicianAssignmentConflictException.class);
-        var next = assign(replacementId, first.getId(), ENTERED.plusHours(1));
-        assertThatThrownBy(() -> service.release(encounterId, locationId, first.getId(), ENTERED.plusHours(2), "operator"))
+        assertThatThrownBy(() -> assign(physicianId, first.id(), ENTERED)).isInstanceOf(PhysicianAssignmentConflictException.class);
+        var next = assign(replacementId, first.id(), ENTERED.plusHours(1));
+        assertThatThrownBy(() -> service.release(encounterId, locationId, first.id(), ENTERED.plusHours(2), "operator"))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
         var moved = encounters.transferEncounter(encounterId, departmentId, wardId, secondBedId, ENTERED.plusHours(2), "operator", currentLocationId(encounterId));
-        assertThatThrownBy(() -> service.assign(encounterId, physicianId, locationId, next.getId(), ENTERED.plusHours(3), "operator"))
+        assertThatThrownBy(() -> service.assign(encounterId, physicianId, locationId, next.id(), ENTERED.plusHours(3), "operator"))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
-        assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId()).isEqualTo(next.getId());
-        assertThat(moved.getId()).isNotEqualTo(locationId);
+        assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId()).isEqualTo(next.id());
+        assertThat(moved.id()).isNotEqualTo(locationId);
     }
 
     @Test
@@ -134,15 +139,15 @@ class EncounterPhysicianIntegrationTest {
         var first = assign(physicianId, null, ENTERED);
         var replacement = physicians.get(replacementId);
         physicians.changeActive(replacementId, false, replacement.version());
-        assertThatThrownBy(() -> assign(replacementId, first.getId(), ENTERED.plusHours(1)))
+        assertThatThrownBy(() -> assign(replacementId, first.id(), ENTERED.plusHours(1)))
                 .isInstanceOf(InvalidPhysicianAssignmentException.class);
         replacement = physicians.get(replacementId);
         physicians.changeActive(replacementId, true, replacement.version());
         replacement = physicians.get(replacementId);
         physicians.update(replacementId, replacement.firstName(), replacement.lastName(), Set.of(otherDepartmentId), replacement.version());
-        assertThatThrownBy(() -> assign(replacementId, first.getId(), ENTERED.plusHours(1)))
+        assertThatThrownBy(() -> assign(replacementId, first.id(), ENTERED.plusHours(1)))
                 .isInstanceOf(InvalidPhysicianAssignmentException.class);
-        assertThatThrownBy(() -> assign(UUID.randomUUID(), first.getId(), ENTERED.plusHours(1)))
+        assertThatThrownBy(() -> assign(UUID.randomUUID(), first.id(), ENTERED.plusHours(1)))
                 .isInstanceOf(PhysicianNotFoundException.class);
         assertThat(service.getHistory(encounterId)).singleElement().satisfies(item -> assertThat(item.getEndedAt()).isNull());
     }
@@ -152,9 +157,9 @@ class EncounterPhysicianIntegrationTest {
         var first = assign(physicianId, null, ENTERED);
         transactions.executeWithoutResult(status -> entityManager.createNativeQuery("UPDATE departments SET active = false WHERE id = :id")
                 .setParameter("id", departmentId).executeUpdate());
-        assertThatThrownBy(() -> assign(replacementId, first.getId(), ENTERED.plusHours(1)))
+        assertThatThrownBy(() -> assign(replacementId, first.id(), ENTERED.plusHours(1)))
                 .isInstanceOf(InvalidPhysicianAssignmentException.class);
-        service.release(encounterId, locationId, first.getId(), ENTERED.plusHours(1), "operator");
+        service.release(encounterId, locationId, first.id(), ENTERED.plusHours(1), "operator");
         assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
     }
 
@@ -189,40 +194,40 @@ class EncounterPhysicianIntegrationTest {
     @Test
     void rejectsBackdatingAcrossOpenAndClosedResponsibilityEvenWhenUnassigned() {
         var first = assign(physicianId, null, ENTERED.plusHours(1));
-        assertThatThrownBy(() -> assign(replacementId, first.getId(), ENTERED))
+        assertThatThrownBy(() -> assign(replacementId, first.id(), ENTERED))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
-        assertThatThrownBy(() -> service.release(encounterId, locationId, first.getId(), ENTERED, "operator"))
+        assertThatThrownBy(() -> service.release(encounterId, locationId, first.id(), ENTERED, "operator"))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
-        var before = encounters.getTimeline(encounterId);
+        var before = encounterQueries.getTimeline(encounterId);
         assertThatThrownBy(() -> encounters.dischargeEncounter(encounterId, ENTERED, "operator", currentLocationId(encounterId)))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
-        assertThat(encounters.getTimeline(encounterId)).isEqualTo(before);
-        service.release(encounterId, locationId, first.getId(), ENTERED.plusHours(2), "operator");
+        assertThat(encounterQueries.getTimeline(encounterId)).isEqualTo(before);
+        service.release(encounterId, locationId, first.id(), ENTERED.plusHours(2), "operator");
         assertThatThrownBy(() -> assign(replacementId, null, ENTERED.plusHours(1)))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
         assertThatThrownBy(() -> encounters.dischargeEncounter(encounterId, ENTERED.plusHours(1), "operator", currentLocationId(encounterId)))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
         assertThatThrownBy(() -> encounters.transferEncounter(encounterId, otherDepartmentId, wardId, null, ENTERED.plusHours(1), "operator", currentLocationId(encounterId)))
                 .isInstanceOf(PhysicianAssignmentConflictException.class);
-        assertThat(encounters.getTimeline(encounterId)).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(encounterId)).isEqualTo(before);
         var next = assign(replacementId, null, ENTERED.plusHours(2));
-        assertThat(next.getStartedAt()).isEqualTo(ENTERED.plusHours(2));
+        assertThat(next.startedAt()).isEqualTo(ENTERED.plusHours(2));
     }
 
     @Test
     void sameDepartmentMoveRetainsPhysicianButDepartmentTransferEndsResponsibility() {
         var first = assign(physicianId, null, ENTERED);
         encounters.transferEncounter(encounterId, departmentId, wardId, secondBedId, ENTERED.plusHours(1), "bed-clerk", currentLocationId(encounterId));
-        assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId()).isEqualTo(first.getId());
+        assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId()).isEqualTo(first.id());
         var destination = encounters.transferEncounter(encounterId, otherDepartmentId, wardId, null, ENTERED.plusHours(2), "transfer-clerk", currentLocationId(encounterId));
         assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
         var ended = service.getHistory(encounterId).getFirst();
         assertThat(ended.getEndedAt()).isEqualTo(ENTERED.plusHours(2));
         assertThat(ended.getEndReason()).isEqualTo(PhysicianAssignmentEndReason.DEPARTMENT_TRANSFER);
         assertThat(ended.getEndedBy()).isEqualTo("transfer-clerk");
-        var selected = service.assign(encounterId, physicianId, destination.getId(), null, ENTERED.plusHours(2), "receiving-clerk");
-        assertThat(selected.getDepartment().getId()).isEqualTo(otherDepartmentId);
-        assertThat(selected.getId()).isNotEqualTo(first.getId());
+        var selected = service.assign(encounterId, physicianId, destination.id(), null, ENTERED.plusHours(2), "receiving-clerk");
+        assertThat(selected.departmentId()).isEqualTo(otherDepartmentId);
+        assertThat(selected.id()).isNotEqualTo(first.id());
     }
 
     @Test
@@ -232,38 +237,39 @@ class EncounterPhysicianIntegrationTest {
         var physician = physicians.get(physicianId);
         physicians.changeActive(physicianId, false, physician.version());
         encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk");
-        var restored = encounters.getTimeline(encounterId).locations().getLast();
+        var restored = encounterQueries.getTimeline(encounterId).locations().getLast();
         assertThat(assignments.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
         var ended = service.getHistory(encounterId).getFirst();
-        assertThat(ended.getId()).isEqualTo(first.getId());
+        assertThat(ended.getId()).isEqualTo(first.id());
         assertThat(ended.getEndReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
         assertThat(ended.getEndedBy()).isEqualTo("discharge-clerk");
         assertThatThrownBy(() -> service.assign(encounterId, physicianId, restored.id(), null, restored.startedAt(), "operator"))
                 .isInstanceOf(InvalidPhysicianAssignmentException.class);
         var confirmed = service.assign(encounterId, replacementId, restored.id(), null, restored.startedAt(), "operator");
-        assertThat(confirmed.getStartedAt()).isEqualTo(ended.getEndedAt());
+        assertThat(confirmed.startedAt()).isEqualTo(ended.getEndedAt());
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"handover", "transfer", "discharge"})
     void rollsBackAllChangesAfterAFlushedWorkflowFails(String workflow) {
         var first = assign(physicianId, null, ENTERED);
-        var before = encounters.getTimeline(encounterId);
+        long originalVersion = assignments.findById(first.id()).orElseThrow().getVersion();
+        var before = encounterQueries.getTimeline(encounterId);
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             switch (workflow) {
-                case "handover" -> assign(replacementId, first.getId(), ENTERED.plusHours(1));
+                case "handover" -> assign(replacementId, first.id(), ENTERED.plusHours(1));
                 case "transfer" -> encounters.transferEncounter(encounterId, otherDepartmentId, wardId, null, ENTERED.plusHours(1), "operator", currentLocationId(encounterId));
                 case "discharge" -> encounters.dischargeEncounter(encounterId, ENTERED.plusHours(1), "operator", currentLocationId(encounterId));
             }
             entityManager.flush();
             throw new IllegalStateException("Failure after workflow was flushed");
         })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after workflow was flushed");
-        assertThat(encounters.getTimeline(encounterId)).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(encounterId)).isEqualTo(before);
         assertThat(service.getHistory(encounterId)).singleElement().satisfies(item -> {
-            assertThat(item.getId()).isEqualTo(first.getId());
+            assertThat(item.getId()).isEqualTo(first.id());
             assertThat(item.getEndedAt()).isNull();
             assertThat(item.getEndedBy()).isNull();
-            assertThat(item.getVersion()).isEqualTo(first.getVersion());
+            assertThat(item.getVersion()).isEqualTo(originalVersion);
         });
     }
 
@@ -287,20 +293,20 @@ class EncounterPhysicianIntegrationTest {
     @WithMockUser(username = "operator", roles = "OPERATOR")
     void conflictingDischargeTimeReturnsAConflictAndKeepsTheBedOccupied() throws Exception {
         assign(physicianId, null, ENTERED.plusHours(1));
-        var before = encounters.getTimeline(encounterId);
+        var before = encounterQueries.getTimeline(encounterId);
         mvc.perform(post("/api/v1/encounters/{id}/discharges", encounterId).with(csrf())
                         .contentType("application/json").content("{\"dischargedAt\":\"2025-09-01T10:00:00-04:00\",\"expectedLocationId\":\"%s\"}".formatted(locationId)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.title").value("Physician assignment conflict"));
-        assertThat(encounters.getTimeline(encounterId)).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(encounterId)).isEqualTo(before);
     }
 
-    private EncounterPhysicianAssignment assign(UUID physician, UUID expected, OffsetDateTime time) {
+    private PhysicianAssignmentResponse assign(UUID physician, UUID expected, OffsetDateTime time) {
         return service.assign(encounterId, physician, locationId, expected, time, "Assignment.Clerk");
     }
 
     private UUID admit() {
         var patient = patients.createPatient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 1, 1));
-        return encounters.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ENTERED.minusHours(1)).getId();
+        return encounters.admitPatient(patient.id(), "ENC-" + UUID.randomUUID(), ENTERED.minusHours(1)).id();
     }
 
     private UUID currentLocationId(UUID encounterId) {

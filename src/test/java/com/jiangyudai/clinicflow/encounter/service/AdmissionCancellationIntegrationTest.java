@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -133,14 +134,14 @@ class AdmissionCancellationIntegrationTest {
         CancellationData data = createCancellationData();
         encounterService.cancelAdmission(data.encounterId(), data.cancelledAt(), "demo-clerk");
 
-        Encounter readmission = encounterService.admitPatient(
+        EncounterResponse readmission = encounterService.admitPatient(
                 data.patientId(), "ENC-" + UUID.randomUUID(), data.cancelledAt().plusHours(1)
         );
 
-        assertThat(readmission.getId()).isNotEqualTo(data.encounterId());
-        assertThat(readmission.getStatus()).isEqualTo(EncounterStatus.ADMITTED);
-        assertThat(readmission.getAdmissionCancelledAt()).isNull();
-        assertThat(readmission.getAdmissionCancelledBy()).isNull();
+        assertThat(readmission.id()).isNotEqualTo(data.encounterId());
+        assertThat(readmission.status()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(readmission.admissionCancelledAt()).isNull();
+        assertThat(readmission.admissionCancelledBy()).isNull();
         assertThatThrownBy(() -> encounterService.admitPatient(
                 data.patientId(), data.encounterNumber(), data.cancelledAt().plusHours(1)
         )).isInstanceOf(DuplicateEncounterNumberException.class);
@@ -343,10 +344,10 @@ class AdmissionCancellationIntegrationTest {
             entityManager.persist(ward);
             entityManager.persist(bed);
             entityManager.flush();
-            Encounter encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, admittedAt);
+            EncounterResponse encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, admittedAt);
 
             return new CancellationData(
-                    patient.getId(), encounter.getId(), encounter.getEncounterNumber(),
+                    patient.getId(), encounter.id(), encounter.encounterNumber(),
                     department.getId(), ward.getId(), bed.getId(), admittedAt, admittedAt.plusHours(1)
             );
         });

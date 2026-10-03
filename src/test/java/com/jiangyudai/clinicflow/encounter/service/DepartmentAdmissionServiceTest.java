@@ -1,5 +1,9 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
+import org.mockito.ArgumentCaptor;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -21,9 +25,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,6 +83,9 @@ class DepartmentAdmissionServiceTest {
     @Mock
     private EncounterPhysicianService physicianService;
 
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
+
     @InjectMocks
     private EncounterService encounterService;
 
@@ -108,7 +118,7 @@ class DepartmentAdmissionServiceTest {
         when(encounterLocationRepository.save(any(EncounterLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        EncounterLocation location = encounterService.admitToDepartment(
+        EncounterLocationResponse location = encounterService.admitToDepartment(
                 ENCOUNTER_ID,
                 DEPARTMENT_ID,
                 WARD_ID,
@@ -116,16 +126,18 @@ class DepartmentAdmissionServiceTest {
                 STARTED_AT
         );
 
-        assertThat(location.getEncounter()).isSameAs(encounter);
-        assertThat(location.getDepartment()).isSameAs(department);
-        assertThat(location.getWard()).isSameAs(ward);
-        assertThat(location.getBed()).isSameAs(bed);
-        assertThat(location.getStartedAt()).isEqualTo(STARTED_AT);
-        assertThat(location.getEndedAt()).isNull();
+        assertThat(location.encounterId()).isEqualTo(encounter.getId());
+        assertThat(location.departmentId()).isEqualTo(department.getId());
+        assertThat(location.wardId()).isEqualTo(ward.getId());
+        assertThat(location.bedId()).isEqualTo(bed.getId());
+        assertThat(location.startedAt()).isEqualTo(STARTED_AT);
+        assertThat(location.endedAt()).isNull();
         assertThat(encounter.getStatus())
                 .isEqualTo(EncounterStatus.IN_DEPARTMENT);
 
-        verify(encounterLocationRepository).save(location);
+        var saved = ArgumentCaptor.forClass(EncounterLocation.class);
+        verify(encounterLocationRepository).save(saved.capture());
+        assertThat(EncounterLocationResponse.from(saved.getValue())).isEqualTo(location);
         verify(encounterLocationRepository)
                 .existsByBed_IdAndEndedAtIsNull(BED_ID);
     }
@@ -138,7 +150,7 @@ class DepartmentAdmissionServiceTest {
         when(encounterLocationRepository.save(any(EncounterLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        EncounterLocation location = encounterService.admitToDepartment(
+        EncounterLocationResponse location = encounterService.admitToDepartment(
                 ENCOUNTER_ID,
                 DEPARTMENT_ID,
                 WARD_ID,
@@ -146,12 +158,14 @@ class DepartmentAdmissionServiceTest {
                 STARTED_AT
         );
 
-        assertThat(location.getBed()).isNull();
-        assertThat(location.getWard()).isSameAs(ward);
+        assertThat(location.bedId()).isNull();
+        assertThat(location.wardId()).isEqualTo(ward.getId());
         assertThat(encounter.getStatus())
                 .isEqualTo(EncounterStatus.IN_DEPARTMENT);
 
-        verify(encounterLocationRepository).save(location);
+        var saved = ArgumentCaptor.forClass(EncounterLocation.class);
+        verify(encounterLocationRepository).save(saved.capture());
+        assertThat(EncounterLocationResponse.from(saved.getValue())).isEqualTo(location);
         verify(locationService, never())
                 .getActiveBedForUpdate(any(), any());
         verify(encounterLocationRepository, never())
@@ -203,7 +217,7 @@ class DepartmentAdmissionServiceTest {
                 DEPARTMENT_ID,
                 WARD_ID,
                 BED_ID,
-                OffsetDateTime.now().plusDays(1)
+                NOW.plusDays(1)
         )).isInstanceOf(InvalidDepartmentAdmissionTimeException.class)
                 .hasMessageContaining("future");
 

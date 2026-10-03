@@ -73,8 +73,8 @@ public class EncounterDischarge {
     /**
      * Retains discharge audit and links the continuation of effective location history.
      */
-    public void cancelAt(OffsetDateTime cancelledAt, String cancelledBy, EncounterLocation restoredLocation) {
-        validateCancellation(cancelledAt, cancelledBy);
+    public void cancelAt(OffsetDateTime cancelledAt, String cancelledBy, EncounterLocation restoredLocation, OffsetDateTime now) {
+        validateCancellation(cancelledAt, cancelledBy, now);
         if (restoredLocation == null
                 || restoredLocation.getEndedAt() != null
                 || restoredLocation.getStartedAt() == null
@@ -92,7 +92,7 @@ public class EncounterDischarge {
     /**
      * Validates cancellation before the workflow checks historical availability.
      */
-    public void validateCancellation(OffsetDateTime cancelledAt, String cancelledBy) {
+    public void validateCancellation(OffsetDateTime cancelledAt, String cancelledBy, OffsetDateTime now) {
         if (this.cancelledAt != null) {
             throw new DischargeRecordConflictException("Discharge has already been cancelled");
         }
@@ -102,7 +102,7 @@ public class EncounterDischarge {
         if (cancelledAt.isBefore(dischargedAt)) {
             throw new InvalidDischargeCancellationException("Cancellation time cannot be before discharge");
         }
-        if (cancelledAt.isAfter(OffsetDateTime.now())) {
+        if (cancelledAt.isAfter(now)) {
             throw new InvalidDischargeCancellationException("Cancellation time cannot be in the future");
         }
         if (cancelledBy == null || cancelledBy.isBlank()) {

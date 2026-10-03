@@ -1,5 +1,8 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
@@ -39,6 +42,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfiguration.class)
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterControllerTest {
+    @MockitoBean
+    private EncounterQueryService encounterQueries;
+
 
     private static final UUID EXPECTED_LOCATION_ID = UUID.fromString("99999999-1111-2222-3333-444444444444");
 
@@ -93,7 +99,7 @@ class EncounterControllerTest {
                 eq(PATIENT_ID),
                 eq("ENC-2026-000001"),
                 any(OffsetDateTime.class)
-        )).thenReturn(encounter);
+        )).thenAnswer(invocation -> EncounterResponse.from(encounter));
 
         mockMvc.perform(post("/api/v1/encounters").with(csrf())
                         .contentType("application/json")
@@ -118,8 +124,8 @@ class EncounterControllerTest {
     void returnsEncounter() throws Exception {
         Encounter encounter = createEncounter();
 
-        when(encounterService.getEncounter(ENCOUNTER_ID))
-                .thenReturn(encounter);
+        when(encounterQueries.getEncounter(ENCOUNTER_ID))
+                .thenAnswer(invocation -> EncounterResponse.from(encounter));
 
         mockMvc.perform(get("/api/v1/encounters/{id}", ENCOUNTER_ID))
                 .andExpect(status().isOk())
@@ -183,7 +189,7 @@ class EncounterControllerTest {
 
     @Test
     void returnsNotFoundForMissingEncounter() throws Exception {
-        when(encounterService.getEncounter(ENCOUNTER_ID))
+        when(encounterQueries.getEncounter(ENCOUNTER_ID))
                 .thenThrow(new EncounterNotFoundException(ENCOUNTER_ID));
 
         mockMvc.perform(get("/api/v1/encounters/{id}", ENCOUNTER_ID))
@@ -204,7 +210,7 @@ class EncounterControllerTest {
                 argThat(time ->
                         time.isEqual(DEPARTMENT_ADMITTED_AT)
                 )
-        )).thenReturn(location);
+        )).thenAnswer(invocation -> EncounterLocationResponse.from(location));
 
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/department-admissions",
@@ -341,7 +347,7 @@ class EncounterControllerTest {
                 eq(WARD_ID),
                 eq(BED_ID),
                 argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
-        )).thenReturn(location);
+        )).thenAnswer(invocation -> EncounterLocationResponse.from(location));
 
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",
@@ -386,7 +392,7 @@ class EncounterControllerTest {
                 eq(WARD_ID),
                 isNull(),
                 argThat(time -> time.isEqual(TRANSFERRED_AT)), eq("test-operator"), eq(EXPECTED_LOCATION_ID)
-        )).thenReturn(location);
+        )).thenAnswer(invocation -> EncounterLocationResponse.from(location));
 
         mockMvc.perform(post(
                         "/api/v1/encounters/{id}/transfers",

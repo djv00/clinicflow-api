@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.physician.service;
 
+import com.jiangyudai.clinicflow.common.query.SearchPatterns;
+
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.exception.LocationNotFoundException;
 import com.jiangyudai.clinicflow.location.repository.DepartmentRepository;
@@ -40,7 +42,7 @@ public class PhysicianService {
     /** Searches literal name/code fragments and pages physicians before fetching affiliations. */
     public PhysicianPageResponse search(String keyword, UUID departmentId, Boolean active, int page, int size) {
         String search = keyword == null ? "" : keyword.strip();
-        String pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        String pattern = SearchPatterns.containing(search);
         var result = physicians.search(pattern, departmentId, active,
                 PageRequest.of(page, size, Sort.by("lastName", "firstName", "physicianCode")));
         if (result.isEmpty()) {

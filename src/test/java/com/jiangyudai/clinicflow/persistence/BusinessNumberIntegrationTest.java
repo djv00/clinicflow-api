@@ -70,14 +70,14 @@ class BusinessNumberIntegrationTest {
     void normalizationPreservesCaseAndInternalSpaces() {
         String prefix = UUID.randomUUID().toString().substring(0, 12);
         var patient = patients.createPatient("\t " + prefix + "-a B \r\n", "Maya", "Chen", LocalDate.of(1990, 5, 14));
-        assertThat(patient.getMedicalRecordNumber()).isEqualTo(prefix + "-a B");
-        var encounter = encounters.admitPatient(patient.getId(), "\t " + prefix + "-c D \r\n", OffsetDateTime.now().minusDays(1));
-        assertThat(encounter.getEncounterNumber()).isEqualTo(prefix + "-c D");
-        assertThat(patients.createPatient(prefix + "-A B", "Alex", "Martin", LocalDate.of(1985, 1, 1)).getId())
-                .isNotEqualTo(patient.getId());
+        assertThat(patient.medicalRecordNumber()).isEqualTo(prefix + "-a B");
+        var encounter = encounters.admitPatient(patient.id(), "\t " + prefix + "-c D \r\n", OffsetDateTime.now().minusDays(1));
+        assertThat(encounter.encounterNumber()).isEqualTo(prefix + "-c D");
+        assertThat(patients.createPatient(prefix + "-A B", "Alex", "Martin", LocalDate.of(1985, 1, 1)).id())
+                .isNotEqualTo(patient.id());
     }
 
     private UUID registerPatient() {
-        return patients.createPatient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 1, 1)).getId();
+        return patients.createPatient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 1, 1)).id();
     }
 }

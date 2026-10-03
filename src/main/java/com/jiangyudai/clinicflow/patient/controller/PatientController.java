@@ -4,7 +4,6 @@ import com.jiangyudai.clinicflow.patient.dto.CreatePatientRequest;
 import com.jiangyudai.clinicflow.patient.dto.PatientPageResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientSearchRequest;
-import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -39,14 +38,12 @@ public class PatientController {
     public PatientResponse createPatient(
             @Valid @RequestBody CreatePatientRequest request
     ) {
-        Patient patient = patientService.createPatient(
+        return patientService.createPatient(
                 request.medicalRecordNumber(),
                 request.firstName(),
                 request.lastName(),
                 request.dateOfBirth()
         );
-
-        return PatientResponse.from(patient);
     }
 
     @GetMapping
@@ -56,6 +53,6 @@ public class PatientController {
 
     @GetMapping("/{id}")
     public PatientResponse getPatient(@PathVariable UUID id) {
-        return PatientResponse.from(patientService.getPatient(id));
+        return patientService.getPatient(id);
     }
 }

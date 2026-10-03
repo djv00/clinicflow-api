@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationHistoryExistsException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionCancellationException;
@@ -34,6 +35,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfiguration.class)
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class AdmissionCancellationControllerTest {
+    @MockitoBean
+    private EncounterQueryService encounterQueries;
+
 
     private static final UUID ENCOUNTER_ID = UUID.fromString(
             "22222222-2222-2222-2222-222222222222"

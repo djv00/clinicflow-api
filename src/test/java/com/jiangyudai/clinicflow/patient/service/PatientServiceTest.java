@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.patient.service;
 
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.repository.PatientRepository;
@@ -38,16 +39,16 @@ class PatientServiceTest {
         when(patientRepository.saveAndFlush(any(Patient.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Patient patient = patientService.createPatient(
+        PatientResponse patient = patientService.createPatient(
                 "MRN-100001",
                 "Maya",
                 "Chen",
                 LocalDate.of(1990, 5, 14)
         );
 
-        assertThat(patient.getMedicalRecordNumber())
+        assertThat(patient.medicalRecordNumber())
                 .isEqualTo("MRN-100001");
-        assertThat(patient.getFirstName()).isEqualTo("Maya");
+        assertThat(patient.firstName()).isEqualTo("Maya");
 
         verify(patientRepository).saveAndFlush(any(Patient.class));
     }

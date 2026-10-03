@@ -73,13 +73,13 @@ public class EncounterPhysicianAssignment {
     }
 
     public EncounterPhysicianAssignment(Encounter encounter, Physician physician, Department department,
-                                        OffsetDateTime startedAt, String assignedBy) {
+                                        OffsetDateTime startedAt, String assignedBy, OffsetDateTime now) {
         Assert.notNull(encounter, "Encounter is required");
         Assert.notNull(physician, "Physician is required");
         Assert.notNull(department, "Department is required");
         Assert.notNull(startedAt, "Assignment start time is required");
         Assert.isTrue(!startedAt.isBefore(encounter.getAdmittedAt()), "Assignment cannot start before hospital admission");
-        Assert.isTrue(!startedAt.isAfter(OffsetDateTime.now()), "Assignment cannot start in the future");
+        Assert.isTrue(!startedAt.isAfter(now), "Assignment cannot start in the future");
         validateOperator(assignedBy);
         this.encounter = encounter;
         this.physician = physician;
@@ -89,11 +89,11 @@ public class EncounterPhysicianAssignment {
     }
 
     /** Closes a responsibility period without changing its physician, department, or start audit. */
-    public void endAt(OffsetDateTime endedAt, PhysicianAssignmentEndReason reason, String endedBy) {
+    public void endAt(OffsetDateTime endedAt, PhysicianAssignmentEndReason reason, String endedBy, OffsetDateTime now) {
         Assert.state(this.endedAt == null, "Physician assignment has already ended");
         Assert.notNull(endedAt, "Assignment end time is required");
         Assert.isTrue(!endedAt.isBefore(startedAt), "Assignment cannot end before it starts");
-        Assert.isTrue(!endedAt.isAfter(OffsetDateTime.now()), "Assignment cannot end in the future");
+        Assert.isTrue(!endedAt.isAfter(now), "Assignment cannot end in the future");
         Assert.notNull(reason, "Assignment end reason is required");
         validateOperator(endedBy);
         this.endedAt = endedAt;

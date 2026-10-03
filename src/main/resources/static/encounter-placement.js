@@ -275,7 +275,7 @@ element('department-form').addEventListener('submit', async (event) => {
         if (!(error instanceof ApiError) || error.status >= 500) {
             message = `${workflow.label} could not be confirmed. Refresh availability to check the encounter before trying again.`;
         } else if (error.status === 409) {
-            message = error.title === 'Encounter history conflict'
+            message = error.code === 'BED_HISTORY_CONFLICT'
                 ? 'The bed has occupancy history after the requested time. Check the time or choose another bed, then refresh availability.'
                 : 'The encounter or placement has changed, or the bed is no longer available. Refresh availability before trying again.';
         } else if (error.status === 404 || error.status === 400 && !Object.keys(error.fields).length) {

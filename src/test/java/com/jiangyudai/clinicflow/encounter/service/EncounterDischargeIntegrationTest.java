@@ -1,11 +1,12 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
-import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationChangedException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
@@ -54,6 +55,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterDischargeIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterService encounterService;
@@ -119,12 +123,12 @@ class EncounterDischargeIntegrationTest {
                 first.bedId(), second.dischargedAt(), "test-clerk", currentLocationId(second.encounterId())
         );
 
-        Encounter readmission = encounterService.admitPatient(
+        EncounterResponse readmission = encounterService.admitPatient(
                 first.patientId(), "ENC-" + UUID.randomUUID(), first.dischargedAt().plusHours(1)
         );
 
-        assertThat(readmission.getStatus()).isEqualTo(EncounterStatus.ADMITTED);
-        assertThat(readmission.getId()).isNotEqualTo(first.encounterId());
+        assertThat(readmission.status()).isEqualTo(EncounterStatus.ADMITTED);
+        assertThat(readmission.id()).isNotEqualTo(first.encounterId());
         transactions.executeWithoutResult(status -> {
             EncounterLocation location = encounterLocationRepository
                     .findByEncounter_IdAndEndedAtIsNull(second.encounterId()).orElseThrow();
@@ -325,9 +329,9 @@ class EncounterDischargeIntegrationTest {
             entityManager.persist(otherBed);
             entityManager.flush();
 
-            Encounter encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, admittedAt);
+            EncounterResponse encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, admittedAt);
             return new DischargeData(
-                    patient.getId(), encounter.getId(), department.getId(), ward.getId(),
+                    patient.getId(), encounter.id(), department.getId(), ward.getId(),
                     bed.getId(), otherBed.getId(), admittedAt.plusHours(1), admittedAt.plusDays(2)
             );
         });
@@ -365,7 +369,7 @@ class EncounterDischargeIntegrationTest {
         UUID seenLocation = currentLocationId(data.encounterId());
         encounterService.transferEncounter(data.encounterId(), data.departmentId(), data.wardId(),
                 data.otherBedId(), data.startedAt().plusHours(1), "other-clerk", seenLocation);
-        var before = encounterService.getTimeline(data.encounterId());
+        var before = encounterQueries.getTimeline(data.encounterId());
         String body = discharge
                 ? "{\"dischargedAt\":\"%s\",\"expectedLocationId\":\"%s\"}"
                     .formatted(data.dischargedAt(), seenLocation)
@@ -375,6 +379,6 @@ class EncounterDischargeIntegrationTest {
                         .with(csrf()).contentType("application/json").content(body))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("The current placement has changed. Reload it before saving."));
-        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(data.encounterId())).isEqualTo(before);
     }
 }

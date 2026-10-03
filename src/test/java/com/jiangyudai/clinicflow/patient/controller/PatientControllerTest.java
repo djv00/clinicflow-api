@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.patient.controller;
 
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
 import com.jiangyudai.clinicflow.patient.exception.PatientNotFoundException;
@@ -48,7 +49,7 @@ class PatientControllerTest {
                 "Maya",
                 "Chen",
                 LocalDate.of(1990, 5, 14)
-        )).thenReturn(patient);
+        )).thenReturn(PatientResponse.from(patient));
 
         mockMvc.perform(post("/api/v1/patients").with(csrf())
                         .contentType("application/json")

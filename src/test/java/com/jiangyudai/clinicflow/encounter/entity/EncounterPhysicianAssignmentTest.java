@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.physician.entity.Physician;
@@ -26,7 +28,7 @@ class EncounterPhysicianAssignmentTest {
     void retainsStartAuditAndReferencesWhenClosingResponsibility() {
         var assignment = assignment();
 
-        assignment.endAt(START.plusHours(2), PhysicianAssignmentEndReason.REASSIGNED, "Second.Operator");
+        assignment.endAt(START.plusHours(2), PhysicianAssignmentEndReason.REASSIGNED, "Second.Operator", NOW);
 
         assertThat(assignment.getEncounter()).isSameAs(encounter);
         assertThat(assignment.getPhysician()).isSameAs(physician);
@@ -43,7 +45,7 @@ class EncounterPhysicianAssignmentTest {
         var assignment = assignment();
         OffsetDateTime sameInstant = START.withOffsetSameInstant(ZoneOffset.UTC);
 
-        assignment.endAt(sameInstant, PhysicianAssignmentEndReason.RELEASED, "operator");
+        assignment.endAt(sameInstant, PhysicianAssignmentEndReason.RELEASED, "operator", NOW);
 
         assertThat(assignment.getEndedAt().isEqual(assignment.getStartedAt())).isTrue();
     }
@@ -51,9 +53,9 @@ class EncounterPhysicianAssignmentTest {
     @Test
     void cannotOverwriteAClosedAssignment() {
         var assignment = assignment();
-        assignment.endAt(START.plusHours(1), PhysicianAssignmentEndReason.DISCHARGE, "operator");
+        assignment.endAt(START.plusHours(1), PhysicianAssignmentEndReason.DISCHARGE, "operator", NOW);
 
-        assertThatThrownBy(() -> assignment.endAt(START.plusHours(2), PhysicianAssignmentEndReason.REASSIGNED, "other"))
+        assertThatThrownBy(() -> assignment.endAt(START.plusHours(2), PhysicianAssignmentEndReason.REASSIGNED, "other", NOW))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(assignment.getEndedAt()).isEqualTo(START.plusHours(1));
         assertThat(assignment.getEndReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
@@ -63,13 +65,13 @@ class EncounterPhysicianAssignmentTest {
     @Test
     void rejectsInvalidTimesAndLeavesTheAssignmentOpen() {
         var assignment = assignment();
-        for (OffsetDateTime end : new OffsetDateTime[]{null, START.minusSeconds(1), OffsetDateTime.now().plusDays(1)}) {
-            assertThatThrownBy(() -> assignment.endAt(end, PhysicianAssignmentEndReason.DISCHARGE, "operator"))
+        for (OffsetDateTime end : new OffsetDateTime[]{null, START.minusSeconds(1), NOW.plusDays(1)}) {
+            assertThatThrownBy(() -> assignment.endAt(end, PhysicianAssignmentEndReason.DISCHARGE, "operator", NOW))
                     .isInstanceOf(IllegalArgumentException.class);
             assertOpen(assignment);
         }
-        for (OffsetDateTime start : new OffsetDateTime[]{null, encounter.getAdmittedAt().minusSeconds(1), OffsetDateTime.now().plusDays(1)}) {
-            assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, start, "operator"))
+        for (OffsetDateTime start : new OffsetDateTime[]{null, encounter.getAdmittedAt().minusSeconds(1), NOW.plusDays(1)}) {
+            assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, start, "operator", NOW))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -78,11 +80,11 @@ class EncounterPhysicianAssignmentTest {
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t"})
     void rejectsMissingOperatorsWithoutPartiallyClosing(String operator) {
-        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, START, operator))
+        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, START, operator, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
         var assignment = assignment();
 
-        assertThatThrownBy(() -> assignment.endAt(START.plusHours(1), PhysicianAssignmentEndReason.RELEASED, operator))
+        assertThatThrownBy(() -> assignment.endAt(START.plusHours(1), PhysicianAssignmentEndReason.RELEASED, operator, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
         assertOpen(assignment);
     }
@@ -90,28 +92,28 @@ class EncounterPhysicianAssignmentTest {
     @Test
     void rejectsOverlongAuditAndMissingReasonWithoutPartialChanges() {
         String overlong = "x".repeat(101);
-        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, START, overlong))
+        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, department, START, overlong, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
         var assignment = assignment();
-        assertThatThrownBy(() -> assignment.endAt(START, PhysicianAssignmentEndReason.RELEASED, overlong))
+        assertThatThrownBy(() -> assignment.endAt(START, PhysicianAssignmentEndReason.RELEASED, overlong, NOW))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> assignment.endAt(START, null, "operator"))
+        assertThatThrownBy(() -> assignment.endAt(START, null, "operator", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
         assertOpen(assignment);
     }
 
     @Test
     void requiresAllThreeBusinessReferences() {
-        assertThatThrownBy(() -> new EncounterPhysicianAssignment(null, physician, department, START, "operator"))
+        assertThatThrownBy(() -> new EncounterPhysicianAssignment(null, physician, department, START, "operator", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, null, department, START, "operator"))
+        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, null, department, START, "operator", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, null, START, "operator"))
+        assertThatThrownBy(() -> new EncounterPhysicianAssignment(encounter, physician, null, START, "operator", NOW))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     private EncounterPhysicianAssignment assignment() {
-        return new EncounterPhysicianAssignment(encounter, physician, department, START, "First.Operator");
+        return new EncounterPhysicianAssignment(encounter, physician, department, START, "First.Operator", NOW);
     }
 
     private static void assertOpen(EncounterPhysicianAssignment assignment) {

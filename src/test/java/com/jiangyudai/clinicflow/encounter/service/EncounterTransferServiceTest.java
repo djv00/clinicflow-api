@@ -1,5 +1,9 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
+import org.mockito.ArgumentCaptor;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -17,10 +21,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,6 +93,9 @@ class EncounterTransferServiceTest {
 
     @Mock
     private EncounterPhysicianService physicianService;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
 
     @InjectMocks
     private EncounterService encounterService;
@@ -191,8 +201,7 @@ class EncounterTransferServiceTest {
                 any(EncounterLocation.class)
         )).thenAnswer(invocation -> invocation.getArgument(0));
 
-        EncounterLocation nextLocation =
-                encounterService.transferEncounter(
+        EncounterLocationResponse nextLocation = encounterService.transferEncounter(
                         ENCOUNTER_ID,
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
@@ -203,19 +212,21 @@ class EncounterTransferServiceTest {
         assertThat(currentLocation.getEndedAt())
                 .isEqualTo(TRANSFERRED_AT);
 
-        assertThat(nextLocation.getEncounter()).isSameAs(encounter);
-        assertThat(nextLocation.getDepartment())
-                .isSameAs(targetDepartment);
-        assertThat(nextLocation.getWard()).isSameAs(targetWard);
-        assertThat(nextLocation.getBed()).isSameAs(targetBed);
-        assertThat(nextLocation.getStartedAt())
+        assertThat(nextLocation.encounterId()).isEqualTo(encounter.getId());
+        assertThat(nextLocation.departmentId())
+                .isEqualTo(targetDepartment.getId());
+        assertThat(nextLocation.wardId()).isEqualTo(targetWard.getId());
+        assertThat(nextLocation.bedId()).isEqualTo(targetBed.getId());
+        assertThat(nextLocation.startedAt())
                 .isEqualTo(TRANSFERRED_AT);
-        assertThat(nextLocation.getEndedAt()).isNull();
+        assertThat(nextLocation.endedAt()).isNull();
 
         assertThat(encounter.getStatus())
                 .isEqualTo(EncounterStatus.IN_DEPARTMENT);
 
-        verify(encounterLocationRepository).save(nextLocation);
+        var saved = ArgumentCaptor.forClass(EncounterLocation.class);
+        verify(encounterLocationRepository).save(saved.capture());
+        assertThat(EncounterLocationResponse.from(saved.getValue())).isEqualTo(nextLocation);
         verify(encounterLocationRepository)
                 .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
                         TARGET_BED_ID,
@@ -232,8 +243,7 @@ class EncounterTransferServiceTest {
                 any(EncounterLocation.class)
         )).thenAnswer(invocation -> invocation.getArgument(0));
 
-        EncounterLocation nextLocation =
-                encounterService.transferEncounter(
+        EncounterLocationResponse nextLocation = encounterService.transferEncounter(
                         ENCOUNTER_ID,
                         TARGET_DEPARTMENT_ID,
                         TARGET_WARD_ID,
@@ -243,11 +253,11 @@ class EncounterTransferServiceTest {
 
         assertThat(currentLocation.getEndedAt())
                 .isEqualTo(TRANSFERRED_AT);
-        assertThat(nextLocation.getDepartment())
-                .isSameAs(targetDepartment);
-        assertThat(nextLocation.getWard()).isSameAs(targetWard);
-        assertThat(nextLocation.getBed()).isNull();
-        assertThat(nextLocation.getStartedAt())
+        assertThat(nextLocation.departmentId())
+                .isEqualTo(targetDepartment.getId());
+        assertThat(nextLocation.wardId()).isEqualTo(targetWard.getId());
+        assertThat(nextLocation.bedId()).isNull();
+        assertThat(nextLocation.startedAt())
                 .isEqualTo(TRANSFERRED_AT);
 
         verify(locationService, never())
@@ -257,7 +267,9 @@ class EncounterTransferServiceTest {
                         any(),
                         any()
                 );
-        verify(encounterLocationRepository).save(nextLocation);
+        var saved = ArgumentCaptor.forClass(EncounterLocation.class);
+        verify(encounterLocationRepository).save(saved.capture());
+        assertThat(EncounterLocationResponse.from(saved.getValue())).isEqualTo(nextLocation);
     }
 
 
@@ -383,7 +395,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                OffsetDateTime.now().plusDays(1), "test-clerk", CURRENT_LOCATION_ID
+                NOW.plusDays(1), "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("future");
 
@@ -418,8 +430,7 @@ class EncounterTransferServiceTest {
                 any(EncounterLocation.class)
         )).thenAnswer(invocation -> invocation.getArgument(0));
 
-        EncounterLocation nextLocation =
-                encounterService.transferEncounter(
+        EncounterLocationResponse nextLocation = encounterService.transferEncounter(
                         ENCOUNTER_ID,
                         CURRENT_DEPARTMENT_ID,
                         CURRENT_WARD_ID,
@@ -429,17 +440,19 @@ class EncounterTransferServiceTest {
 
         assertThat(currentLocation.getEndedAt())
                 .isEqualTo(TRANSFERRED_AT);
-        assertThat(nextLocation.getDepartment())
-                .isSameAs(currentDepartment);
-        assertThat(nextLocation.getWard()).isSameAs(currentWard);
-        assertThat(nextLocation.getBed()).isSameAs(nextBed);
+        assertThat(nextLocation.departmentId())
+                .isEqualTo(currentDepartment.getId());
+        assertThat(nextLocation.wardId()).isEqualTo(currentWard.getId());
+        assertThat(nextLocation.bedId()).isEqualTo(nextBed.getId());
 
         verify(encounterLocationRepository)
                 .existsByBed_IdAndEndedAtIsNullAndEncounter_IdNot(
                         TARGET_BED_ID,
                         ENCOUNTER_ID
                 );
-        verify(encounterLocationRepository).save(nextLocation);
+        var saved = ArgumentCaptor.forClass(EncounterLocation.class);
+        verify(encounterLocationRepository).save(saved.capture());
+        assertThat(EncounterLocationResponse.from(saved.getValue())).isEqualTo(nextLocation);
     }
 
     @Test

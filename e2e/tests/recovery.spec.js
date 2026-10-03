@@ -1,4 +1,26 @@
-import { test, expect, signIn, seedEncounter, openPatient, choosePlacement, minutesAgo } from './support.js';
+import { test, expect, signIn, seedEncounter, openPatient, choosePlacement, minutesAgo, uniqueCode } from './support.js';
+
+test('admission recovery uses the error code even when presentation text changes', async ({ page, operatorApi }) => {
+  const existing = await seedEncounter(operatorApi);
+  const patient = await operatorApi.write('/api/v1/patients', {
+    medicalRecordNumber: uniqueCode('MRN'), firstName: 'Error', lastName: 'Contract', dateOfBirth: '1990-01-01'
+  });
+  await signIn(page);
+  await openPatient(page, patient.medicalRecordNumber);
+  await page.getByRole('button', { name: 'Admit patient', exact: true }).click();
+  await page.getByLabel('Encounter number', { exact: true }).fill(existing.encounter.encounterNumber);
+  await page.route('**/api/v1/encounters', async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(409);
+    const problem = await response.json();
+    expect(problem.code).toBe('DUPLICATE_ENCOUNTER_NUMBER');
+    // Keep the real business rejection and code; only its presentation wording changes.
+    await route.fulfill({ response, json: { ...problem, title: 'Updated title', detail: 'Updated explanation' } });
+  }, { times: 1 });
+  await page.getByRole('button', { name: 'Save admission', exact: true }).click();
+  await expect(page.locator('#encounterNumber-error')).toContainText('already in use');
+  expect((await operatorApi.get(`/api/v1/patients/${patient.id}/encounters`)).totalElements).toBe(0);
+});
 
 test('a transfer committed after the page precheck rejects the stale write and requires refresh', async ({ page, operatorApi }) => {
   const care = await seedEncounter(operatorApi);

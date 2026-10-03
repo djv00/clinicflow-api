@@ -1,5 +1,8 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -24,10 +27,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,6 +70,9 @@ class EncounterDischargeServiceTest {
     @Mock
     private EncounterPhysicianService physicianService;
 
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
+
     @InjectMocks
     private EncounterService encounterService;
 
@@ -91,9 +100,9 @@ class EncounterDischargeServiceTest {
     void dischargesWithoutABedAtTheCurrentLocationStartTime() {
         stubCurrentLocation();
 
-        Encounter result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT, "test-clerk", CURRENT_LOCATION_ID);
+        EncounterResponse result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT, "test-clerk", CURRENT_LOCATION_ID);
 
-        assertThat(result).isSameAs(encounter);
+        assertThat(result).isEqualTo(EncounterResponse.from(encounter));
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(encounter.getDischargedAt()).isEqualTo(STARTED_AT);
         assertThat(currentLocation.getEndedAt()).isEqualTo(STARTED_AT);
@@ -167,7 +176,7 @@ class EncounterDischargeServiceTest {
     }
 
     private static Stream<OffsetDateTime> invalidDischargeTimes() {
-        return Stream.of(STARTED_AT.minusSeconds(1), OffsetDateTime.now().plusDays(1));
+        return Stream.of(STARTED_AT.minusSeconds(1), NOW.plusDays(1));
     }
 
     private void stubCurrentLocation() {

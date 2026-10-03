@@ -7,6 +7,7 @@ export class ApiError extends Error {
         super(status >= 500 ? 'The server could not complete the request. Please try again.'
             : problem?.detail || `The request failed (${status}).`);
         this.status = status;
+        this.code = problem?.code;
         this.title = problem?.title;
         this.fields = problem?.errors || {};
     }
@@ -59,4 +60,12 @@ export async function loadPlacementDetails(location, controller) {
         location.bedId ? request(`./api/v1/beds/${encodeURIComponent(location.bedId)}`, {}, controller) : null
     ]);
     return { department, ward, bed };
+}
+
+const birthDateFormat = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
+});
+
+export function formatBirthDate(value) {
+    return birthDateFormat.format(new Date(`${value}T00:00:00Z`));
 }

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.PhysicianAssignmentResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterPhysicianAssignmentsResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -34,20 +36,22 @@ public class EncounterPhysicianService {
     private final EncounterPhysicianAssignmentRepository assignments;
     private final PhysicianRepository physicians;
     private final DepartmentRepository departments;
+    private final Clock clock;
 
     public EncounterPhysicianService(EncounterRepository encounters, EncounterLocationRepository locations,
                                     EncounterPhysicianAssignmentRepository assignments,
-                                    PhysicianRepository physicians, DepartmentRepository departments) {
+                                    PhysicianRepository physicians, DepartmentRepository departments, Clock clock) {
         this.encounters = encounters;
         this.locations = locations;
         this.assignments = assignments;
         this.physicians = physicians;
         this.departments = departments;
+        this.clock = clock;
     }
 
     /** Assigns or hands over responsibility. A null expected assignment means the caller saw no current physician. */
     @Transactional
-    public EncounterPhysicianAssignment assign(UUID encounterId, UUID physicianId, UUID expectedLocationId,
+    public PhysicianAssignmentResponse assign(UUID encounterId, UUID physicianId, UUID expectedLocationId,
                                                UUID expectedAssignmentId, OffsetDateTime startedAt, String operator) {
         validateOperator(operator);
         Encounter encounter = lockInDepartment(encounterId);
@@ -73,16 +77,16 @@ public class EncounterPhysicianService {
         }
 
         if (current != null) {
-            current.endAt(startedAt, PhysicianAssignmentEndReason.REASSIGNED, operator);
+            current.endAt(startedAt, PhysicianAssignmentEndReason.REASSIGNED, operator, OffsetDateTime.now(clock));
             // PostgreSQL checks the open-assignment index immediately, before the replacement insert.
             assignments.flush();
         }
-        return assignments.saveAndFlush(new EncounterPhysicianAssignment(encounter, physician, department, startedAt, operator));
+        return PhysicianAssignmentResponse.from(assignments.saveAndFlush(new EncounterPhysicianAssignment(encounter, physician, department, startedAt, operator, OffsetDateTime.now(clock))));
     }
 
     /** Ends responsibility without a replacement, keeping the encounter in department care. */
     @Transactional
-    public EncounterPhysicianAssignment release(UUID encounterId, UUID expectedLocationId,
+    public PhysicianAssignmentResponse release(UUID encounterId, UUID expectedLocationId,
                                                 UUID expectedAssignmentId, OffsetDateTime endedAt, String operator) {
         validateOperator(operator);
         lockInDepartment(encounterId);
@@ -92,9 +96,9 @@ public class EncounterPhysicianService {
             throw new PhysicianAssignmentConflictException("There is no current physician assignment to release");
         }
         validateTime(encounterId, location, current, endedAt);
-        current.endAt(endedAt, PhysicianAssignmentEndReason.RELEASED, operator);
+        current.endAt(endedAt, PhysicianAssignmentEndReason.RELEASED, operator, OffsetDateTime.now(clock));
         assignments.flush();
-        return current;
+        return PhysicianAssignmentResponse.from(current);
     }
 
     /** Reads responsibility history while preventing encounter workflows from changing it mid-read. */
@@ -121,7 +125,7 @@ public class EncounterPhysicianService {
         var current = assignments.findByEncounter_IdAndEndedAtIsNull(encounterId).orElse(null);
         checkHistoryTime(encounterId, current, endedAt);
         if (current != null) {
-            current.endAt(endedAt, reason, operator);
+            current.endAt(endedAt, reason, operator, OffsetDateTime.now(clock));
         }
     }
 
@@ -153,7 +157,7 @@ public class EncounterPhysicianService {
 
     private void validateTime(UUID encounterId, EncounterLocation location,
                               EncounterPhysicianAssignment current, OffsetDateTime time) {
-        if (time == null || time.isAfter(OffsetDateTime.now()) || time.isBefore(location.getStartedAt())) {
+        if (time == null || time.isAfter(OffsetDateTime.now(clock)) || time.isBefore(location.getStartedAt())) {
             throw new InvalidPhysicianAssignmentException("Assignment time must be between the current location start and now");
         }
         checkHistoryTime(encounterId, current, time);

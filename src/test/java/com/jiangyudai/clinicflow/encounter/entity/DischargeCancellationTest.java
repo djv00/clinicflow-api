@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeCancellationException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
@@ -34,7 +36,7 @@ class DischargeCancellationTest {
         encounter = createEncounter();
         previous = locationAt(DISCHARGED_AT.minusDays(1));
         encounter.admitToDepartment();
-        encounter.dischargeAt(DISCHARGED_AT);
+        encounter.dischargeAt(DISCHARGED_AT, NOW);
         previous.endAt(DISCHARGED_AT);
         discharge = new EncounterDischarge(encounter, previous);
     }
@@ -44,7 +46,7 @@ class DischargeCancellationTest {
         OffsetDateTime time = DISCHARGED_AT.plusHours(1);
         EncounterLocation restored = locationAt(DISCHARGED_AT);
 
-        discharge.cancelAt(time, "demo-clerk", restored);
+        discharge.cancelAt(time, "demo-clerk", restored, NOW);
         encounter.cancelDischarge();
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -57,7 +59,7 @@ class DischargeCancellationTest {
         assertThat(discharge.getRestoredLocation()).isSameAs(restored);
         assertThat(restored.getStartedAt()).isEqualTo(previous.getEndedAt());
 
-        assertThatThrownBy(() -> discharge.cancelAt(time.plusMinutes(1), "another-clerk", restored))
+        assertThatThrownBy(() -> discharge.cancelAt(time.plusMinutes(1), "another-clerk", restored, NOW))
                 .isInstanceOf(DischargeRecordConflictException.class);
         assertThat(discharge.getCancelledBy()).isEqualTo("demo-clerk");
     }
@@ -65,7 +67,7 @@ class DischargeCancellationTest {
     @ParameterizedTest
     @MethodSource("invalidCancellationDetails")
     void rejectsInvalidDetailsWithoutChangingTheDischarge(OffsetDateTime time, String operator) {
-        assertThatThrownBy(() -> discharge.cancelAt(time, operator, locationAt(time)))
+        assertThatThrownBy(() -> discharge.cancelAt(time, operator, locationAt(time), NOW))
                 .isInstanceOf(InvalidDischargeCancellationException.class);
         assertThat(discharge.getCancelledAt()).isNull();
         assertThat(discharge.getCancelledBy()).isNull();
@@ -75,7 +77,7 @@ class DischargeCancellationTest {
     @Test
     void acceptsDischargeInstantWithAnotherOffset() {
         OffsetDateTime time = DISCHARGED_AT.withOffsetSameInstant(ZoneOffset.UTC);
-        discharge.cancelAt(time, "a".repeat(100), locationAt(time));
+        discharge.cancelAt(time, "a".repeat(100), locationAt(time), NOW);
         assertThat(discharge.getCancelledAt()).isEqualTo(time);
     }
 
@@ -86,7 +88,7 @@ class DischargeCancellationTest {
         if (state == EncounterStatus.IN_DEPARTMENT) {
             other.admitToDepartment();
         } else if (state == EncounterStatus.ADMISSION_CANCELLED) {
-            other.cancelAdmission(DISCHARGED_AT, "demo-clerk");
+            other.cancelAdmission(DISCHARGED_AT, "demo-clerk", NOW);
         }
         assertThatThrownBy(other::cancelDischarge).isInstanceOf(InvalidEncounterStatusException.class);
         assertThat(other.getStatus()).isEqualTo(state);
@@ -107,7 +109,7 @@ class DischargeCancellationTest {
     @ValueSource(ints = {-1, 1, 3600})
     void rejectsAGapOrOverlapInRestoredHistory(int secondsFromDischarge) {
         assertThatThrownBy(() -> discharge.cancelAt(DISCHARGED_AT.plusHours(1), "demo-clerk",
-                locationAt(DISCHARGED_AT.plusSeconds(secondsFromDischarge))))
+                locationAt(DISCHARGED_AT.plusSeconds(secondsFromDischarge)), NOW))
                 .isInstanceOf(DischargeRecordConflictException.class);
         assertThat(discharge.getCancelledAt()).isNull();
     }
@@ -116,7 +118,7 @@ class DischargeCancellationTest {
         return Stream.of(
                 Arguments.of(null, "demo-clerk"),
                 Arguments.of(DISCHARGED_AT.minusSeconds(1), "demo-clerk"),
-                Arguments.of(OffsetDateTime.now().plusDays(1), "demo-clerk"),
+                Arguments.of(NOW.plusDays(1), "demo-clerk"),
                 Arguments.of(DISCHARGED_AT, null),
                 Arguments.of(DISCHARGED_AT, ""),
                 Arguments.of(DISCHARGED_AT, "  "),

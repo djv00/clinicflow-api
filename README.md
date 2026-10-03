@@ -451,9 +451,13 @@ Restarting the application clears all H2 data and reloads only the demo dictiona
 
 The application is organised by feature under
 [`com.jiangyudai.clinicflow`](src/main/java/com/jiangyudai/clinicflow):
-`patient`, `encounter`, and `location`. Controllers validate request DTOs,
+`patient`, `encounter`, `location`, `physician`, and `security`. Controllers validate request DTOs,
 services coordinate transactions, and repositories perform database queries and
-locking. API responses use DTOs with Open EntityManager in View disabled.
+locking. Controller-facing services assemble response DTOs inside transactions,
+with Open EntityManager in View disabled. Encounter reads have a dedicated query
+service. `web.error` owns the stable API error contract; `common` holds time and
+literal-search utilities. See the [architecture and reading guide](docs/architecture.md)
+and [interview walkthrough](docs/interview-walkthrough.md).
 
 | Entity | Responsibility |
 | --- | --- |
@@ -461,6 +465,8 @@ locking. API responses use DTOs with Open EntityManager in View disabled.
 | `Encounter` | One inpatient stay, its current state, and admission/cancellation times. |
 | `EncounterLocation` | A timed department, ward, and optional bed assignment. |
 | `EncounterDischarge` | A discharge and its cancellation audit, linking the original and restored locations. |
+| `Physician` | Directory details, optimistic version and current department affiliations. |
+| `EncounterPhysicianAssignment` | Effective responsibility history, operator audit and closure reason. |
 | `Department`, `Ward`, `Bed` | Reference data used by location workflows; each bed belongs to a ward. |
 
 A patient can have multiple encounters, with at most one active at a time.
@@ -501,6 +507,8 @@ broader H2 suite still runs separately within the same build.
 [CI](#continuous-integration) runs both groups with Java 21 and PostgreSQL 17.
 Test configuration and expected behaviour are in
 [`src/test/java`](src/test/java/com/jiangyudai/clinicflow).
+Architecture tests check layer dependencies and DTO boundaries; fixed-clock tests
+keep time validation independent of the machine's current time.
 
 [Browser tests](e2e/README.md) additionally verify the workbench with real Chromium
 and authenticated backend requests. They run separately with `npm --prefix e2e test`
@@ -526,4 +534,6 @@ The project currently covers inpatient flow through REST/JSON APIs and provides
 connected patient and inpatient workbench pages for the full workflow, including
 physician responsibility. Outpatient scheduling, clinical orders, and billing are outside the
 implemented scope. PostgreSQL supports optional, repeatable demo-location
-initialization. The next delivery work is deployment packaging and an interview walkthrough.
+initialization. Container packaging is available in the [deployment guide](docs/deployment.md).
+The remaining presentation work is to rehearse the [interview walkthrough](docs/interview-walkthrough.md)
+against a running instance. Public hosting remains optional.
