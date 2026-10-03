@@ -1,7 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
-import com.jiangyudai.clinicflow.encounter.dto.EncounterPageResponse;
-import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -19,8 +19,6 @@ import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -71,7 +69,7 @@ public class EncounterService {
      * Opens a hospital encounter after checking admission rules.
      */
     @Transactional
-    public Encounter admitPatient(
+    public EncounterResponse admitPatient(
             UUID patientId,
             String encounterNumber,
             OffsetDateTime admittedAt
@@ -107,7 +105,7 @@ public class EncounterService {
         );
 
         try {
-            return encounterRepository.saveAndFlush(encounter);
+            return EncounterResponse.from(encounterRepository.saveAndFlush(encounter));
         } catch (DataIntegrityViolationException exception) {
             // The patient lock does not serialize admission numbers across different patients.
             for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
@@ -126,7 +124,7 @@ public class EncounterService {
      * @param bedId bed to assign, or {@code null} when no bed is assigned yet
      */
     @Transactional
-    public EncounterLocation admitToDepartment(
+    public EncounterLocationResponse admitToDepartment(
             UUID encounterId,
             UUID departmentId,
             UUID wardId,
@@ -196,14 +194,14 @@ public class EncounterService {
         // The state change and location record are committed as one transaction.
         encounter.admitToDepartment();
 
-        return encounterLocationRepository.save(location);
+        return EncounterLocationResponse.from(encounterLocationRepository.save(location));
     }
 
     /**
      * Moves an encounter to a new department, ward, or bed.
      */
     @Transactional
-    public EncounterLocation transferEncounter(
+    public EncounterLocationResponse transferEncounter(
             UUID encounterId,
             UUID departmentId,
             UUID wardId,
@@ -298,14 +296,14 @@ public class EncounterService {
         // Hibernate inserts before updates; release the open-location keys before inserting the replacement.
         encounterLocationRepository.flush();
 
-        return encounterLocationRepository.save(nextLocation);
+        return EncounterLocationResponse.from(encounterLocationRepository.save(nextLocation));
     }
 
     /**
      * Discharges an encounter and closes its current location in one transaction.
      */
     @Transactional
-    public Encounter dischargeEncounter(
+    public EncounterResponse dischargeEncounter(
             UUID encounterId,
             OffsetDateTime dischargedAt,
             String operator,
@@ -348,14 +346,14 @@ public class EncounterService {
         currentLocation.endAt(dischargedAt);
         encounterDischargeRepository.save(new EncounterDischarge(encounter, currentLocation));
 
-        return encounter;
+        return EncounterResponse.from(encounter);
     }
 
     /**
      * Cancels an admission only while no department location has been recorded.
      */
     @Transactional
-    public Encounter cancelAdmission(
+    public EncounterResponse cancelAdmission(
             UUID encounterId,
             OffsetDateTime cancelledAt,
             String cancelledBy
@@ -379,14 +377,14 @@ public class EncounterService {
 
         encounter.cancelAdmission(cancelledAt, cancelledBy);
 
-        return encounter;
+        return EncounterResponse.from(encounter);
     }
 
     /**
      * Cancels a mistaken discharge and continues location history from its effective time.
      */
     @Transactional
-    public Encounter cancelDischarge(
+    public EncounterResponse cancelDischarge(
             UUID encounterId,
             OffsetDateTime cancelledAt,
             String cancelledBy
@@ -398,7 +396,7 @@ public class EncounterService {
      * When supplied, the expected record prevents a stale form from cancelling a later discharge.
      */
     @Transactional
-    public Encounter cancelDischarge(
+    public EncounterResponse cancelDischarge(
             UUID encounterId,
             OffsetDateTime cancelledAt,
             String cancelledBy,
@@ -461,44 +459,7 @@ public class EncounterService {
         discharge.cancelAt(cancelledAt, cancelledBy, restored);
         encounter.cancelDischarge();
         encounterLocationRepository.save(restored);
-        return encounter;
-    }
-
-    /**
-     * Returns effective location history and discharge audit from one consistent workflow state.
-     */
-    @Transactional
-    public EncounterTimelineResponse getTimeline(UUID encounterId) {
-        Encounter encounter = encounterRepository.findByIdForRead(encounterId)
-                .orElseThrow(() -> new EncounterNotFoundException(encounterId));
-        List<EncounterLocation> locations = encounterLocationRepository
-                .findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
-        List<EncounterDischarge> discharges = encounterDischargeRepository
-                .findAllByEncounter_IdOrderByDischargedAtAscIdAsc(encounterId);
-        return EncounterTimelineResponse.from(encounter, locations, discharges);
-    }
-
-    public List<EncounterDischarge> getDischarges(UUID encounterId) {
-        getEncounter(encounterId);
-        return encounterDischargeRepository.findAllByEncounter_IdOrderByDischargedAtAscIdAsc(encounterId);
-    }
-
-    /**
-     * Returns an encounter without acquiring a workflow write lock.
-     */
-    public Encounter getEncounter(UUID id) {
-        return encounterRepository.findById(id)
-                .orElseThrow(() -> new EncounterNotFoundException(id));
-    }
-
-    /**
-     * Lists all encounters for an existing patient, including cancelled admissions.
-     */
-    public EncounterPageResponse getPatientEncounters(UUID patientId, int page, int size) {
-        patientService.getPatient(patientId);
-        PageRequest pageable = PageRequest.of(page, size,
-                Sort.by(Sort.Direction.DESC, "admittedAt", "encounterNumber"));
-        return EncounterPageResponse.from(encounterRepository.findAllByPatient_Id(patientId, pageable));
+        return EncounterResponse.from(encounter);
     }
 
     // The caller's placement must still be current after acquiring the encounter lock.

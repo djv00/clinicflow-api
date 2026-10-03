@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
@@ -79,16 +80,16 @@ class EncounterServiceTest {
         when(encounterRepository.saveAndFlush(any(Encounter.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Encounter encounter = encounterService.admitPatient(
+        EncounterResponse encounter = encounterService.admitPatient(
                 PATIENT_ID,
                 "ENC-2026-000001",
                 OffsetDateTime.parse("2025-09-02T16:30:00-04:00")
         );
 
-        assertThat(encounter.getEncounterNumber())
+        assertThat(encounter.encounterNumber())
                 .isEqualTo("ENC-2026-000001");
-        assertThat(encounter.getPatient()).isSameAs(patient);
-        assertThat(encounter.getStatus())
+        assertThat(encounter.patientId()).isEqualTo(patient.getId());
+        assertThat(encounter.status())
                 .isEqualTo(EncounterStatus.ADMITTED);
 
         verify(encounterRepository).saveAndFlush(any(Encounter.class));

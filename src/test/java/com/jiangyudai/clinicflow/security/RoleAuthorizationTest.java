@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.security;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.controller.EncounterController;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.patient.controller.PatientController;
@@ -23,6 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest({PatientController.class, EncounterController.class})
 @Import(SecurityConfiguration.class)
 class RoleAuthorizationTest {
+    @MockitoBean
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private MockMvc mvc;

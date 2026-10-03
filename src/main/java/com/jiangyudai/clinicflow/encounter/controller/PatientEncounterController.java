@@ -2,7 +2,7 @@ package com.jiangyudai.clinicflow.encounter.controller;
 
 import com.jiangyudai.clinicflow.encounter.dto.EncounterPageRequest;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterPageResponse;
-import com.jiangyudai.clinicflow.encounter.service.EncounterService;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -16,9 +16,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/patients/{patientId}/encounters")
 public class PatientEncounterController {
 
-    private final EncounterService encounterService;
+    private final EncounterQueryService encounterService;
 
-    public PatientEncounterController(EncounterService encounterService) {
+    public PatientEncounterController(EncounterQueryService encounterService) {
         this.encounterService = encounterService;
     }
 

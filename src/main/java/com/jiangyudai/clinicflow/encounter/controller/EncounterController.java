@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitPatientRequest;
 import com.jiangyudai.clinicflow.encounter.dto.AdmitToDepartmentRequest;
 import com.jiangyudai.clinicflow.encounter.dto.CancelAdmissionRequest;
@@ -10,8 +11,6 @@ import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterTimelineResponse;
 import com.jiangyudai.clinicflow.encounter.dto.TransferEncounterRequest;
-import com.jiangyudai.clinicflow.encounter.entity.Encounter;
-import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -38,7 +37,10 @@ public class EncounterController {
 
     private final EncounterService encounterService;
 
-    public EncounterController(EncounterService encounterService) {
+    private final EncounterQueryService encounterQueries;
+
+    public EncounterController(EncounterService encounterService, EncounterQueryService encounterQueries) {
+        this.encounterQueries = encounterQueries;
         this.encounterService = encounterService;
     }
 
@@ -47,23 +49,21 @@ public class EncounterController {
     public EncounterResponse admitPatient(
             @Valid @RequestBody AdmitPatientRequest request
     ) {
-        Encounter encounter = encounterService.admitPatient(
+        return encounterService.admitPatient(
                 request.patientId(),
                 request.encounterNumber(),
                 request.admittedAt()
         );
-
-        return EncounterResponse.from(encounter);
     }
 
     @GetMapping("/{id}")
     public EncounterResponse getEncounter(@PathVariable UUID id) {
-        return EncounterResponse.from(encounterService.getEncounter(id));
+        return encounterQueries.getEncounter(id);
     }
 
     @GetMapping("/{id}/timeline")
     public EncounterTimelineResponse getTimeline(@PathVariable("id") UUID encounterId) {
-        return encounterService.getTimeline(encounterId);
+        return encounterQueries.getTimeline(encounterId);
     }
 
     @PostMapping("/{id}/department-admissions")
@@ -72,15 +72,13 @@ public class EncounterController {
             @PathVariable("id") UUID encounterId,
             @Valid @RequestBody AdmitToDepartmentRequest request
     ) {
-        EncounterLocation location = encounterService.admitToDepartment(
+        return encounterService.admitToDepartment(
                 encounterId,
                 request.departmentId(),
                 request.wardId(),
                 request.bedId(),
                 request.startedAt()
         );
-
-        return EncounterLocationResponse.from(location);
     }
 
     @PostMapping("/{id}/admission-cancellations")
@@ -89,13 +87,11 @@ public class EncounterController {
             @Valid @RequestBody CancelAdmissionRequest request,
             Principal principal
     ) {
-        Encounter encounter = encounterService.cancelAdmission(
+        return encounterService.cancelAdmission(
                 encounterId,
                 request.cancelledAt(),
                 principal.getName()
         );
-
-        return EncounterResponse.from(encounter);
     }
 
     @PostMapping("/{id}/discharges")
@@ -104,14 +100,12 @@ public class EncounterController {
             @Valid @RequestBody DischargeEncounterRequest request,
             Principal principal
     ) {
-        Encounter encounter = encounterService.dischargeEncounter(
+        return encounterService.dischargeEncounter(
                 encounterId,
                 request.dischargedAt(),
                 principal.getName(),
                 request.expectedLocationId()
         );
-
-        return EncounterResponse.from(encounter);
     }
 
     @PostMapping("/{id}/discharge-cancellations")
@@ -120,15 +114,14 @@ public class EncounterController {
             @Valid @RequestBody CancelDischargeRequest request,
             Principal principal
     ) {
-        return EncounterResponse.from(encounterService.cancelDischarge(
+        return encounterService.cancelDischarge(
                 encounterId, request.cancelledAt(), principal.getName(), request.expectedDischargeId()
-        ));
+        );
     }
 
     @GetMapping("/{id}/discharges")
     public List<EncounterDischargeResponse> getDischarges(@PathVariable("id") UUID encounterId) {
-        return encounterService.getDischarges(encounterId).stream()
-                .map(EncounterDischargeResponse::from).toList();
+        return encounterQueries.getDischarges(encounterId);
     }
 
     @PostMapping("/{id}/transfers")
@@ -138,18 +131,15 @@ public class EncounterController {
             @Valid @RequestBody TransferEncounterRequest request,
             Principal principal
     ) {
-        EncounterLocation location =
-                encounterService.transferEncounter(
-                        encounterId,
-                        request.departmentId(),
-                        request.wardId(),
-                        request.bedId(),
-                        request.transferredAt(),
-                        principal.getName(),
-                        request.expectedLocationId()
-                );
-
-        return EncounterLocationResponse.from(location);
+        return encounterService.transferEncounter(
+                encounterId,
+                request.departmentId(),
+                request.wardId(),
+                request.bedId(),
+                request.transferredAt(),
+                principal.getName(),
+                request.expectedLocationId()
+        );
     }
 
 }

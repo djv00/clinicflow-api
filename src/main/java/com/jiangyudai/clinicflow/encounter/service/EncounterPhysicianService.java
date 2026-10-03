@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.PhysicianAssignmentResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterPhysicianAssignmentsResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -47,7 +48,7 @@ public class EncounterPhysicianService {
 
     /** Assigns or hands over responsibility. A null expected assignment means the caller saw no current physician. */
     @Transactional
-    public EncounterPhysicianAssignment assign(UUID encounterId, UUID physicianId, UUID expectedLocationId,
+    public PhysicianAssignmentResponse assign(UUID encounterId, UUID physicianId, UUID expectedLocationId,
                                                UUID expectedAssignmentId, OffsetDateTime startedAt, String operator) {
         validateOperator(operator);
         Encounter encounter = lockInDepartment(encounterId);
@@ -77,12 +78,12 @@ public class EncounterPhysicianService {
             // PostgreSQL checks the open-assignment index immediately, before the replacement insert.
             assignments.flush();
         }
-        return assignments.saveAndFlush(new EncounterPhysicianAssignment(encounter, physician, department, startedAt, operator));
+        return PhysicianAssignmentResponse.from(assignments.saveAndFlush(new EncounterPhysicianAssignment(encounter, physician, department, startedAt, operator)));
     }
 
     /** Ends responsibility without a replacement, keeping the encounter in department care. */
     @Transactional
-    public EncounterPhysicianAssignment release(UUID encounterId, UUID expectedLocationId,
+    public PhysicianAssignmentResponse release(UUID encounterId, UUID expectedLocationId,
                                                 UUID expectedAssignmentId, OffsetDateTime endedAt, String operator) {
         validateOperator(operator);
         lockInDepartment(encounterId);
@@ -94,7 +95,7 @@ public class EncounterPhysicianService {
         validateTime(encounterId, location, current, endedAt);
         current.endAt(endedAt, PhysicianAssignmentEndReason.RELEASED, operator);
         assignments.flush();
-        return current;
+        return PhysicianAssignmentResponse.from(current);
     }
 
     /** Reads responsibility history while preventing encounter workflows from changing it mid-read. */

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -72,7 +73,7 @@ class DepartmentAdmissionIntegrationTest {
     void commitsDepartmentAdmission() {
         AdmissionData data = createAdmissionData();
 
-        EncounterLocation result = encounterService.admitToDepartment(
+        EncounterLocationResponse result = encounterService.admitToDepartment(
                 data.encounterId(),
                 data.departmentId(),
                 data.wardId(),
@@ -80,7 +81,7 @@ class DepartmentAdmissionIntegrationTest {
                 data.startedAt()
         );
 
-        assertThat(result.getId()).isNotNull();
+        assertThat(result.id()).isNotNull();
 
         transactions.executeWithoutResult(status -> {
             Encounter encounter = encounterRepository
@@ -94,7 +95,7 @@ class DepartmentAdmissionIntegrationTest {
             assertThat(encounter.getStatus())
                     .isEqualTo(EncounterStatus.IN_DEPARTMENT);
 
-            assertThat(location.getId()).isEqualTo(result.getId());
+            assertThat(location.getId()).isEqualTo(result.id());
             assertThat(location.getEncounter().getId())
                     .isEqualTo(data.encounterId());
             assertThat(location.getDepartment().getId())
@@ -168,7 +169,7 @@ class DepartmentAdmissionIntegrationTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
         try {
-            Future<EncounterLocation> secondAttempt = transactions.execute(status -> {
+            Future<EncounterLocationResponse> secondAttempt = transactions.execute(status -> {
                 encounterService.admitToDepartment(
                         first.encounterId(),
                         first.departmentId(),
@@ -185,7 +186,7 @@ class DepartmentAdmissionIntegrationTest {
                         .getSingleResult())
                         .intValue();
 
-                Future<EncounterLocation> attempt = executor.submit(() ->
+                Future<EncounterLocationResponse> attempt = executor.submit(() ->
                         encounterService.admitToDepartment(
                                 second.encounterId(),
                                 first.departmentId(),

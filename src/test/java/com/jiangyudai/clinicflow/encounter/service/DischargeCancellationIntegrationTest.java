@@ -1,5 +1,9 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterDischargeResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
@@ -60,6 +64,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class DischargeCancellationIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     private static final OffsetDateTime ADMITTED_AT = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");
     private static final OffsetDateTime DISCHARGED_AT = ADMITTED_AT.plusDays(1);
@@ -129,7 +136,7 @@ class DischargeCancellationIntegrationTest {
     @ValueSource(strings = {"discharge-operator", "another-operator"})
     void recordsAuthenticatedOperatorDespiteForgedRequestField(String username) throws Exception {
         CancellationData data = createData(true);
-        UUID dischargeId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
+        UUID dischargeId = encounterQueries.getDischarges(data.encounterId()).getFirst().id();
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId())
                         .with(user(username).roles("OPERATOR")).with(csrf())
                         .contentType("application/json")
@@ -138,7 +145,7 @@ class DischargeCancellationIntegrationTest {
                 .andExpect(status().isOk());
 
         assertRestored(data);
-        assertThat(encounterService.getDischarges(data.encounterId()).getFirst().getCancelledBy()).isEqualTo(username);
+        assertThat(encounterQueries.getDischarges(data.encounterId()).getFirst().cancelledBy()).isEqualTo(username);
         mockMvc.perform(get("/api/v1/encounters/{id}/timeline", data.encounterId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.discharges[0].cancelledBy").value(username));
@@ -148,21 +155,21 @@ class DischargeCancellationIntegrationTest {
     void recordsEachDischargeAndCancellationSeparately() {
         CancellationData data = createData(true);
         cancel(data);
-        EncounterDischarge first = encounterService.getDischarges(data.encounterId()).getFirst();
-        UUID restoredId = first.getRestoredLocation().getId();
+        EncounterDischargeResponse first = encounterQueries.getDischarges(data.encounterId()).getFirst();
+        UUID restoredId = first.restoredLocationId();
 
         encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT.plusHours(1), "test-clerk", currentLocationId(data.encounterId()));
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusHours(2), "second-clerk");
 
-        List<EncounterDischarge> discharges = encounterService.getDischarges(data.encounterId());
+        List<EncounterDischargeResponse> discharges = encounterQueries.getDischarges(data.encounterId());
         assertThat(discharges).hasSize(2);
-        assertThat(discharges.getFirst().getId()).isEqualTo(first.getId());
-        assertThat(discharges.getFirst().getCancelledBy()).isEqualTo("first-clerk");
-        assertThat(discharges.getFirst().getCancelledAt()).isEqualTo(CANCELLED_AT);
-        assertThat(discharges.getLast().getLocation().getId()).isEqualTo(restoredId);
-        assertThat(discharges.getLast().getCancelledBy()).isEqualTo("second-clerk");
-        assertThat(discharges.getLast().getCancelledAt()).isEqualTo(CANCELLED_AT.plusHours(2));
-        assertThat(discharges.getLast().getRestoredLocation().getId()).isNotEqualTo(restoredId);
+        assertThat(discharges.getFirst().id()).isEqualTo(first.id());
+        assertThat(discharges.getFirst().cancelledBy()).isEqualTo("first-clerk");
+        assertThat(discharges.getFirst().cancelledAt()).isEqualTo(CANCELLED_AT);
+        assertThat(discharges.getLast().locationId()).isEqualTo(restoredId);
+        assertThat(discharges.getLast().cancelledBy()).isEqualTo("second-clerk");
+        assertThat(discharges.getLast().cancelledAt()).isEqualTo(CANCELLED_AT.plusHours(2));
+        assertThat(discharges.getLast().restoredLocationId()).isNotEqualTo(restoredId);
         transactions.executeWithoutResult(status -> {
             List<EncounterLocation> history = encounterLocationRepository
                     .findAllByEncounter_IdOrderByStartedAtAsc(data.encounterId());
@@ -179,7 +186,7 @@ class DischargeCancellationIntegrationTest {
     @ValueSource(booleans = {true, false})
     void cancelsTheExpectedRecordWithOrWithoutABed(boolean withBed) throws Exception {
         CancellationData data = createData(withBed);
-        UUID dischargeId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
+        UUID dischargeId = encounterQueries.getDischarges(data.encounterId()).getFirst().id();
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
                         .content(request(CANCELLED_AT).replace("}",
@@ -191,10 +198,10 @@ class DischargeCancellationIntegrationTest {
     @Test
     void rejectsAnOldRecordAfterCancellationAndRedischargeAtTheSameTime() throws Exception {
         CancellationData data = createData(false);
-        UUID originalId = encounterService.getDischarges(data.encounterId()).getFirst().getId();
+        UUID originalId = encounterQueries.getDischarges(data.encounterId()).getFirst().id();
         cancel(data);
         encounterService.dischargeEncounter(data.encounterId(), DISCHARGED_AT, "test-clerk", currentLocationId(data.encounterId()));
-        var before = encounterService.getTimeline(data.encounterId());
+        var before = encounterQueries.getTimeline(data.encounterId());
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
@@ -203,35 +210,35 @@ class DischargeCancellationIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("The discharge record has changed. Reload it before cancelling."));
 
-        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(data.encounterId())).isEqualTo(before);
     }
 
     @Test
     void rejectsARecordBelongingToAnotherEncounterWithoutChangingCare() throws Exception {
         CancellationData data = createData(true);
         CancellationData other = createData(false);
-        UUID otherId = encounterService.getDischarges(other.encounterId()).getFirst().getId();
-        var before = encounterService.getTimeline(data.encounterId());
+        UUID otherId = encounterQueries.getDischarges(other.encounterId()).getFirst().id();
+        var before = encounterQueries.getTimeline(data.encounterId());
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json")
                         .content(request(CANCELLED_AT).replace("}",
                                 ", \"expectedDischargeId\": \"" + otherId + "\"}")))
                 .andExpect(status().isConflict());
-        assertThat(encounterService.getTimeline(data.encounterId())).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(data.encounterId())).isEqualTo(before);
     }
 
     @Test
     void restoresTheExplicitDischargeLocationWhenTransferAndDischargeShareATimestamp() {
         CancellationData data = createData(true);
         cancel(data);
-        EncounterLocation transferred = encounterService.transferEncounter(
+        EncounterLocationResponse transferred = encounterService.transferEncounter(
                 data.encounterId(), data.departmentId(), data.wardId(), null, CANCELLED_AT, "test-clerk", currentLocationId(data.encounterId())
         );
         encounterService.dischargeEncounter(data.encounterId(), CANCELLED_AT, "test-clerk", currentLocationId(data.encounterId()));
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "second-clerk");
 
-        EncounterDischarge discharge = encounterService.getDischarges(data.encounterId()).getLast();
-        assertThat(discharge.getLocation().getId()).isEqualTo(transferred.getId());
+        EncounterDischargeResponse discharge = encounterQueries.getDischarges(data.encounterId()).getLast();
+        assertThat(discharge.locationId()).isEqualTo(transferred.id());
         transactions.executeWithoutResult(status -> {
             EncounterLocation current = encounterLocationRepository
                     .findByEncounter_IdAndEndedAtIsNull(data.encounterId()).orElseThrow();
@@ -262,7 +269,7 @@ class DischargeCancellationIntegrationTest {
             throw new IllegalStateException("Simulated discharge failure");
         })).isInstanceOf(IllegalStateException.class).hasMessage("Simulated discharge failure");
         assertRestored(data);
-        assertThat(encounterService.getDischarges(data.encounterId())).hasSize(1);
+        assertThat(encounterQueries.getDischarges(data.encounterId())).hasSize(1);
     }
 
     @Test
@@ -295,11 +302,11 @@ class DischargeCancellationIntegrationTest {
     @Test
     void rejectsReadmittedPatientAndReturnsAnEmptyHistoryForTheNewEncounter() throws Exception {
         CancellationData data = createData(true);
-        Encounter readmission = readmit(data);
+        EncounterResponse readmission = readmit(data);
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
                         .contentType("application/json").content(request(CANCELLED_AT)))
                 .andExpect(status().isConflict());
-        mockMvc.perform(get("/api/v1/encounters/{id}/discharges", readmission.getId()))
+        mockMvc.perform(get("/api/v1/encounters/{id}/discharges", readmission.id()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
         mockMvc.perform(get("/api/v1/encounters/{id}/discharges", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
@@ -372,7 +379,7 @@ class DischargeCancellationIntegrationTest {
     void rejectsAnOlderDischargeEvenAfterTheLaterEncounterHasEnded(boolean operationAfterLaterDischarge)
             throws Exception {
         CancellationData data = createData(false);
-        Encounter later = completeReadmission(data, DISCHARGED_AT.plusDays(1), DISCHARGED_AT.plusDays(2));
+        EncounterResponse later = completeReadmission(data, DISCHARGED_AT.plusDays(1), DISCHARGED_AT.plusDays(2));
         OffsetDateTime cancelledAt = operationAfterLaterDischarge ? DISCHARGED_AT.plusDays(3) : CANCELLED_AT;
 
         mockMvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", data.encounterId()).with(csrf())
@@ -381,8 +388,8 @@ class DischargeCancellationIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
         assertDischarged(data);
-        assertThat(encounterService.getEncounter(later.getId()).getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
-        assertThat(encounterService.getDischarges(later.getId()).getFirst().getCancelledAt()).isNull();
+        assertThat(encounterQueries.getEncounter(later.id()).status()).isEqualTo(EncounterStatus.DISCHARGED);
+        assertThat(encounterQueries.getDischarges(later.id()).getFirst().cancelledAt()).isNull();
     }
 
     @Test
@@ -397,31 +404,31 @@ class DischargeCancellationIntegrationTest {
     @Test
     void aCancelledReadmissionDoesNotPreventCorrectingTheEarlierDischarge() {
         CancellationData data = createData(false);
-        Encounter later = readmit(data);
-        encounterService.cancelAdmission(later.getId(), CANCELLED_AT.plusMinutes(10), "admission-clerk");
+        EncounterResponse later = readmit(data);
+        encounterService.cancelAdmission(later.id(), CANCELLED_AT.plusMinutes(10), "admission-clerk");
 
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT.plusMinutes(20), "first-clerk");
 
         assertRestored(data);
-        Encounter cancelledAdmission = encounterService.getEncounter(later.getId());
-        assertThat(cancelledAdmission.getStatus()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
-        assertThat(cancelledAdmission.getAdmissionCancelledBy()).isEqualTo("admission-clerk");
-        assertThat(encounterService.getDischarges(data.encounterId()).getFirst().getCancelledAt())
+        EncounterResponse cancelledAdmission = encounterQueries.getEncounter(later.id());
+        assertThat(cancelledAdmission.status()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
+        assertThat(cancelledAdmission.admissionCancelledBy()).isEqualTo("admission-clerk");
+        assertThat(encounterQueries.getDischarges(data.encounterId()).getFirst().cancelledAt())
                 .isEqualTo(CANCELLED_AT.plusMinutes(20));
     }
 
     @Test
     void anEarlierEncounterEndingAtAdmissionDoesNotBlockCancellationOfTheLatestOne() {
         CancellationData earlier = createData(false);
-        Encounter latest = completeReadmission(earlier, DISCHARGED_AT, CANCELLED_AT);
+        EncounterResponse latest = completeReadmission(earlier, DISCHARGED_AT, CANCELLED_AT);
 
-        encounterService.cancelDischarge(latest.getId(), CANCELLED_AT.plusHours(1), "latest-clerk");
+        encounterService.cancelDischarge(latest.id(), CANCELLED_AT.plusHours(1), "latest-clerk");
 
         assertDischarged(earlier);
         EncounterLocation current = encounterLocationRepository
-                .findByEncounter_IdAndEndedAtIsNull(latest.getId()).orElseThrow();
+                .findByEncounter_IdAndEndedAtIsNull(latest.id()).orElseThrow();
         assertThat(current.getStartedAt()).isEqualTo(CANCELLED_AT);
-        assertThat(encounterService.getEncounter(latest.getId()).getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        assertThat(encounterQueries.getEncounter(latest.id()).status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
     }
 
     @ParameterizedTest
@@ -441,7 +448,7 @@ class DischargeCancellationIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Encounter history conflict"));
 
         assertDischarged(data);
-        assertThat(encounterService.getEncounter(other).getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
+        assertThat(encounterQueries.getEncounter(other).status()).isEqualTo(EncounterStatus.DISCHARGED);
     }
 
     @Test
@@ -563,14 +570,14 @@ class DischargeCancellationIntegrationTest {
         encounterService.cancelDischarge(data.encounterId(), CANCELLED_AT, "first-clerk");
     }
 
-    private Encounter readmit(CancellationData data) {
+    private EncounterResponse readmit(CancellationData data) {
         return encounterService.admitPatient(data.patientId(), "ENC-" + UUID.randomUUID(), CANCELLED_AT);
     }
 
-    private Encounter completeReadmission(CancellationData data, OffsetDateTime admittedAt, OffsetDateTime dischargedAt) {
-        Encounter later = encounterService.admitPatient(data.patientId(), "ENC-" + UUID.randomUUID(), admittedAt);
-        encounterService.admitToDepartment(later.getId(), data.departmentId(), data.wardId(), null, admittedAt);
-        return encounterService.dischargeEncounter(later.getId(), dischargedAt, "test-clerk", currentLocationId(later.getId()));
+    private EncounterResponse completeReadmission(CancellationData data, OffsetDateTime admittedAt, OffsetDateTime dischargedAt) {
+        EncounterResponse later = encounterService.admitPatient(data.patientId(), "ENC-" + UUID.randomUUID(), admittedAt);
+        encounterService.admitToDepartment(later.id(), data.departmentId(), data.wardId(), null, admittedAt);
+        return encounterService.dischargeEncounter(later.id(), dischargedAt, "test-clerk", currentLocationId(later.id()));
     }
 
     private String request(OffsetDateTime cancelledAt) {
@@ -582,7 +589,7 @@ class DischargeCancellationIntegrationTest {
     private UUID createOtherEncounter() {
         return transactions.execute(status -> {
             Patient patient = createPatient();
-            return encounterService.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ADMITTED_AT).getId();
+            return encounterService.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ADMITTED_AT).id();
         });
     }
 
@@ -606,14 +613,14 @@ class DischargeCancellationIntegrationTest {
                 entityManager.persist(bed);
             }
             entityManager.flush();
-            Encounter encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, ADMITTED_AT);
-            EncounterLocation location = encounterService.admitToDepartment(
-                    encounter.getId(), department.getId(), ward.getId(), bed == null ? null : bed.getId(),
+            EncounterResponse encounter = encounterService.admitPatient(patient.getId(), "ENC-" + suffix, ADMITTED_AT);
+            EncounterLocationResponse location = encounterService.admitToDepartment(
+                    encounter.id(), department.getId(), ward.getId(), bed == null ? null : bed.getId(),
                     ADMITTED_AT.plusHours(1)
             );
-            encounterService.dischargeEncounter(encounter.getId(), DISCHARGED_AT, "test-clerk", currentLocationId(encounter.getId()));
-            return new CancellationData(patient.getId(), encounter.getId(), department.getId(), ward.getId(),
-                    bed == null ? null : bed.getId(), location.getId());
+            encounterService.dischargeEncounter(encounter.id(), DISCHARGED_AT, "test-clerk", currentLocationId(encounter.id()));
+            return new CancellationData(patient.getId(), encounter.id(), department.getId(), ward.getId(),
+                    bed == null ? null : bed.getId(), location.id());
         });
     }
 

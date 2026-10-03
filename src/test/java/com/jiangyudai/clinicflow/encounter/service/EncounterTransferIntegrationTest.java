@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jayway.jsonpath.JsonPath;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -81,7 +82,7 @@ class EncounterTransferIntegrationTest {
     void commitsEncounterTransfer() {
         TransferData data = createTransferData();
 
-        EncounterLocation result = encounterService.transferEncounter(
+        EncounterLocationResponse result = encounterService.transferEncounter(
                 data.encounterId(),
                 data.targetDepartmentId(),
                 data.targetWardId(),
@@ -89,7 +90,7 @@ class EncounterTransferIntegrationTest {
                 data.transferredAt(), "test-clerk", currentLocationId(data.encounterId())
         );
 
-        assertThat(result.getId()).isNotNull();
+        assertThat(result.id()).isNotNull();
 
         transactions.executeWithoutResult(status -> {
             Encounter encounter = encounterRepository
@@ -122,7 +123,7 @@ class EncounterTransferIntegrationTest {
                     .isEqualTo(data.transferredAt());
 
             assertThat(currentLocation.getId())
-                    .isEqualTo(result.getId());
+                    .isEqualTo(result.id());
             assertThat(currentLocation.getDepartment().getId())
                     .isEqualTo(data.targetDepartmentId());
             assertThat(currentLocation.getWard().getId())
@@ -228,7 +229,7 @@ class EncounterTransferIntegrationTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
         try {
-            Future<EncounterLocation> secondAttempt =
+            Future<EncounterLocationResponse> secondAttempt =
                     transactions.execute(status -> {
                         encounterService.transferEncounter(
                                 first.encounterId(),
@@ -245,7 +246,7 @@ class EncounterTransferIntegrationTest {
                                 .getSingleResult())
                                 .intValue();
 
-                        Future<EncounterLocation> attempt =
+                        Future<EncounterLocationResponse> attempt =
                                 executor.submit(() ->
                                         encounterService.transferEncounter(
                                                 second.encounterId(),

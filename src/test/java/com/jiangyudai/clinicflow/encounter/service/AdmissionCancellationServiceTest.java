@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterLocationHistoryExistsException;
@@ -67,9 +68,9 @@ class AdmissionCancellationServiceTest {
     void cancelsTheLockedEncounterAndChecksAllLocationHistory() {
         stubEncounter();
 
-        Encounter result = encounterService.cancelAdmission(ENCOUNTER_ID, CANCELLED_AT, "demo-clerk");
+        EncounterResponse result = encounterService.cancelAdmission(ENCOUNTER_ID, CANCELLED_AT, "demo-clerk");
 
-        assertThat(result).isSameAs(encounter);
+        assertThat(result).isEqualTo(EncounterResponse.from(encounter));
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
         assertThat(encounter.getAdmissionCancelledAt()).isEqualTo(CANCELLED_AT);
         assertThat(encounter.getAdmissionCancelledBy()).isEqualTo("demo-clerk");

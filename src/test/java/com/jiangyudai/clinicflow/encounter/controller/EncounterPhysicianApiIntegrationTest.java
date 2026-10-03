@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.dto.PhysicianAssignmentResponse;
 import com.jiangyudai.clinicflow.encounter.service.EncounterPhysicianService;
@@ -46,6 +47,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class EncounterPhysicianApiIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterLocationRepository locations;
@@ -81,7 +85,7 @@ class EncounterPhysicianApiIntegrationTest {
         replacementId = physicians.create("PHY-" + UUID.randomUUID().toString().substring(0, 16),
                 "Alex", "Martin", Set.of(departmentId)).id();
         encounterId = admit();
-        locationId = encounters.admitToDepartment(encounterId, departmentId, wardId, null, ENTERED).getId();
+        locationId = encounters.admitToDepartment(encounterId, departmentId, wardId, null, ENTERED).id();
     }
 
     @Test
@@ -146,7 +150,7 @@ class EncounterPhysicianApiIntegrationTest {
                 .andExpect(jsonPath("$.currentAssignmentId").value(nullValue()))
                 .andExpect(jsonPath("$.assignments[0].endReason").value("DISCHARGE"));
         encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk");
-        var restored = encounters.getTimeline(encounterId).locations().getLast();
+        var restored = encounterQueries.getTimeline(encounterId).locations().getLast();
         mvc.perform(get(path(encounterId)).with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.currentLocation.id").value(restored.id().toString()))
                 .andExpect(jsonPath("$.currentAssignmentId").value(nullValue()))
@@ -262,7 +266,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(originalBody))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.title").value("Physician assignment conflict"));
-        UUID next = assignments.assign(encounterId, replacementId, locationId, first.id(), ENTERED.plusHours(1), "other-operator").getId();
+        UUID next = assignments.assign(encounterId, replacementId, locationId, first.id(), ENTERED.plusHours(1), "other-operator").id();
         mvc.perform(post(releasePath(first.id())).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(mapper.writeValueAsString(releaseBody(ENTERED.plusHours(2)))))
                 .andExpect(status().isConflict());
@@ -296,7 +300,7 @@ class EncounterPhysicianApiIntegrationTest {
     }
 
     private UUID assignFixture() {
-        return assignments.assign(encounterId, physicianId, locationId, null, ENTERED, "fixture-operator").getId();
+        return assignments.assign(encounterId, physicianId, locationId, null, ENTERED, "fixture-operator").id();
     }
 
     private Map<String, Object> assignmentBody(UUID physician, UUID expected, OffsetDateTime time) {
@@ -326,7 +330,7 @@ class EncounterPhysicianApiIntegrationTest {
 
     private UUID admit() {
         var patient = patients.createPatient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 1, 1));
-        return encounters.admitPatient(patient.getId(), "ENC-" + UUID.randomUUID(), ENTERED.minusHours(1)).getId();
+        return encounters.admitPatient(patient.id(), "ENC-" + UUID.randomUUID(), ENTERED.minusHours(1)).id();
     }
 
     private UUID currentLocationId(UUID encounterId) {

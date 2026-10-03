@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.exception.CurrentEncounterLocationNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
@@ -31,6 +32,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfiguration.class)
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class EncounterDischargeControllerTest {
+    @MockitoBean
+    private EncounterQueryService encounterQueries;
+
 
     private static final UUID EXPECTED_LOCATION_ID = UUID.fromString("99999999-1111-2222-3333-444444444444");
 

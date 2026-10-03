@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterExistsException;
@@ -47,6 +48,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PostgresInpatientIntegrityIT {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     private static final String SCHEMA = "clinicflow_integrity_" + UUID.randomUUID().toString().replace("-", "");
     private static final OffsetDateTime START = OffsetDateTime.parse("2025-09-01T10:00:00-04:00");
@@ -345,11 +349,11 @@ class PostgresInpatientIntegrityIT {
         var next = encounterService.transferEncounter(fixture.encounter(), department, fixture.ward(), targetBed,
                 START.plusHours(1), "test-clerk", initial);
 
-        var timeline = encounterService.getTimeline(fixture.encounter());
+        var timeline = encounterQueries.getTimeline(fixture.encounter());
         assertThat(timeline.locations()).hasSize(2);
         assertThat(timeline.locations().getFirst().id()).isEqualTo(initial);
         assertThat(timeline.locations().getFirst().endedAt()).isEqualTo(START.plusHours(1));
-        assertThat(timeline.locations().getLast().id()).isEqualTo(next.getId());
+        assertThat(timeline.locations().getLast().id()).isEqualTo(next.id());
         assertThat(timeline.locations().getLast().endedAt()).isNull();
         assertThat(timeline.locations().getLast().bedId()).isEqualTo(targetBed);
         var responsibility = physicianService.getAssignments(fixture.encounter());
@@ -366,7 +370,7 @@ class PostgresInpatientIntegrityIT {
         UUID initial = location(SCHEMA, fixture.encounter(), fixture, fixture.bed(), START, null);
         assignPhysician(fixture, initial);
         UUID nextDepartment = department();
-        var before = encounterService.getTimeline(fixture.encounter());
+        var before = encounterQueries.getTimeline(fixture.encounter());
         var responsibility = physicianService.getAssignments(fixture.encounter());
 
         assertThatThrownBy(() -> transactions().executeWithoutResult(status -> {
@@ -380,7 +384,7 @@ class PostgresInpatientIntegrityIT {
             throw new IllegalStateException("Failure after transfer reached the database");
         })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after transfer reached the database");
 
-        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(before);
+        assertThat(encounterQueries.getTimeline(fixture.encounter())).isEqualTo(before);
         assertThat(physicianService.getAssignments(fixture.encounter())).isEqualTo(responsibility);
         assertThat(jdbc.queryForObject("SELECT id FROM encounter_locations WHERE bed_id = ? AND ended_at IS NULL",
                 UUID.class, fixture.bed())).isEqualTo(initial);
@@ -394,7 +398,7 @@ class PostgresInpatientIntegrityIT {
         UUID initial = location(SCHEMA, fixture.encounter(), fixture, bed, START, null);
         assignPhysician(fixture, initial);
         encounterService.dischargeEncounter(fixture.encounter(), START.plusHours(1), "test-clerk", initial);
-        var discharged = encounterService.getTimeline(fixture.encounter());
+        var discharged = encounterQueries.getTimeline(fixture.encounter());
         UUID dischargeId = discharged.discharges().getFirst().id();
 
         assertThatThrownBy(() -> transactions().executeWithoutResult(status -> {
@@ -404,32 +408,32 @@ class PostgresInpatientIntegrityIT {
                     Integer.class, fixture.encounter())).isEqualTo(1);
             throw new IllegalStateException("Failure after discharge correction reached the database");
         })).isInstanceOf(IllegalStateException.class).hasMessage("Failure after discharge correction reached the database");
-        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(discharged);
+        assertThat(encounterQueries.getTimeline(fixture.encounter())).isEqualTo(discharged);
 
         encounterService.cancelDischarge(fixture.encounter(), START.plusHours(2), "test-clerk", dischargeId);
-        var restored = encounterService.getTimeline(fixture.encounter());
+        var restored = encounterQueries.getTimeline(fixture.encounter());
         assertThat(restored.encounter().status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
         assertThat(restored.locations()).hasSize(2);
         assertThat(restored.locations().getLast().bedId()).isEqualTo(bed);
         assertThat(restored.locations().getLast().endedAt()).isNull();
         assertThat(physicianService.getAssignments(fixture.encounter()).currentAssignmentId()).isNull();
         encounterService.dischargeEncounter(fixture.encounter(), START.plusHours(3), "test-clerk", restored.locations().getLast().id());
-        var finalHistory = encounterService.getTimeline(fixture.encounter());
+        var finalHistory = encounterQueries.getTimeline(fixture.encounter());
         var readmitted = encounterService.admitPatient(fixture.patient(), UUID.randomUUID().toString(), START.plusHours(4));
-        encounterService.admitToDepartment(readmitted.getId(), fixture.department(), fixture.ward(), bed, START.plusHours(5));
+        encounterService.admitToDepartment(readmitted.id(), fixture.department(), fixture.ward(), bed, START.plusHours(5));
 
         assertThatThrownBy(() -> encounterService.cancelDischarge(fixture.encounter(), START.plusHours(6), "test-clerk"))
                 .isInstanceOf(ActiveEncounterExistsException.class);
-        assertThat(encounterService.getTimeline(fixture.encounter())).isEqualTo(finalHistory);
+        assertThat(encounterQueries.getTimeline(fixture.encounter())).isEqualTo(finalHistory);
         assertThat(jdbc.queryForObject("SELECT id FROM encounters WHERE patient_id = ? AND status IN ('ADMITTED', 'IN_DEPARTMENT')",
-                UUID.class, fixture.patient())).isEqualTo(readmitted.getId());
+                UUID.class, fixture.patient())).isEqualTo(readmitted.id());
     }
 
     private UUID assignPhysician(Fixture fixture, UUID location) {
         UUID physician = UUID.randomUUID();
         jdbc.update("INSERT INTO physicians VALUES (?, ?, 'Test', 'Doctor', true, 0)", physician, physician.toString().substring(0, 20));
         jdbc.update("INSERT INTO physician_departments VALUES (?, ?)", physician, fixture.department());
-        return physicianService.assign(fixture.encounter(), physician, location, null, START, "test-clerk").getId();
+        return physicianService.assign(fixture.encounter(), physician, location, null, START, "test-clerk").id();
     }
 
     private UUID department() {

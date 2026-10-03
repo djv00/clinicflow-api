@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.patient.service;
 
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientPageResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.exception.DuplicateMedicalRecordNumberException;
@@ -35,7 +36,7 @@ public class PatientService {
      * Registers a patient after checking the medical record number.
      */
     @Transactional
-    public Patient createPatient(
+    public PatientResponse createPatient(
             String medicalRecordNumber,
             String firstName,
             String lastName,
@@ -56,7 +57,7 @@ public class PatientService {
         );
 
         try {
-            return patientRepository.saveAndFlush(patient);
+            return PatientResponse.from(patientRepository.saveAndFlush(patient));
         } catch (DataIntegrityViolationException exception) {
             // Concurrent registrations can both pass the existence check.
             for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
@@ -72,9 +73,9 @@ public class PatientService {
     /**
      * Returns a patient or reports that the supplied identifier is unknown.
      */
-    public Patient getPatient(UUID id) {
-        return patientRepository.findById(id)
-                .orElseThrow(() -> new PatientNotFoundException(id));
+    public PatientResponse getPatient(UUID id) {
+        return PatientResponse.from(patientRepository.findById(id)
+                .orElseThrow(() -> new PatientNotFoundException(id)));
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -91,9 +92,9 @@ class EncounterDischargeServiceTest {
     void dischargesWithoutABedAtTheCurrentLocationStartTime() {
         stubCurrentLocation();
 
-        Encounter result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT, "test-clerk", CURRENT_LOCATION_ID);
+        EncounterResponse result = encounterService.dischargeEncounter(ENCOUNTER_ID, STARTED_AT, "test-clerk", CURRENT_LOCATION_ID);
 
-        assertThat(result).isSameAs(encounter);
+        assertThat(result).isEqualTo(EncounterResponse.from(encounter));
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(encounter.getDischargedAt()).isEqualTo(STARTED_AT);
         assertThat(currentLocation.getEndedAt()).isEqualTo(STARTED_AT);

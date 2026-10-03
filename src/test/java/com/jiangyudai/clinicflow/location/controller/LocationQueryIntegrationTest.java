@@ -1,7 +1,7 @@
 package com.jiangyudai.clinicflow.location.controller;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
-import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.exception.BedHistoryConflictException;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
@@ -160,18 +160,18 @@ class LocationQueryIntegrationTest {
 
     @Test
     void reflectsAdmissionTransferDischargeAndDischargeCancellation() throws Exception {
-        Encounter encounter = enterFirstBed();
+        EncounterResponse encounter = enterFirstBed();
         assertOccupied(firstBed, true);
         assertOccupied(secondBed, false);
 
-        encounterService.transferEncounter(encounter.getId(), department.getId(), secondWard.getId(),
-                secondBed.getId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(encounter.getId()));
+        encounterService.transferEncounter(encounter.id(), department.getId(), secondWard.getId(),
+                secondBed.getId(), ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(encounter.id()));
         assertOccupied(firstBed, false);
         assertOccupied(secondBed, true);
 
-        encounterService.dischargeEncounter(encounter.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(encounter.getId()));
+        encounterService.dischargeEncounter(encounter.id(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(encounter.id()));
         assertOccupied(secondBed, false);
-        encounterService.cancelDischarge(encounter.getId(), ADMITTED_AT.plusHours(4), "test-clerk");
+        encounterService.cancelDischarge(encounter.id(), ADMITTED_AT.plusHours(4), "test-clerk");
         assertOccupied(secondBed, true);
         mockMvc.perform(get("/api/v1/beds").param("occupied", "true"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
@@ -180,8 +180,8 @@ class LocationQueryIntegrationTest {
 
     @Test
     void anUnassignedPatientDoesNotOccupyAnyBed() throws Exception {
-        Encounter encounter = admit();
-        encounterService.admitToDepartment(encounter.getId(), department.getId(), firstWard.getId(), null,
+        EncounterResponse encounter = admit();
+        encounterService.admitToDepartment(encounter.id(), department.getId(), firstWard.getId(), null,
                 ADMITTED_AT.plusHours(1));
 
         mockMvc.perform(get("/api/v1/beds").param("occupied", "true"))
@@ -190,12 +190,12 @@ class LocationQueryIntegrationTest {
 
     @Test
     void closedHistoryDoesNotCountAsCurrentOccupancyButStillPreventsBackdatedAssignment() throws Exception {
-        Encounter first = enterFirstBed();
-        encounterService.dischargeEncounter(first.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(first.getId()));
+        EncounterResponse first = enterFirstBed();
+        encounterService.dischargeEncounter(first.id(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(first.id()));
         assertOccupied(firstBed, false);
-        Encounter next = admit();
+        EncounterResponse next = admit();
 
-        assertThatThrownBy(() -> encounterService.admitToDepartment(next.getId(), department.getId(), firstWard.getId(),
+        assertThatThrownBy(() -> encounterService.admitToDepartment(next.id(), department.getId(), firstWard.getId(),
                 firstBed.getId(), ADMITTED_AT.plusHours(2))).isInstanceOf(BedHistoryConflictException.class);
     }
 
@@ -205,9 +205,9 @@ class LocationQueryIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].active").value(true))
                 .andExpect(jsonPath("$[0].occupied").value(false));
-        Encounter encounter = admit();
+        EncounterResponse encounter = admit();
 
-        assertThatThrownBy(() -> encounterService.admitToDepartment(encounter.getId(), department.getId(), inactiveWard.getId(),
+        assertThatThrownBy(() -> encounterService.admitToDepartment(encounter.id(), department.getId(), inactiveWard.getId(),
                 bedInInactiveWard.getId(), ADMITTED_AT.plusHours(1))).isInstanceOf(InvalidLocationException.class);
     }
 
@@ -251,14 +251,14 @@ class LocationQueryIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.occupied").value(occupied));
     }
 
-    private Encounter enterFirstBed() {
-        Encounter encounter = admit();
-        encounterService.admitToDepartment(encounter.getId(), department.getId(), firstWard.getId(), firstBed.getId(),
+    private EncounterResponse enterFirstBed() {
+        EncounterResponse encounter = admit();
+        encounterService.admitToDepartment(encounter.id(), department.getId(), firstWard.getId(), firstBed.getId(),
                 ADMITTED_AT.plusHours(1));
         return encounter;
     }
 
-    private Encounter admit() {
+    private EncounterResponse admit() {
         Patient patient = new Patient("MRN-" + UUID.randomUUID(), "Test", "Patient", LocalDate.of(1990, 5, 14));
         entityManager.persist(patient);
         entityManager.flush();

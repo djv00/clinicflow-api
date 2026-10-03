@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.dto.InpatientSearchRequest;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
@@ -31,7 +32,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -44,6 +44,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PostgresQueryPlansIT {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
     private static final String SCHEMA = "clinicflow_queries_" + UUID.randomUUID().toString().replace("-", "");
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -125,14 +128,14 @@ class PostgresQueryPlansIT {
     @ParameterizedTest
     @ValueSource(ints = {5, 20})
     void patientHistoryUsesThreeSelectsRegardlessOfPageSize(int size) {
-        var observation = QueryCapture.observe(() -> encounters.getPatientEncounters(patient, 0, size));
+        var observation = QueryCapture.observe(() -> encounterQueries.getPatientEncounters(patient, 0, size));
         // Patient existence lookup, page content, and count; proxy IDs do not load each patient again.
         assertThat(observation.queries()).hasSize(3);
         assertThat(observation.result().items()).hasSize(size);
         assertThat(observation.result().totalElements()).isEqualTo(31);
         assertThat(observation.result().items()).allSatisfy(row -> assertThat(row.patientId()).isEqualTo(patient));
         assertThat(observation.result().items().getFirst().encounterNumber()).isEqualTo("QUERY-A-000001");
-        var next = encounters.getPatientEncounters(patient, 1, size);
+        var next = encounterQueries.getPatientEncounters(patient, 1, size);
         assertThat(next.items()).extracting(row -> row.id())
                 .doesNotContainAnyElementsOf(observation.result().items().stream().map(row -> row.id()).toList());
     }
@@ -188,8 +191,8 @@ class PostgresQueryPlansIT {
 
     private Map<String, Object> writePlans(String label) throws Exception {
         var cases = new LinkedHashMap<String, Supplier<?>>();
-        cases.put("history-first", () -> encounters.getPatientEncounters(patient, 0, 20));
-        cases.put("history-next", () -> encounters.getPatientEncounters(patient, 1, 20));
+        cases.put("history-first", () -> encounterQueries.getPatientEncounters(patient, 0, 20));
+        cases.put("history-next", () -> encounterQueries.getPatientEncounters(patient, 1, 20));
         cases.put("inpatients-all", () -> inpatients.searchInpatients(new InpatientSearchRequest(null, null, null, null), 0, 20));
         cases.put("inpatients-department", () -> inpatients.searchInpatients(new InpatientSearchRequest(null, null, department, null), 0, 20));
         cases.put("inpatients-ward", () -> inpatients.searchInpatients(new InpatientSearchRequest(null, null, null, ward), 0, 20));

@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -92,10 +93,10 @@ class DischargeCancellationServiceTest {
         when(locationService.getActiveWard(ward.getId())).thenReturn(ward);
         when(locationService.getActiveBedForUpdate(bed.getId(), ward.getId())).thenReturn(bed);
 
-        Encounter result = encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk");
+        EncounterResponse result = encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk");
 
-        assertThat(result).isSameAs(encounter);
-        assertThat(result.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
+        assertThat(result).isEqualTo(EncounterResponse.from(encounter));
+        assertThat(result.status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
         EncounterLocation restored = discharge.getRestoredLocation();
         assertThat(restored.getDepartment()).isSameAs(department);
         assertThat(restored.getWard()).isSameAs(ward);

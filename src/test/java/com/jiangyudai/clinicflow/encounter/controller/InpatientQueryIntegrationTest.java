@@ -1,12 +1,12 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
+import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
-import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.location.entity.Bed;
 import com.jiangyudai.clinicflow.location.entity.Department;
 import com.jiangyudai.clinicflow.location.entity.Ward;
-import com.jiangyudai.clinicflow.patient.entity.Patient;
 import com.jiangyudai.clinicflow.patient.service.PatientService;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,8 +44,8 @@ class InpatientQueryIntegrationTest {
     @Autowired private EncounterService encounterService;
     @Autowired private EntityManager entityManager;
 
-    private Encounter waiting;
-    private Encounter placed;
+    private EncounterResponse waiting;
+    private EncounterResponse placed;
     private Department medicine;
     private Department rehabilitation;
     private Ward firstWard;
@@ -65,13 +65,13 @@ class InpatientQueryIntegrationTest {
         entityManager.persist(bed);
         waiting = admit("STAY-001", "MRN-001", "Maya", "Chen");
         placed = admit("STAY-002", "MRN-002", "Evan", "Cole");
-        encounterService.admitToDepartment(placed.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
-        encounterService.transferEncounter(placed.getId(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(placed.getId()));
-        Encounter discharged = admit("STAY-003", "MRN-003", "Theo", "Gray");
-        encounterService.admitToDepartment(discharged.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(2));
-        encounterService.dischargeEncounter(discharged.getId(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(discharged.getId()));
-        Encounter cancelled = admit("STAY-004", "MRN-004", "Lena", "Ross");
-        encounterService.cancelAdmission(cancelled.getId(), ADMITTED_AT.plusMinutes(30), "test-clerk");
+        encounterService.admitToDepartment(placed.id(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
+        encounterService.transferEncounter(placed.id(), rehabilitation.getId(), secondWard.getId(), null, ADMITTED_AT.plusHours(2), "test-clerk", currentLocationId(placed.id()));
+        EncounterResponse discharged = admit("STAY-003", "MRN-003", "Theo", "Gray");
+        encounterService.admitToDepartment(discharged.id(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(2));
+        encounterService.dischargeEncounter(discharged.id(), ADMITTED_AT.plusHours(3), "test-clerk", currentLocationId(discharged.id()));
+        EncounterResponse cancelled = admit("STAY-004", "MRN-004", "Lena", "Ross");
+        encounterService.cancelAdmission(cancelled.id(), ADMITTED_AT.plusMinutes(30), "test-clerk");
         entityManager.flush();
         entityManager.clear();
     }
@@ -82,8 +82,8 @@ class InpatientQueryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.items[0].id").value(waiting.getId().toString()))
-                .andExpect(jsonPath("$.items[0].patientId").value(waiting.getPatient().getId().toString()))
+                .andExpect(jsonPath("$.items[0].id").value(waiting.id().toString()))
+                .andExpect(jsonPath("$.items[0].patientId").value(waiting.patientId().toString()))
                 .andExpect(jsonPath("$.items[0].medicalRecordNumber").value("MRN-001"))
                 .andExpect(jsonPath("$.items[0].dateOfBirth").value("1990-05-14"))
                 .andExpect(jsonPath("$.items[0].departmentId").isEmpty())
@@ -97,7 +97,7 @@ class InpatientQueryIntegrationTest {
     void returnsTheAssignedBedForCurrentDepartmentCare() throws Exception {
         Bed bed = new Bed("02", entityManager.find(Ward.class, firstWard.getId()));
         entityManager.persist(bed);
-        encounterService.admitToDepartment(waiting.getId(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
+        encounterService.admitToDepartment(waiting.id(), medicine.getId(), firstWard.getId(), bed.getId(), ADMITTED_AT.plusHours(1));
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT").param("wardId", firstWard.getId().toString()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.items[0].bedId").value(bed.getId().toString()))
@@ -112,7 +112,7 @@ class InpatientQueryIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
         mockMvc.perform(get(PATH).param("departmentId", rehabilitation.getId().toString())
                         .param("wardId", secondWard.getId().toString()).param("status", "IN_DEPARTMENT").param("keyword", "cole"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(placed.getId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(placed.id().toString()))
                 .andExpect(jsonPath("$.totalElements").value(1));
         mockMvc.perform(get(PATH).param("status", "ADMITTED").param("wardId", secondWard.getId().toString()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
@@ -159,16 +159,16 @@ class InpatientQueryIntegrationTest {
 
     @Test
     void reflectsEntryDischargeAndCancellationWithoutDuplicatingHistoricalLocations() throws Exception {
-        encounterService.admitToDepartment(waiting.getId(), medicine.getId(), firstWard.getId(), null, ADMITTED_AT.plusHours(1));
-        encounterService.dischargeEncounter(placed.getId(), ADMITTED_AT.plusHours(4), "test-clerk", currentLocationId(placed.getId()));
+        encounterService.admitToDepartment(waiting.id(), medicine.getId(), firstWard.getId(), null, ADMITTED_AT.plusHours(1));
+        encounterService.dischargeEncounter(placed.id(), ADMITTED_AT.plusHours(4), "test-clerk", currentLocationId(placed.id()));
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
-        encounterService.cancelDischarge(placed.getId(), ADMITTED_AT.plusHours(5), "test-clerk");
+        encounterService.cancelDischarge(placed.id(), ADMITTED_AT.plusHours(5), "test-clerk");
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT").param("size", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
         mockMvc.perform(get(PATH).param("wardId", secondWard.getId().toString()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.items[0].id").value(placed.getId().toString()));
+                .andExpect(jsonPath("$.items[0].id").value(placed.id().toString()));
     }
 
     @Test
@@ -193,9 +193,9 @@ class InpatientQueryIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    private Encounter admit(String encounterNumber, String mrn, String firstName, String lastName) {
-        Patient patient = patientService.createPatient(mrn, firstName, lastName, LocalDate.of(1990, 5, 14));
-        return encounterService.admitPatient(patient.getId(), encounterNumber, ADMITTED_AT);
+    private EncounterResponse admit(String encounterNumber, String mrn, String firstName, String lastName) {
+        PatientResponse patient = patientService.createPatient(mrn, firstName, lastName, LocalDate.of(1990, 5, 14));
+        return encounterService.admitPatient(patient.id(), encounterNumber, ADMITTED_AT);
     }
 
     private UUID currentLocationId(UUID encounterId) {

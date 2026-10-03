@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.ClinicflowApiApplication;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
@@ -49,11 +50,11 @@ class PostgresDemoDataIT {
                         UUID.fromString("30000000-0000-0000-0000-000000000003"))).isEqualTo(wardId);
                 var patients = first.getBean(PatientService.class);
                 var encounters = first.getBean(EncounterService.class);
-                patientId = patients.createPatient("DEMO-RESTART-TEST", "Fictional", "Patient", LocalDate.of(1990, 5, 14)).getId();
+                patientId = patients.createPatient("DEMO-RESTART-TEST", "Fictional", "Patient", LocalDate.of(1990, 5, 14)).id();
                 var start = OffsetDateTime.parse("2025-09-01T09:00:00-04:00");
-                cancelledId = encounters.admitPatient(patientId, "DEMO-CANCEL-TEST", start).getId();
+                cancelledId = encounters.admitPatient(patientId, "DEMO-CANCEL-TEST", start).id();
                 encounters.cancelAdmission(cancelledId, start.plusMinutes(1), "test-operator");
-                encounterId = encounters.admitPatient(patientId, "DEMO-STAY-TEST", start.plusHours(1)).getId();
+                encounterId = encounters.admitPatient(patientId, "DEMO-STAY-TEST", start.plusHours(1)).id();
                 encounters.admitToDepartment(encounterId, departmentId, wardId, bedId, start.plusHours(2));
                 encounters.transferEncounter(encounterId, UUID.fromString("10000000-0000-0000-0000-000000000002"),
                         UUID.fromString("20000000-0000-0000-0000-000000000002"), SECOND_BED, start.plusHours(3), "test-clerk", database.jdbc.queryForObject("SELECT id FROM encounter_locations WHERE encounter_id = ? AND ended_at IS NULL", UUID.class, encounterId));
@@ -78,8 +79,8 @@ class PostgresDemoDataIT {
                 assertThat(database.jdbc.queryForObject("SELECT active FROM beds WHERE id = ?", Boolean.class, bedId)).isFalse();
                 assertThat(database.count("patients")).isEqualTo(1);
                 assertThat(database.count("encounters")).isEqualTo(2);
-                var encounters = restarted.getBean(EncounterService.class);
-                assertThat(encounters.getEncounter(cancelledId).getStatus()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
+                var encounters = restarted.getBean(EncounterQueryService.class);
+                assertThat(encounters.getEncounter(cancelledId).status()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
                 var timeline = encounters.getTimeline(encounterId);
                 assertThat(timeline.encounter().status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
                 assertThat(timeline.locations()).hasSize(3);
@@ -88,7 +89,7 @@ class PostgresDemoDataIT {
                         Integer.class, SECOND_BED)).isEqualTo(1);
                 assertThat(database.jdbc.queryForObject("SELECT cancelled_by FROM encounter_discharges WHERE encounter_id = ?",
                         String.class, encounterId)).isEqualTo("test-operator");
-                assertThat(restarted.getBean(PatientService.class).getPatient(patientId).getMedicalRecordNumber()).isEqualTo("DEMO-RESTART-TEST");
+                assertThat(restarted.getBean(PatientService.class).getPatient(patientId).medicalRecordNumber()).isEqualTo("DEMO-RESTART-TEST");
             }
         }
     }

@@ -30,14 +30,14 @@ public class EncounterPhysicianController {
     @ResponseStatus(HttpStatus.CREATED)
     public PhysicianAssignmentResponse assign(@PathVariable UUID encounterId,
                                               @Valid @RequestBody AssignPhysicianRequest request, Principal principal) {
-        return PhysicianAssignmentResponse.from(physicians.assign(encounterId, request.physicianId(),
-                request.expectedLocationId(), request.expectedAssignmentId(), request.startedAt(), principal.getName()));
+        return physicians.assign(encounterId, request.physicianId(),
+                request.expectedLocationId(), request.expectedAssignmentId(), request.startedAt(), principal.getName());
     }
 
     @PostMapping("/{assignmentId}/releases")
     public PhysicianAssignmentResponse release(@PathVariable UUID encounterId, @PathVariable UUID assignmentId,
                                                @Valid @RequestBody ReleasePhysicianRequest request, Principal principal) {
-        return PhysicianAssignmentResponse.from(physicians.release(encounterId, request.expectedLocationId(),
-                assignmentId, request.endedAt(), principal.getName()));
+        return physicians.release(encounterId, request.expectedLocationId(),
+                assignmentId, request.endedAt(), principal.getName());
     }
 }
