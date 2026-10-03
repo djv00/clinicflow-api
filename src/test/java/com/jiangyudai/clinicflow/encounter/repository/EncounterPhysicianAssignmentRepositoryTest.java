@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.repository;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterPhysicianAssignment;
 import com.jiangyudai.clinicflow.encounter.entity.PhysicianAssignmentEndReason;
@@ -49,7 +51,7 @@ class EncounterPhysicianAssignmentRepositoryTest {
     void retainsHistoryAndFindsOnlyTheCurrentPhysicianAfterHandover() {
         var first = assignments.saveAndFlush(assignment(encounter, physician, START));
         Physician replacement = physicians.save(new Physician("PHY-002", "Alex", "Martin"));
-        first.endAt(START.plusHours(1), PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk");
+        first.endAt(START.plusHours(1), PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk", NOW);
         assignments.flush();
         var next = assignments.saveAndFlush(assignment(encounter, replacement, START.plusHours(1)));
         entityManager.clear();
@@ -99,12 +101,12 @@ class EncounterPhysicianAssignmentRepositoryTest {
         var stale = assignments.saveAndFlush(assignment(encounter, physician, START));
         entityManager.clear();
         var managed = assignments.findById(stale.getId()).orElseThrow();
-        managed.endAt(START.plusHours(1), PhysicianAssignmentEndReason.DISCHARGE, "first-clerk");
+        managed.endAt(START.plusHours(1), PhysicianAssignmentEndReason.DISCHARGE, "first-clerk", NOW);
         assignments.flush();
         assertThat(managed.getVersion()).isGreaterThan(stale.getVersion());
         entityManager.clear();
 
-        stale.endAt(START.plusHours(2), PhysicianAssignmentEndReason.RELEASED, "stale-clerk");
+        stale.endAt(START.plusHours(2), PhysicianAssignmentEndReason.RELEASED, "stale-clerk", NOW);
         assertThatThrownBy(() -> assignments.saveAndFlush(stale))
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
@@ -143,6 +145,6 @@ class EncounterPhysicianAssignmentRepositoryTest {
     }
 
     private EncounterPhysicianAssignment assignment(Encounter encounter, Physician physician, OffsetDateTime start) {
-        return new EncounterPhysicianAssignment(encounter, physician, department, start, "operator");
+        return new EncounterPhysicianAssignment(encounter, physician, department, start, "operator", NOW);
     }
 }

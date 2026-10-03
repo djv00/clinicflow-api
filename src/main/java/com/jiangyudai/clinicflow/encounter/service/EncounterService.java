@@ -22,6 +22,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +49,7 @@ public class EncounterService {
     private final PatientService patientService;
     private final EncounterDischargeRepository encounterDischargeRepository;
     private final EncounterPhysicianService physicianService;
+    private final Clock clock;
 
     public EncounterService(
             EncounterRepository encounterRepository,
@@ -55,7 +57,8 @@ public class EncounterService {
             EncounterLocationRepository encounterLocationRepository,
             LocationService locationService,
             EncounterDischargeRepository encounterDischargeRepository,
-            EncounterPhysicianService physicianService
+            EncounterPhysicianService physicianService,
+            Clock clock
     ) {
         this.encounterRepository = encounterRepository;
         this.patientService = patientService;
@@ -63,6 +66,7 @@ public class EncounterService {
         this.locationService = locationService;
         this.encounterDischargeRepository = encounterDischargeRepository;
         this.physicianService = physicianService;
+        this.clock = clock;
     }
 
     /**
@@ -75,7 +79,7 @@ public class EncounterService {
             OffsetDateTime admittedAt
     ) {
         encounterNumber = encounterNumber.trim();
-        if (admittedAt.isAfter(OffsetDateTime.now())) {
+        if (admittedAt.isAfter(OffsetDateTime.now(clock))) {
             throw new InvalidAdmissionTimeException(admittedAt);
         }
 
@@ -155,7 +159,7 @@ public class EncounterService {
             );
         }
 
-        if (startedAt.isAfter(OffsetDateTime.now())) {
+        if (startedAt.isAfter(OffsetDateTime.now(clock))) {
             throw new InvalidDepartmentAdmissionTimeException(
                     "Department admission time cannot be in the future"
             );
@@ -246,7 +250,7 @@ public class EncounterService {
             );
         }
 
-        if (transferredAt.isAfter(OffsetDateTime.now())) {
+        if (transferredAt.isAfter(OffsetDateTime.now(clock))) {
             throw new InvalidEncounterTransferTimeException(
                     "Transfer time cannot be in the future"
             );
@@ -341,7 +345,7 @@ public class EncounterService {
             );
         }
 
-        encounter.dischargeAt(dischargedAt);
+        encounter.dischargeAt(dischargedAt, OffsetDateTime.now(clock));
         physicianService.closeForCareEnd(encounterId, dischargedAt, PhysicianAssignmentEndReason.DISCHARGE, operator);
         currentLocation.endAt(dischargedAt);
         encounterDischargeRepository.save(new EncounterDischarge(encounter, currentLocation));
@@ -375,7 +379,7 @@ public class EncounterService {
             throw new EncounterLocationHistoryExistsException(encounterId);
         }
 
-        encounter.cancelAdmission(cancelledAt, cancelledBy);
+        encounter.cancelAdmission(cancelledAt, cancelledBy, OffsetDateTime.now(clock));
 
         return EncounterResponse.from(encounter);
     }
@@ -433,7 +437,8 @@ public class EncounterService {
             throw new DischargeRecordConflictException("Discharge record does not match the closed location");
         }
 
-        discharge.validateCancellation(cancelledAt, cancelledBy);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        discharge.validateCancellation(cancelledAt, cancelledBy, now);
 
         if (encounterRepository.existsConflictingEncounterAfterDischarge(
                 patientId, encounterId, discharge.getDischargedAt(), EncounterStatus.ADMISSION_CANCELLED
@@ -456,7 +461,7 @@ public class EncounterService {
         EncounterLocation restored = new EncounterLocation(
                 encounter, department, ward, bed, discharge.getDischargedAt()
         );
-        discharge.cancelAt(cancelledAt, cancelledBy, restored);
+        discharge.cancelAt(cancelledAt, cancelledBy, restored, now);
         encounter.cancelDischarge();
         encounterLocationRepository.save(restored);
         return EncounterResponse.from(encounter);

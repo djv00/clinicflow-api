@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -18,10 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -54,6 +59,9 @@ class EncounterServiceTest {
 
     @Mock
     private EncounterPhysicianService physicianService;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
 
     @InjectMocks
     private EncounterService encounterService;
@@ -174,7 +182,7 @@ class EncounterServiceTest {
                 "duplicate", new SQLException("duplicate", "23505"), "uk_encounters_encounter_number"));
         when(encounterRepository.saveAndFlush(any(Encounter.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-RACE", OffsetDateTime.now().minusHours(1)))
+        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-RACE", NOW.minusHours(1)))
                 .isInstanceOf(DuplicateEncounterNumberException.class).hasMessageContaining("ENC-RACE");
     }
 
@@ -185,7 +193,7 @@ class EncounterServiceTest {
                 "invalid reference", new SQLException("invalid reference", "23503"), "fk_encounters_patient"));
         when(encounterRepository.saveAndFlush(any(Encounter.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-100001", OffsetDateTime.now().minusHours(1)))
+        assertThatThrownBy(() -> encounterService.admitPatient(PATIENT_ID, "ENC-100001", NOW.minusHours(1)))
                 .isSameAs(failure);
     }
 }

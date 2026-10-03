@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.persistence;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
@@ -644,7 +646,7 @@ class PostgresWorkflowIT {
         OffsetDateTime handoverAt = ENTERED_AT.plusHours(1);
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             assignmentRepository.findById(original.getId()).orElseThrow()
-                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk");
+                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk", NOW);
             assignmentRepository.flush();
             createAssignment(encounterId, nextPhysician, locations.departmentId(), handoverAt);
             assertThat(jdbc.queryForObject("SELECT count(*) FROM encounter_physician_assignments WHERE encounter_id = ?",
@@ -661,7 +663,7 @@ class PostgresWorkflowIT {
 
         var next = transactions.execute(status -> {
             assignmentRepository.findById(original.getId()).orElseThrow()
-                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk");
+                    .endAt(handoverAt, PhysicianAssignmentEndReason.REASSIGNED, "handover-clerk", NOW);
             assignmentRepository.flush();
             return createAssignment(encounterId, nextPhysician, locations.departmentId(), handoverAt);
         });
@@ -700,7 +702,7 @@ class PostgresWorkflowIT {
                     UUID.randomUUID(), id)).as(column).isInstanceOf(DataIntegrityViolationException.class);
         }
         transactions.executeWithoutResult(status -> assignmentRepository.findById(id).orElseThrow()
-                .endAt(ENTERED_AT, PhysicianAssignmentEndReason.RELEASED, "operator"));
+                .endAt(ENTERED_AT, PhysicianAssignmentEndReason.RELEASED, "operator", NOW));
         // Remove the separate affiliation so it cannot mask the assignment's physician foreign key.
         jdbc.update("DELETE FROM physician_departments WHERE physician_id = ?", physicianId);
         assertThatThrownBy(() -> jdbc.update("DELETE FROM physicians WHERE id = ?", physicianId))
@@ -925,7 +927,7 @@ class PostgresWorkflowIT {
         return transactions.execute(status -> assignmentRepository.saveAndFlush(new EncounterPhysicianAssignment(
                 entityManager.getReference(Encounter.class, encounterId),
                 entityManager.getReference(Physician.class, physicianId),
-                entityManager.getReference(Department.class, departmentId), startedAt, "test-clerk")));
+                entityManager.getReference(Department.class, departmentId), startedAt, "test-clerk", NOW)));
     }
 
     private void awaitBlockedBy(Future<?> contender, int blockingPid) throws Exception {

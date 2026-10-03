@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
@@ -17,9 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +55,9 @@ class AdmissionCancellationServiceTest {
     private LocationService locationService;
     @Mock
     private EncounterPhysicianService physicianService;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
 
     @InjectMocks
     private EncounterService encounterService;

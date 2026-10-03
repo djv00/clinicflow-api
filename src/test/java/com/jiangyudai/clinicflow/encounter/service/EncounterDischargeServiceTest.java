@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterLocation;
@@ -25,10 +27,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,6 +69,9 @@ class EncounterDischargeServiceTest {
     private LocationService locationService;
     @Mock
     private EncounterPhysicianService physicianService;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
 
     @InjectMocks
     private EncounterService encounterService;
@@ -168,7 +176,7 @@ class EncounterDischargeServiceTest {
     }
 
     private static Stream<OffsetDateTime> invalidDischargeTimes() {
-        return Stream.of(STARTED_AT.minusSeconds(1), OffsetDateTime.now().plusDays(1));
+        return Stream.of(STARTED_AT.minusSeconds(1), NOW.plusDays(1));
     }
 
     private void stubCurrentLocation() {

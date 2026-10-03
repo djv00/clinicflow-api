@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.exception.InvalidAdmissionCancellationException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
@@ -26,7 +28,7 @@ class AdmissionCancellationTest {
     void recordsCancellationWithoutChangingAdmissionOrDischargeTime() {
         Encounter encounter = createEncounter();
 
-        encounter.cancelAdmission(CANCELLED_AT, "demo-clerk");
+        encounter.cancelAdmission(CANCELLED_AT, "demo-clerk", NOW);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
         assertThat(encounter.getAdmissionCancelledAt()).isEqualTo(CANCELLED_AT);
@@ -38,9 +40,9 @@ class AdmissionCancellationTest {
     @Test
     void repeatedCancellationDoesNotOverwriteTheOriginalDetails() {
         Encounter encounter = createEncounter();
-        encounter.cancelAdmission(CANCELLED_AT, "first-clerk");
+        encounter.cancelAdmission(CANCELLED_AT, "first-clerk", NOW);
 
-        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT.plusMinutes(1), "second-clerk"))
+        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT.plusMinutes(1), "second-clerk", NOW))
                 .isInstanceOf(InvalidEncounterStatusException.class);
 
         assertThat(encounter.getAdmissionCancelledAt()).isEqualTo(CANCELLED_AT);
@@ -53,10 +55,10 @@ class AdmissionCancellationTest {
         Encounter encounter = createEncounter();
         encounter.admitToDepartment();
         if (status == EncounterStatus.DISCHARGED) {
-            encounter.dischargeAt(CANCELLED_AT);
+            encounter.dischargeAt(CANCELLED_AT, NOW);
         }
 
-        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT, "demo-clerk"))
+        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT, "demo-clerk", NOW))
                 .isInstanceOf(InvalidEncounterStatusException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(status);
@@ -69,7 +71,7 @@ class AdmissionCancellationTest {
     void rejectsInvalidTimeWithoutChangingTheEncounter(OffsetDateTime cancelledAt) {
         Encounter encounter = createEncounter();
 
-        assertThatThrownBy(() -> encounter.cancelAdmission(cancelledAt, "demo-clerk"))
+        assertThatThrownBy(() -> encounter.cancelAdmission(cancelledAt, "demo-clerk", NOW))
                 .isInstanceOf(InvalidAdmissionCancellationException.class);
 
         assertNotCancelled(encounter);
@@ -80,7 +82,7 @@ class AdmissionCancellationTest {
     void rejectsInvalidOperatorWithoutChangingTheEncounter(String cancelledBy) {
         Encounter encounter = createEncounter();
 
-        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT, cancelledBy))
+        assertThatThrownBy(() -> encounter.cancelAdmission(CANCELLED_AT, cancelledBy, NOW))
                 .isInstanceOf(InvalidAdmissionCancellationException.class);
 
         assertNotCancelled(encounter);
@@ -92,7 +94,7 @@ class AdmissionCancellationTest {
         String operator = "a".repeat(100);
         OffsetDateTime cancelledAt = ADMITTED_AT.withOffsetSameInstant(ZoneOffset.UTC);
 
-        encounter.cancelAdmission(cancelledAt, operator);
+        encounter.cancelAdmission(cancelledAt, operator, NOW);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ADMISSION_CANCELLED);
         assertThat(encounter.getAdmissionCancelledAt()).isEqualTo(cancelledAt);
@@ -100,7 +102,7 @@ class AdmissionCancellationTest {
     }
 
     private static Stream<OffsetDateTime> invalidCancellationTimes() {
-        return Stream.of(null, ADMITTED_AT.minusSeconds(1), OffsetDateTime.now().plusDays(1));
+        return Stream.of(null, ADMITTED_AT.minusSeconds(1), NOW.plusDays(1));
     }
 
     private static Stream<String> invalidOperators() {

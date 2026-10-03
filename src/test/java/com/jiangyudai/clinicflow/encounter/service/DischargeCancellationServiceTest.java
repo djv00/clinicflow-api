@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
 import com.jiangyudai.clinicflow.encounter.entity.EncounterDischarge;
@@ -22,10 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,6 +61,9 @@ class DischargeCancellationServiceTest {
     @Mock
     private EncounterPhysicianService physicianService;
 
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
+
     @InjectMocks
     private EncounterService encounterService;
 
@@ -79,7 +87,7 @@ class DischargeCancellationServiceTest {
         ReflectionTestUtils.setField(bed, "id", UUID.randomUUID());
         previous = new EncounterLocation(encounter, department, ward, bed, DISCHARGED_AT.minusDays(1));
         encounter.admitToDepartment();
-        encounter.dischargeAt(DISCHARGED_AT);
+        encounter.dischargeAt(DISCHARGED_AT, NOW);
         previous.endAt(DISCHARGED_AT);
         discharge = new EncounterDischarge(encounter, previous);
     }

@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.patient.service;
 
+import com.jiangyudai.clinicflow.common.query.SearchPatterns;
+
 import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientPageResponse;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
@@ -90,7 +92,7 @@ public class PatientService {
         }
 
         // Escape LIKE metacharacters so user input remains a literal fragment.
-        String pattern = "%" + search.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+        String pattern = SearchPatterns.containing(search);
         return PatientPageResponse.from(patientRepository.search(pattern, pageable));
     }
 

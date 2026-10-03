@@ -101,7 +101,7 @@ public class Encounter {
     /**
      * Records discharge after the encounter has entered a department.
      */
-    public void dischargeAt(OffsetDateTime dischargedAt) {
+    public void dischargeAt(OffsetDateTime dischargedAt, OffsetDateTime now) {
         if (status != EncounterStatus.IN_DEPARTMENT) {
             throw new InvalidEncounterStatusException(
                     status,
@@ -121,7 +121,7 @@ public class Encounter {
             );
         }
 
-        if (dischargedAt.isAfter(OffsetDateTime.now())) {
+        if (dischargedAt.isAfter(now)) {
             throw new InvalidDischargeTimeException(
                     "Discharge time cannot be in the future"
             );
@@ -134,7 +134,7 @@ public class Encounter {
     /**
      * Cancels an admission before department care begins, retaining the encounter.
      */
-    public void cancelAdmission(OffsetDateTime cancelledAt, String cancelledBy) {
+    public void cancelAdmission(OffsetDateTime cancelledAt, String cancelledBy, OffsetDateTime now) {
         if (status != EncounterStatus.ADMITTED) {
             throw new InvalidEncounterStatusException(status, EncounterStatus.ADMITTED);
         }
@@ -149,7 +149,7 @@ public class Encounter {
             );
         }
 
-        if (cancelledAt.isAfter(OffsetDateTime.now())) {
+        if (cancelledAt.isAfter(now)) {
             throw new InvalidAdmissionCancellationException(
                     "Cancellation time cannot be in the future"
             );

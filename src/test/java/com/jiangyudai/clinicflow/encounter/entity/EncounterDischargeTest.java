@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.entity;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeTimeException;
 import com.jiangyudai.clinicflow.encounter.exception.InvalidEncounterStatusException;
 import com.jiangyudai.clinicflow.patient.entity.Patient;
@@ -26,11 +28,11 @@ class EncounterDischargeTest {
         encounter.admitToDepartment();
         OffsetDateTime dischargedAt = ADMITTED_AT.plusDays(2);
 
-        encounter.dischargeAt(dischargedAt);
+        encounter.dischargeAt(dischargedAt, NOW);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(encounter.getDischargedAt()).isEqualTo(dischargedAt);
-        assertThatThrownBy(() -> encounter.dischargeAt(dischargedAt.plusHours(1)))
+        assertThatThrownBy(() -> encounter.dischargeAt(dischargedAt.plusHours(1), NOW))
                 .isInstanceOf(InvalidEncounterStatusException.class);
         assertThat(encounter.getDischargedAt()).isEqualTo(dischargedAt);
     }
@@ -39,7 +41,7 @@ class EncounterDischargeTest {
     void rejectsDischargeBeforeDepartmentAdmission() {
         Encounter encounter = createEncounter();
 
-        assertThatThrownBy(() -> encounter.dischargeAt(ADMITTED_AT.plusDays(1)))
+        assertThatThrownBy(() -> encounter.dischargeAt(ADMITTED_AT.plusDays(1), NOW))
                 .isInstanceOf(InvalidEncounterStatusException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ADMITTED);
@@ -52,7 +54,7 @@ class EncounterDischargeTest {
         Encounter encounter = createEncounter();
         encounter.admitToDepartment();
 
-        assertThatThrownBy(() -> encounter.dischargeAt(dischargedAt))
+        assertThatThrownBy(() -> encounter.dischargeAt(dischargedAt, NOW))
                 .isInstanceOf(InvalidDischargeTimeException.class);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -65,14 +67,14 @@ class EncounterDischargeTest {
         encounter.admitToDepartment();
         OffsetDateTime dischargedAt = ADMITTED_AT.withOffsetSameInstant(ZoneOffset.UTC);
 
-        encounter.dischargeAt(dischargedAt);
+        encounter.dischargeAt(dischargedAt, NOW);
 
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.DISCHARGED);
         assertThat(encounter.getDischargedAt()).isEqualTo(dischargedAt);
     }
 
     private static Stream<OffsetDateTime> invalidDischargeTimes() {
-        return Stream.of(null, ADMITTED_AT.minusSeconds(1), OffsetDateTime.now().plusDays(1));
+        return Stream.of(null, ADMITTED_AT.minusSeconds(1), NOW.plusDays(1));
     }
 
     private Encounter createEncounter() {

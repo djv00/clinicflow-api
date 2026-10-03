@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.encounter.service;
 
+import static com.jiangyudai.clinicflow.support.TestTime.NOW;
+
 import org.mockito.ArgumentCaptor;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterLocationResponse;
 import com.jiangyudai.clinicflow.encounter.entity.Encounter;
@@ -19,10 +21,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -88,6 +93,9 @@ class EncounterTransferServiceTest {
 
     @Mock
     private EncounterPhysicianService physicianService;
+
+    @Spy
+    private Clock clock = Clock.fixed(NOW.toInstant(), ZoneOffset.UTC);
 
     @InjectMocks
     private EncounterService encounterService;
@@ -387,7 +395,7 @@ class EncounterTransferServiceTest {
                 TARGET_DEPARTMENT_ID,
                 TARGET_WARD_ID,
                 TARGET_BED_ID,
-                OffsetDateTime.now().plusDays(1), "test-clerk", CURRENT_LOCATION_ID
+                NOW.plusDays(1), "test-clerk", CURRENT_LOCATION_ID
         )).isInstanceOf(InvalidEncounterTransferTimeException.class)
                 .hasMessageContaining("future");
 
