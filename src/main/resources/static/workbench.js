@@ -61,3 +61,11 @@ export async function loadPlacementDetails(location, controller) {
     ]);
     return { department, ward, bed };
 }
+
+const birthDateFormat = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC'
+});
+
+export function formatBirthDate(value) {
+    return birthDateFormat.format(new Date(`${value}T00:00:00Z`));
+}
