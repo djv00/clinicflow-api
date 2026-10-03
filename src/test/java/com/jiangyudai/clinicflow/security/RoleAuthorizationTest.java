@@ -46,6 +46,7 @@ class RoleAuthorizationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.title").value("Access denied"))
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
                 .andExpect(header().doesNotExist("Location"));
         verifyNoInteractions(patients, encounters);
     }
@@ -73,14 +74,16 @@ class RoleAuthorizationTest {
     @Test
     void anUnrecognisedRoleCannotReadBusinessData() throws Exception {
         mvc.perform(get("/api/v1/patients").with(user("unassigned").roles("OTHER")))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").value("Access denied"));
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").value("Access denied"))
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
         verifyNoInteractions(patients, encounters);
     }
 
     @Test
     void csrfErrorsRemainDistinctFromPermissionErrors() throws Exception {
         mvc.perform(post("/api/v1/patients").with(user("viewer").roles("VIEWER")))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").value("Request not allowed"));
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.title").value("Request not allowed"))
+                .andExpect(jsonPath("$.code").value("CSRF_REJECTED"));
         verifyNoInteractions(patients, encounters);
     }
 }

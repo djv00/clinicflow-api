@@ -5,9 +5,11 @@ import com.jiangyudai.clinicflow.encounter.exception.*;
 import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.service.EncounterService;
 import com.jiangyudai.clinicflow.security.SecurityConfiguration;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -20,7 +22,10 @@ import java.util.stream.Stream;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -31,6 +36,24 @@ class ApiErrorContractTest {
     @Autowired private MockMvc mvc;
     @MockitoBean private EncounterService encounters;
     @MockitoBean private EncounterQueryService queries;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{", "{\"cancelledAt\":\"not-a-date\"}", "{}"})
+    void malformedAndInvalidBodiesUseTheRequestCode(String body) throws Exception {
+        mvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", UUID.randomUUID()).with(csrf())
+                        .contentType("application/json").content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        verifyNoInteractions(encounters);
+    }
+
+    @Test
+    void anonymousApiReadReturnsTheAuthenticationCode() throws Exception {
+        mvc.perform(get("/api/v1/encounters/{id}", UUID.randomUUID()).with(anonymous()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+        verifyNoInteractions(queries);
+    }
 
     static Stream<Arguments> conflicts() {
         UUID id = UUID.randomUUID();

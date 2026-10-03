@@ -10,10 +10,12 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -146,6 +148,12 @@ public class ApiExceptionHandler {
     }
 
     // Request validation errors
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ProblemDetail> handleUnreadableRequest(Exception exception) {
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_REQUEST,
+                "Invalid request", "Check the request body, identifiers, and date formats.");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidation(
             MethodArgumentNotValidException exception
