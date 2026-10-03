@@ -134,7 +134,10 @@ Returns `201 Created` with `id` and the four registration fields.
 
 The medical record number is required and limited to 50 characters; first and
 last names are required and limited to 100 characters each. Date of birth must
-be a date in the past. Invalid fields return `400`; an already registered
+be today or earlier in the configured hospital time zone. Same-day births are
+allowed. `clinicflow.time-zone` (`CLINICFLOW_TIME_ZONE`) defaults to `UTC`;
+set it explicitly for the hospital, for example `America/Toronto`.
+Invalid fields return `400`; an already registered
 medical record number returns `409`; an unknown patient ID returns `404`.
 
 ## Patient search
@@ -266,9 +269,11 @@ The patient must exist. The encounter number is required, globally unique, and
 limited to 50 characters. A patient may have only one active encounter
 (`ADMITTED` or `IN_DEPARTMENT`). Admission cannot predate the end of a
 previously discharged encounter for that patient. Cancelled admissions are
-retained but do not prevent a new admission.
+retained but do not prevent a new admission. The admission date, evaluated in
+the same hospital time zone as birth-date validation, cannot precede the patient's
+date of birth. The request's UTC offset does not override that business time zone.
 
-Invalid fields or future times return `400`; an unknown patient returns `404`;
+Invalid fields, future times, or admission before birth return `400`; an unknown patient returns `404`;
 a duplicate encounter number, active encounter, or history conflict returns
 `409`.
 

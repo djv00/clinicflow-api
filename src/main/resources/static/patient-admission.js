@@ -87,7 +87,7 @@ export function createPatientAdmission({ getPatientId, onSaved, onRefresh }) {
             } else if (error.status === 409 && error.code === 'ENCOUNTER_HISTORY_CONFLICT') {
                 fieldErrors.admittedAt = 'Admission time cannot be before a previous discharge for this patient.';
             } else if (error.status === 400 && error.code === 'INVALID_ADMISSION_TIME') {
-                fieldErrors.admittedAt = 'Admission time cannot be in the future.';
+                fieldErrors.admittedAt = error.message;
             } else if (error.status === 404) {
                 message = 'This patient record is no longer available. Close and reopen the patient record.';
             }

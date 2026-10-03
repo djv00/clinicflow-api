@@ -101,11 +101,15 @@ this is an intentional shared-database dependency, not strict module isolation.
 ## Time and error contracts
 
 `TimeConfiguration` supplies a `Clock` to workflow services and Jakarta request
-validation. Its production default retains the JVM's time zone. Services pass a
+validation. `clinicflow.time-zone` (`CLINICFLOW_TIME_ZONE`) selects the hospital
+time zone and defaults to UTC, independently of the host JVM. Services pass a
 reference `OffsetDateTime` into entity transitions; entities do not read the
 machine clock. Offset timestamps compare instants, so another UTC offset for the
 same instant is valid. Fixed-clock tests cover acceptance at the boundary and
-rejection one second later. Dates such as birth dates still use date constraints.
+rejection one second later. Birth dates allow today in that zone; admission is
+converted to the same zone before comparing its date with the patient's birth
+date. The registration form leaves that date check to the server, avoiding a
+different result from the browser's clock or time zone.
 
 `ApiExceptionHandler` is an HTTP adapter, outside business-independent `common`.
 It maps domain exceptions to status, `code`, `title` and `detail`; security filters

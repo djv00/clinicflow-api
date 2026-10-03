@@ -84,6 +84,10 @@ public class EncounterService {
         }
 
         Patient patient = patientService.getPatientForUpdate(patientId);
+        // Birth is a date in the hospital's time zone, not in the caller's chosen offset.
+        if (admittedAt.atZoneSameInstant(clock.getZone()).toLocalDate().isBefore(patient.getDateOfBirth())) {
+            throw new InvalidAdmissionTimeException("Admission date cannot be before the patient's date of birth");
+        }
 
         if (encounterRepository.existsByEncounterNumber(encounterNumber)) {
             throw new DuplicateEncounterNumberException(encounterNumber);

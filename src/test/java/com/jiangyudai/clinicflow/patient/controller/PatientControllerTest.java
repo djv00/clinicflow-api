@@ -104,7 +104,7 @@ class PatientControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.dateOfBirth")
-                        .value("Date of birth must be in the past"));
+                        .value("Date of birth cannot be in the future"));
     }
 
     @Test

@@ -7,4 +7,8 @@ public class InvalidAdmissionTimeException extends RuntimeException {
     public InvalidAdmissionTimeException(OffsetDateTime admittedAt) {
         super("Admission time cannot be in the future: " + admittedAt);
     }
+
+    public InvalidAdmissionTimeException(String message) {
+        super(message);
+    }
 }

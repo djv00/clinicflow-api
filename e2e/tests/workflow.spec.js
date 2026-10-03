@@ -1,5 +1,31 @@
 import { test, expect, signIn, uniqueCode, seedEncounter, openPatient, choosePlacement } from './support.js';
 
+test('birth and admission dates use server rules even when the browser clock is behind', async ({ page, operatorApi }) => {
+  const mrn = uniqueCode('BIRTH');
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  await page.clock.setFixedTime(new Date('2000-01-01T12:00:00Z'));
+  await signIn(page);
+  await page.getByRole('button', { name: 'Register patient', exact: true }).click();
+  await page.getByLabel('Medical record number', { exact: true }).fill(mrn);
+  await page.getByLabel('First name', { exact: true }).fill('Newborn');
+  await page.getByLabel('Last name', { exact: true }).fill('Test');
+  await page.getByLabel('Date of birth', { exact: true }).fill(tomorrow);
+  await page.getByRole('button', { name: 'Save patient', exact: true }).click();
+  await expect(page.locator('#dateOfBirth-error')).toHaveText('Date of birth cannot be in the future');
+  await page.getByLabel('Date of birth', { exact: true }).fill(today);
+  await page.getByRole('button', { name: 'Save patient', exact: true }).click();
+  await expect(page.locator('#registration-dialog')).not.toBeVisible();
+  await openPatient(page, mrn);
+  await page.getByRole('button', { name: 'Admit patient', exact: true }).click();
+  await page.getByLabel('Encounter number', { exact: true }).fill(uniqueCode('BEFORE-BIRTH'));
+  await page.getByLabel('Admission time', { exact: true }).fill('1999-01-01T12:00');
+  await page.getByRole('button', { name: 'Save admission', exact: true }).click();
+  await expect(page.locator('#admittedAt-error')).toHaveText("Admission date cannot be before the patient's date of birth");
+  const { items: [patient] } = await operatorApi.get(`/api/v1/patients?keyword=${mrn}`);
+  expect((await operatorApi.get(`/api/v1/patients/${patient.id}/encounters`)).totalElements).toBe(0);
+});
+
 test('operator registers, admits, places, transfers and discharges a patient through the workbench', async ({ page, operatorApi }) => {
   const mrn = uniqueCode('MRN');
   const number = uniqueCode('ENC');
