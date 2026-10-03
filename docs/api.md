@@ -64,6 +64,29 @@ and [logout handling](https://docs.spring.io/spring-security/reference/servlet/a
 Role rules use Spring Security's
 [request authorization](https://docs.spring.io/spring-security/reference/servlet/authorization/authorize-http-requests.html).
 
+## Error contract
+
+Business, request-validation, and security failures use `application/problem+json`.
+The `code` property is the machine-readable contract; `title` and `detail` are
+display text and may be reworded. Field-validation failures also include `errors`.
+Clients should use the HTTP status for general recovery and `code` for specific
+business actions. Unknown codes should fall back to displaying the problem detail.
+
+| Code | Client action |
+| --- | --- |
+| `DUPLICATE_MEDICAL_RECORD_NUMBER`, `DUPLICATE_ENCOUNTER_NUMBER` | Correct the identifier or find the existing record |
+| `ACTIVE_ENCOUNTER_EXISTS` | Reload the patient's encounter history |
+| `BED_OCCUPIED`, `BED_HISTORY_CONFLICT` | Review bed availability and effective history |
+| `ENCOUNTER_HISTORY_CONFLICT`, `SUBSEQUENT_ENCOUNTER_EXISTS` | Review the patient's recorded care before retrying |
+| `ENCOUNTER_LOCATION_CONFLICT`, `PHYSICIAN_ASSIGNMENT_CONFLICT`, `UPDATE_CONFLICT` | Reload the record and review the current state |
+| `INVALID_REQUEST` | Display the `errors` field messages |
+| `AUTHENTICATION_REQUIRED`, `SIGN_IN_FAILED` | Sign in or correct credentials |
+| `CSRF_REJECTED` | Reload the session/token before a deliberate retry |
+| `ACCESS_DENIED` | Keep the session and explain the missing permission |
+
+The complete set is defined in [ApiErrorCode](../src/main/java/com/jiangyudai/clinicflow/web/error/ApiErrorCode.java).
+An uncertain network or server failure must never trigger an automatic write replay.
+
 ## Endpoints
 
 | Method | Path after `/api/v1` | Success | Response |

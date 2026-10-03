@@ -1,4 +1,4 @@
-package com.jiangyudai.clinicflow.common.error;
+package com.jiangyudai.clinicflow.web.error;
 
 import com.jiangyudai.clinicflow.encounter.exception.*;
 import com.jiangyudai.clinicflow.location.exception.InvalidLocationException;
@@ -28,45 +28,38 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InvalidPhysicianAssignmentException.class)
     public ResponseEntity<ProblemDetail> handleInvalidPhysicianAssignment(InvalidPhysicianAssignmentException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
-        problem.setTitle("Invalid physician assignment");
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_PHYSICIAN_ASSIGNMENT,
+                "Invalid physician assignment", exception.getMessage());
     }
 
     @ExceptionHandler(PhysicianAssignmentConflictException.class)
     public ResponseEntity<ProblemDetail> handlePhysicianAssignmentConflict(PhysicianAssignmentConflictException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
-        problem.setTitle("Physician assignment conflict");
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.PHYSICIAN_ASSIGNMENT_CONFLICT,
+                "Physician assignment conflict", exception.getMessage());
     }
 
     @ExceptionHandler(PhysicianNotFoundException.class)
     public ResponseEntity<ProblemDetail> handlePhysicianNotFound(PhysicianNotFoundException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
-        problem.setTitle("Physician not found");
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+        return problem(HttpStatus.NOT_FOUND, ApiErrorCode.PHYSICIAN_NOT_FOUND,
+                "Physician not found", exception.getMessage());
     }
 
     @ExceptionHandler(DuplicatePhysicianCodeException.class)
     public ResponseEntity<ProblemDetail> handleDuplicatePhysicianCode(DuplicatePhysicianCodeException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
-        problem.setTitle("Duplicate physician code");
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.DUPLICATE_PHYSICIAN_CODE,
+                "Duplicate physician code", exception.getMessage());
     }
 
     @ExceptionHandler({PhysicianVersionConflictException.class, OptimisticLockingFailureException.class})
     public ResponseEntity<ProblemDetail> handleConcurrentUpdate(RuntimeException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
-                "The record has changed. Reload it before saving.");
-        problem.setTitle("Update conflict");
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.UPDATE_CONFLICT,
+                "Update conflict", "The record has changed. Reload it before saving.");
     }
 
     @ExceptionHandler(InvalidPhysicianDepartmentException.class)
     public ResponseEntity<ProblemDetail> handleInvalidPhysicianDepartment(InvalidPhysicianDepartmentException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
-        problem.setTitle("Invalid physician department");
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_PHYSICIAN_DEPARTMENT,
+                "Invalid physician department", exception.getMessage());
     }
 
     // Encounter admission errors
@@ -74,95 +67,65 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleDuplicateEncounterNumber(
             DuplicateEncounterNumberException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                exception.getMessage()
-        );
-        problem.setTitle("Duplicate encounter number");
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.DUPLICATE_ENCOUNTER_NUMBER,
+                "Duplicate encounter number", exception.getMessage());
     }
 
     @ExceptionHandler(ActiveEncounterExistsException.class)
     public ResponseEntity<ProblemDetail> handleActiveEncounterExists(
             ActiveEncounterExistsException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                exception.getMessage()
-        );
-        problem.setTitle("Active encounter already exists");
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.ACTIVE_ENCOUNTER_EXISTS,
+                "Active encounter already exists", exception.getMessage());
     }
 
     @ExceptionHandler({EncounterHistoryConflictException.class, BedHistoryConflictException.class,
             SubsequentEncounterExistsException.class})
     public ResponseEntity<ProblemDetail> handleEncounterHistoryConflict(RuntimeException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
-        problem.setTitle("Encounter history conflict");
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, exception instanceof BedHistoryConflictException ? ApiErrorCode.BED_HISTORY_CONFLICT
+                : exception instanceof SubsequentEncounterExistsException ? ApiErrorCode.SUBSEQUENT_ENCOUNTER_EXISTS
+                : ApiErrorCode.ENCOUNTER_HISTORY_CONFLICT,
+                "Encounter history conflict", exception.getMessage());
     }
 
     @ExceptionHandler(EncounterNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleEncounterNotFound(
             EncounterNotFoundException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND,
-                exception.getMessage()
-        );
-        problem.setTitle("Encounter not found");
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+        return problem(HttpStatus.NOT_FOUND, ApiErrorCode.ENCOUNTER_NOT_FOUND,
+                "Encounter not found", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidAdmissionTimeException.class)
     public ResponseEntity<ProblemDetail> handleInvalidAdmissionTime(
             InvalidAdmissionTimeException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage()
-        );
-        problem.setTitle("Invalid admission time");
-
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_ADMISSION_TIME,
+                "Invalid admission time", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidDischargeTimeException.class)
     public ResponseEntity<ProblemDetail> handleInvalidDischargeTime(
             InvalidDischargeTimeException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage()
-        );
-        problem.setTitle("Invalid discharge time");
-
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_DISCHARGE_TIME,
+                "Invalid discharge time", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidAdmissionCancellationException.class)
     public ResponseEntity<ProblemDetail> handleInvalidAdmissionCancellation(
             InvalidAdmissionCancellationException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage()
-        );
-        problem.setTitle("Invalid admission cancellation");
-
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_ADMISSION_CANCELLATION,
+                "Invalid admission cancellation", exception.getMessage());
     }
 
     @ExceptionHandler(InvalidDischargeCancellationException.class)
     public ResponseEntity<ProblemDetail> handleInvalidDischargeCancellation(
             InvalidDischargeCancellationException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
-        problem.setTitle("Invalid discharge cancellation");
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_DISCHARGE_CANCELLATION,
+                "Invalid discharge cancellation", exception.getMessage());
     }
 
     // Patient registration errors
@@ -170,26 +133,16 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleDuplicateMedicalRecordNumber(
             DuplicateMedicalRecordNumberException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                exception.getMessage()
-        );
-        problem.setTitle("Duplicate medical record number");
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, ApiErrorCode.DUPLICATE_MEDICAL_RECORD_NUMBER,
+                "Duplicate medical record number", exception.getMessage());
     }
 
     @ExceptionHandler(PatientNotFoundException.class)
     public ResponseEntity<ProblemDetail> handlePatientNotFound(
             PatientNotFoundException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND,
-                exception.getMessage()
-        );
-        problem.setTitle("Patient not found");
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+        return problem(HttpStatus.NOT_FOUND, ApiErrorCode.PATIENT_NOT_FOUND,
+                "Patient not found", exception.getMessage());
     }
 
     // Request validation errors
@@ -208,6 +161,7 @@ public class ApiExceptionHandler {
                 "Request validation failed"
         );
         problem.setTitle("Invalid request");
+        problem.setProperty("code", ApiErrorCode.INVALID_REQUEST.name());
         problem.setProperty("errors", errors);
 
         return ResponseEntity.badRequest().body(problem);
@@ -228,13 +182,9 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleEncounterLocationConflict(
             RuntimeException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT,
-                exception.getMessage()
-        );
-        problem.setTitle("Encounter location conflict");
-
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+        return problem(HttpStatus.CONFLICT, exception instanceof BedOccupiedException ? ApiErrorCode.BED_OCCUPIED
+                : ApiErrorCode.ENCOUNTER_LOCATION_CONFLICT,
+                "Encounter location conflict", exception.getMessage());
     }
 
     @ExceptionHandler({
@@ -246,25 +196,23 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleInvalidEncounterLocation(
             RuntimeException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage()
-        );
-        problem.setTitle("Invalid encounter location");
-
-        return ResponseEntity.badRequest().body(problem);
+        return problem(HttpStatus.BAD_REQUEST, ApiErrorCode.INVALID_LOCATION,
+                "Invalid encounter location", exception.getMessage());
     }
 
     @ExceptionHandler(LocationNotFoundException.class)
     public ResponseEntity<ProblemDetail> handleLocationNotFound(
             LocationNotFoundException exception
     ) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND,
-                exception.getMessage()
-        );
-        problem.setTitle("Location not found");
+        return problem(HttpStatus.NOT_FOUND, ApiErrorCode.LOCATION_NOT_FOUND,
+                "Location not found", exception.getMessage());
+    }
 
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    private static ResponseEntity<ProblemDetail> problem(HttpStatus status, ApiErrorCode code,
+                                                         String title, String detail) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setTitle(title);
+        problem.setProperty("code", code.name());
+        return ResponseEntity.status(status).body(problem);
     }
 }

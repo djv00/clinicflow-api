@@ -318,13 +318,13 @@ element('admission-form').addEventListener('submit', async (event) => {
             : error.message;
         element('refresh-admission-records').hidden = !(uncertain || error.status === 409);
         const fieldErrors = { ...error.fields };
-        if (error.status === 409 && error.title === 'Duplicate encounter number') {
+        if (error.status === 409 && error.code === 'DUPLICATE_ENCOUNTER_NUMBER') {
             fieldErrors.encounterNumber = 'This encounter number is already in use. Check the existing record or use a new number.';
-        } else if (error.status === 409 && error.title === 'Active encounter already exists') {
+        } else if (error.status === 409 && error.code === 'ACTIVE_ENCOUNTER_EXISTS') {
             message = 'This patient already has an active hospital encounter. Review the existing encounter before admitting again.';
-        } else if (error.status === 409 && error.title === 'Encounter history conflict') {
+        } else if (error.status === 409 && error.code === 'ENCOUNTER_HISTORY_CONFLICT') {
             fieldErrors.admittedAt = 'Admission time cannot be before a previous discharge for this patient.';
-        } else if (error.status === 400 && error.title === 'Invalid admission time') {
+        } else if (error.status === 400 && error.code === 'INVALID_ADMISSION_TIME') {
             fieldErrors.admittedAt = 'Admission time cannot be in the future.';
         } else if (error.status === 404) {
             message = 'This patient record is no longer available. Close and reopen the patient record.';

@@ -7,6 +7,7 @@ export class ApiError extends Error {
         super(status >= 500 ? 'The server could not complete the request. Please try again.'
             : problem?.detail || `The request failed (${status}).`);
         this.status = status;
+        this.code = problem?.code;
         this.title = problem?.title;
         this.fields = problem?.errors || {};
     }

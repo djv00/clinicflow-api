@@ -1,5 +1,7 @@
 package com.jiangyudai.clinicflow.security;
 
+import com.jiangyudai.clinicflow.web.error.ApiErrorCode;
+
 import com.jiangyudai.clinicflow.security.entity.UserAccount;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
@@ -95,7 +97,7 @@ public class SecurityConfiguration {
                 .formLogin(form -> form.loginPage("/login.html").loginProcessingUrl("/api/auth/login")
                         .successHandler((request, response, authentication) -> response.setStatus(204))
                         .failureHandler((request, response, exception) -> writeProblem(mapper, response, 401,
-                                "Sign-in failed", "Username or password is incorrect."))
+                                ApiErrorCode.SIGN_IN_FAILED, "Sign-in failed", "Username or password is incorrect."))
                         .permitAll())
                 .logout(logout -> logout.logoutUrl("/api/auth/logout")
                         .deleteCookies("JSESSIONID")
@@ -103,17 +105,17 @@ public class SecurityConfiguration {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) -> {
                             if (api.matches(request)) {
-                                writeProblem(mapper, response, 401, "Authentication required", "Sign in to continue.");
+                                writeProblem(mapper, response, 401, ApiErrorCode.AUTHENTICATION_REQUIRED, "Authentication required", "Sign in to continue.");
                             } else {
                                 loginEntryPoint.commence(request, response, exception);
                             }
                         })
                         .accessDeniedHandler((request, response, exception) -> {
                             if (exception instanceof CsrfException) {
-                                writeProblem(mapper, response, 403, "Request not allowed",
+                                writeProblem(mapper, response, 403, ApiErrorCode.CSRF_REJECTED, "Request not allowed",
                                         "Your session or security token is no longer valid. Reload the page and try again.");
                             } else {
-                                writeProblem(mapper, response, 403, "Access denied",
+                                writeProblem(mapper, response, 403, ApiErrorCode.ACCESS_DENIED, "Access denied",
                                         "Your account does not have permission to perform this action.");
                             }
                         }));
@@ -121,10 +123,10 @@ public class SecurityConfiguration {
     }
 
     private static void writeProblem(JsonMapper mapper, HttpServletResponse response, int status,
-                                     String title, String detail) throws IOException {
+                                     ApiErrorCode code, String title, String detail) throws IOException {
         response.setStatus(status);
         response.setContentType("application/problem+json");
         mapper.writeValue(response.getOutputStream(), Map.of(
-                "type", "about:blank", "status", status, "title", title, "detail", detail));
+                "type", "about:blank", "status", status, "code", code.name(), "title", title, "detail", detail));
     }
 }

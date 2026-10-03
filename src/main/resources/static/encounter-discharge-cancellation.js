@@ -134,18 +134,18 @@ function cancellationError(error) {
         return 'Cancellation could not be confirmed. Refresh the encounter to check its status before trying again.';
     }
     if (error.status === 404) return 'The encounter or original location is no longer available. Close and reopen the patient record.';
-    if (error.title === 'Active encounter already exists') return 'This patient has another active hospital stay. Review their encounter history before correcting this discharge.';
-    if (error.title === 'Encounter history conflict') {
-        return error.message.startsWith('Bed assignment')
+    if (error.code === 'ACTIVE_ENCOUNTER_EXISTS') return 'This patient has another active hospital stay. Review their encounter history before correcting this discharge.';
+    if (['BED_HISTORY_CONFLICT', 'ENCOUNTER_HISTORY_CONFLICT', 'SUBSEQUENT_ENCOUNTER_EXISTS'].includes(error.code)) {
+        return error.code === 'BED_HISTORY_CONFLICT'
             ? 'The original bed was used after this discharge. It cannot be restored across that history, even if it is free now. Changing the cancellation time does not resolve this conflict.'
             : 'A later or overlapping hospital stay prevents this correction. Review the patient’s encounter history. Changing the cancellation time does not resolve this conflict.';
     }
     if (error.status === 409) {
-        return error.message.startsWith('Bed is already occupied')
+        return error.code === 'BED_OCCUPIED'
             ? 'The original bed is currently occupied. Cancellation must restore the original placement; a replacement bed cannot be selected here.'
             : 'The encounter or discharge record changed. Refresh the encounter and review the recorded discharge before saving.';
     }
-    if (error.title === 'Invalid encounter location') return 'The original department, ward, or bed is no longer available for care. Refresh the encounter to review the placement.';
+    if (error.code === 'INVALID_LOCATION') return 'The original department, ward, or bed is no longer available for care. Refresh the encounter to review the placement.';
     return error.message;
 }
 
