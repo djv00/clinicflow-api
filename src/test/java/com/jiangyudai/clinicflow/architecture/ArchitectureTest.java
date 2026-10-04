@@ -9,11 +9,12 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import jakarta.persistence.Entity;
 import org.junit.jupiter.api.Test;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.OffsetDateTime;
+import java.time.Clock;
+import java.util.Set;
 
+import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -36,7 +37,7 @@ class ArchitectureTest {
 
     @Test
     void servicesDoNotReadHttpOrTheSecurityContext() {
-        noClasses().that().areAnnotatedWith(Service.class)
+        noClasses().that().resideInAPackage("..service..")
                 .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..web..",
                         "jakarta.servlet..", "org.springframework.http..", "org.springframework.security.core.context..")
                 .because("controllers pass the authenticated operator explicitly")
@@ -61,7 +62,17 @@ class ArchitectureTest {
 
     @Test
     void businessTimeIsExplicit() {
-        noClasses().should().callMethod(OffsetDateTime.class, "now")
+        noClasses().that().resideOutsideOfPackage("..common.time..")
+                .should().callMethodWhere(describe("read system time without the injected Clock", call -> {
+                    var target = call.getTarget();
+                    boolean implicitNow = target.getOwner().getPackageName().equals("java.time")
+                            && target.getName().equals("now")
+                            && target.getRawParameterTypes().stream().noneMatch(type -> type.isEquivalentTo(Clock.class));
+                    boolean systemClock = target.getOwner().isEquivalentTo(Clock.class)
+                            && Set.of("system", "systemUTC", "systemDefaultZone", "tickMillis", "tickSeconds", "tickMinutes")
+                            .contains(target.getName());
+                    return implicitNow || systemClock;
+                }))
                 .because("workflow time must come from the injected Clock")
                 .check(APPLICATION);
     }

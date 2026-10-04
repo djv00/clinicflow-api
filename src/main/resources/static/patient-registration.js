@@ -10,9 +10,7 @@ export function initializePatientRegistration({ onRegistered }) {
         element('registration-form').reset();
         registrationFields.forEach(clearFieldError);
         element('registration-error').hidden = true;
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        element('dateOfBirth').max = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+        // The server checks birth dates in the hospital time zone; the browser may be elsewhere.
         element('registration-dialog').showModal();
         element('medicalRecordNumber').focus();
     });

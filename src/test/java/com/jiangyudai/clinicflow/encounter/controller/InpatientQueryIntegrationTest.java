@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
@@ -33,6 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class InpatientQueryIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterLocationRepository locations;
@@ -163,7 +167,7 @@ class InpatientQueryIntegrationTest {
         encounterService.dischargeEncounter(placed.id(), ADMITTED_AT.plusHours(4), "test-clerk", currentLocationId(placed.id()));
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
-        encounterService.cancelDischarge(placed.id(), ADMITTED_AT.plusHours(5), "test-clerk");
+        encounterService.cancelDischarge(placed.id(), ADMITTED_AT.plusHours(5), "test-clerk", currentDischargeId(placed.id()));
         mockMvc.perform(get(PATH).param("status", "IN_DEPARTMENT").param("size", "1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
         mockMvc.perform(get(PATH).param("wardId", secondWard.getId().toString()))
@@ -201,5 +205,9 @@ class InpatientQueryIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

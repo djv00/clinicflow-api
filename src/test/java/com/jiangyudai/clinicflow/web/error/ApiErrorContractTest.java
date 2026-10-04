@@ -73,7 +73,7 @@ class ApiErrorContractTest {
         when(encounters.cancelDischarge(any(), any(), eq("test-operator"), any())).thenThrow(exception);
         mvc.perform(post("/api/v1/encounters/{id}/discharge-cancellations", UUID.randomUUID()).with(csrf())
                         .contentType("application/json")
-                        .content("{\"cancelledAt\":\"2025-09-01T12:00:00Z\"}"))
+                        .content("{\"cancelledAt\":\"2025-09-01T12:00:00Z\",\"expectedDischargeId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
                 .andExpect(jsonPath("$.code").value(code))

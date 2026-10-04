@@ -170,7 +170,7 @@ class PostgresWorkflowIT {
         encounterService.dischargeEncounter(placed, ENTERED_AT.plusHours(1), "test-clerk", currentLocationId(placed));
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, locations.departmentId(), locations.wardId()), 0, 1).items()).isEmpty();
-        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk");
+        encounterService.cancelDischarge(placed, ENTERED_AT.plusHours(2), "test-clerk", currentDischargeId(placed));
         assertThat(inpatientQueryService.searchInpatients(new InpatientSearchRequest(prefix,
                 null, null, null), 1, 1).items().getFirst().id()).isEqualTo(placed);
     }
@@ -483,7 +483,7 @@ class PostgresWorkflowIT {
         encounterService.dischargeEncounter(encounterId, dischargedAt, "test-clerk", currentLocationId(encounterId));
         assertThat(bedRepository.findForLookup(locations.firstBedId(), null, null, null))
                 .singleElement().satisfies(bed -> assertThat(bed.occupied()).isFalse());
-        encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk");
+        encounterService.cancelDischarge(encounterId, dischargedAt.plusHours(1), "test-clerk", currentDischargeId(encounterId));
 
         var timeline = encounterQueries.getTimeline(encounterId);
         assertThat(timeline.encounter().status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -779,11 +779,11 @@ class PostgresWorkflowIT {
             UUID committedId = first.get(10, TimeUnit.SECONDS).id();
             assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
                     .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(PhysicianAssignmentConflictException.class);
-            assertThat(encounterPhysicianService.getHistory(encounterId)).singleElement()
-                    .satisfies(item -> assertThat(item.getId()).isEqualTo(committedId));
+            assertThat(encounterPhysicianService.getAssignments(encounterId).assignments()).singleElement()
+                    .satisfies(item -> assertThat(item.id()).isEqualTo(committedId));
             var replacement = encounterPhysicianService.assign(encounterId, secondPhysician, locationId, committedId,
                     ENTERED_AT.plusHours(1), "handover-clerk");
-            assertThat(encounterPhysicianService.getHistory(encounterId)).hasSize(2);
+            assertThat(encounterPhysicianService.getAssignments(encounterId).assignments()).hasSize(2);
             assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId).orElseThrow().getId())
                     .isEqualTo(replacement.id());
         } finally {
@@ -821,15 +821,15 @@ class PostgresWorkflowIT {
             first.get(10, TimeUnit.SECONDS);
             if (assignmentFirst) {
                 second.get(10, TimeUnit.SECONDS);
-                assertThat(encounterPhysicianService.getHistory(encounterId)).singleElement().satisfies(item -> {
-                    assertThat(item.getEndReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
-                    assertThat(item.getEndedBy()).isEqualTo("discharge-clerk");
-                    assertThat(item.getEndedAt().toInstant()).isEqualTo(ENTERED_AT.plusHours(1).toInstant());
+                assertThat(encounterPhysicianService.getAssignments(encounterId).assignments()).singleElement().satisfies(item -> {
+                    assertThat(item.endReason()).isEqualTo(PhysicianAssignmentEndReason.DISCHARGE);
+                    assertThat(item.endedBy()).isEqualTo("discharge-clerk");
+                    assertThat(item.endedAt().toInstant()).isEqualTo(ENTERED_AT.plusHours(1).toInstant());
                 });
             } else {
                 assertThatThrownBy(() -> second.get(10, TimeUnit.SECONDS))
                         .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(InvalidEncounterStatusException.class);
-                assertThat(encounterPhysicianService.getHistory(encounterId)).isEmpty();
+                assertThat(encounterPhysicianService.getAssignments(encounterId).assignments()).isEmpty();
             }
             assertThat(encounterQueries.getEncounter(encounterId).status()).isEqualTo(EncounterStatus.DISCHARGED);
             assertThat(assignmentRepository.findByEncounter_IdAndEndedAtIsNull(encounterId)).isEmpty();
@@ -870,7 +870,7 @@ class PostgresWorkflowIT {
             edit.get(10, TimeUnit.SECONDS);
             assertThatThrownBy(() -> assign.get(10, TimeUnit.SECONDS))
                     .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(InvalidPhysicianAssignmentException.class);
-            assertThat(encounterPhysicianService.getHistory(encounterId)).isEmpty();
+            assertThat(encounterPhysicianService.getAssignments(encounterId).assignments()).isEmpty();
         } finally {
             releaseFirst.countDown();
             executor.shutdownNow();
@@ -1137,5 +1137,9 @@ class PostgresWorkflowIT {
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

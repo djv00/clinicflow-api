@@ -2,7 +2,7 @@ package com.jiangyudai.clinicflow.patient.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -22,7 +22,7 @@ public record CreatePatientRequest(
         String lastName,
 
         @NotNull(message = "Date of birth is required")
-        @Past(message = "Date of birth must be in the past")
+        @PastOrPresent(message = "Date of birth cannot be in the future")
         LocalDate dateOfBirth
 ) {
 }

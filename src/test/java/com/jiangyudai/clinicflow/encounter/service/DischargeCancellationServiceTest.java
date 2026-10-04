@@ -10,6 +10,7 @@ import com.jiangyudai.clinicflow.encounter.entity.EncounterStatus;
 import com.jiangyudai.clinicflow.encounter.exception.ActiveEncounterLocationExistsException;
 import com.jiangyudai.clinicflow.encounter.exception.DischargeRecordConflictException;
 import com.jiangyudai.clinicflow.encounter.exception.EncounterNotFoundException;
+import com.jiangyudai.clinicflow.encounter.exception.InvalidDischargeCancellationException;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterDischargeRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterRepository;
@@ -44,6 +45,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DischargeCancellationServiceTest {
 
+    private static final UUID DISCHARGE_ID = UUID.randomUUID();
     private static final UUID ENCOUNTER_ID = UUID.randomUUID();
     private static final UUID PATIENT_ID = UUID.randomUUID();
     private static final OffsetDateTime DISCHARGED_AT = OffsetDateTime.parse("2025-09-03T14:00:00-04:00");
@@ -90,6 +92,16 @@ class DischargeCancellationServiceTest {
         encounter.dischargeAt(DISCHARGED_AT, NOW);
         previous.endAt(DISCHARGED_AT);
         discharge = new EncounterDischarge(encounter, previous);
+        ReflectionTestUtils.setField(discharge, "id", DISCHARGE_ID);
+    }
+
+    @Test
+    void requiresAnExpectedRecordBeforeTakingLocks() {
+        assertThatThrownBy(() -> encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk", null))
+                .isInstanceOf(InvalidDischargeCancellationException.class).hasMessage("Expected discharge ID is required");
+        verifyNoInteractions(patientService, encounterRepository, encounterDischargeRepository,
+                encounterLocationRepository, locationService);
+        assertUnchanged();
     }
 
     @Test
@@ -101,7 +113,7 @@ class DischargeCancellationServiceTest {
         when(locationService.getActiveWard(ward.getId())).thenReturn(ward);
         when(locationService.getActiveBedForUpdate(bed.getId(), ward.getId())).thenReturn(bed);
 
-        EncounterResponse result = encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk");
+        EncounterResponse result = encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk", DISCHARGE_ID);
 
         assertThat(result).isEqualTo(EncounterResponse.from(encounter));
         assertThat(result.status()).isEqualTo(EncounterStatus.IN_DEPARTMENT);
@@ -164,7 +176,7 @@ class DischargeCancellationServiceTest {
     }
 
     private void cancel() {
-        encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk");
+        encounterService.cancelDischarge(ENCOUNTER_ID, DISCHARGED_AT.plusHours(1), "demo-clerk", DISCHARGE_ID);
     }
 
     private void assertUnchanged() {

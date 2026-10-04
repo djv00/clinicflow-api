@@ -59,7 +59,7 @@ class PostgresDemoDataIT {
                 encounters.transferEncounter(encounterId, UUID.fromString("10000000-0000-0000-0000-000000000002"),
                         UUID.fromString("20000000-0000-0000-0000-000000000002"), SECOND_BED, start.plusHours(3), "test-clerk", database.jdbc.queryForObject("SELECT id FROM encounter_locations WHERE encounter_id = ? AND ended_at IS NULL", UUID.class, encounterId));
                 encounters.dischargeEncounter(encounterId, start.plusHours(4), "test-clerk", database.jdbc.queryForObject("SELECT id FROM encounter_locations WHERE encounter_id = ? AND ended_at IS NULL", UUID.class, encounterId));
-                encounters.cancelDischarge(encounterId, start.plusHours(5), "test-operator");
+                encounters.cancelDischarge(encounterId, start.plusHours(5), "test-operator", first.getBean(EncounterQueryService.class).getDischarges(encounterId).getFirst().id());
 
                 database.jdbc.update("UPDATE departments SET active = false WHERE id = ?", departmentId);
                 database.jdbc.update("UPDATE wards SET active = false WHERE id = ?", wardId);

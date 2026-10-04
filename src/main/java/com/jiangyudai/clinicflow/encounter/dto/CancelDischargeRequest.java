@@ -13,6 +13,7 @@ public record CancelDischargeRequest(
         @PastOrPresent(message = "Cancellation time cannot be in the future")
         OffsetDateTime cancelledAt,
 
+        @NotNull(message = "Expected discharge ID is required")
         UUID expectedDischargeId
 ) {
 }

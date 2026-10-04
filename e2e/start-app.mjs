@@ -14,6 +14,7 @@ const env = Object.fromEntries(Object.entries(process.env)
 const app = spawn(java, ['-jar', resolve(target, jars[0]),
   '--spring.config.location=classpath:/',
   '--spring.profiles.active=demo',
+  '--clinicflow.time-zone=UTC',
   '--server.address=127.0.0.1', '--server.port=18081',
   '--spring.datasource.url=jdbc:h2:mem:clinicflow_e2e;DB_CLOSE_ON_EXIT=FALSE',
   '--spring.security.user.name=operator', '--spring.security.user.password=e2e-operator-only',

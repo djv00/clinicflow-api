@@ -149,7 +149,7 @@ class EncounterPhysicianApiIntegrationTest {
                 .andExpect(jsonPath("$.currentLocation").value(nullValue()))
                 .andExpect(jsonPath("$.currentAssignmentId").value(nullValue()))
                 .andExpect(jsonPath("$.assignments[0].endReason").value("DISCHARGE"));
-        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk");
+        encounters.cancelDischarge(encounterId, ENTERED.plusHours(2), "correction-clerk", currentDischargeId(encounterId));
         var restored = encounterQueries.getTimeline(encounterId).locations().getLast();
         mvc.perform(get(path(encounterId)).with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.currentLocation.id").value(restored.id().toString()))
@@ -208,7 +208,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(mapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors." + field).exists());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @ParameterizedTest
@@ -220,7 +220,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(mapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @ParameterizedTest
@@ -254,7 +254,7 @@ class EncounterPhysicianApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/encounters/not-a-uuid/physician-assignments").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isBadRequest());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @Test
@@ -296,7 +296,7 @@ class EncounterPhysicianApiIntegrationTest {
         encounters.dischargeEncounter(encounterId, ENTERED.plusHours(3), "discharge-clerk", currentLocationId(encounterId));
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(request)).andExpect(status().isConflict());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     private UUID assignFixture() {
@@ -336,5 +336,9 @@ class EncounterPhysicianApiIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

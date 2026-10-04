@@ -134,7 +134,10 @@ Returns `201 Created` with `id` and the four registration fields.
 
 The medical record number is required and limited to 50 characters; first and
 last names are required and limited to 100 characters each. Date of birth must
-be a date in the past. Invalid fields return `400`; an already registered
+be today or earlier in the configured hospital time zone. Same-day births are
+allowed. `clinicflow.time-zone` (`CLINICFLOW_TIME_ZONE`) defaults to `UTC`;
+set it explicitly for the hospital, for example `America/Toronto`.
+Invalid fields return `400`; an already registered
 medical record number returns `409`; an unknown patient ID returns `404`.
 
 ## Patient search
@@ -266,9 +269,11 @@ The patient must exist. The encounter number is required, globally unique, and
 limited to 50 characters. A patient may have only one active encounter
 (`ADMITTED` or `IN_DEPARTMENT`). Admission cannot predate the end of a
 previously discharged encounter for that patient. Cancelled admissions are
-retained but do not prevent a new admission.
+retained but do not prevent a new admission. The admission date, evaluated in
+the same hospital time zone as birth-date validation, cannot precede the patient's
+date of birth. The request's UTC offset does not override that business time zone.
 
-Invalid fields or future times return `400`; an unknown patient returns `404`;
+Invalid fields, future times, or admission before birth return `400`; an unknown patient returns `404`;
 a duplicate encounter number, active encounter, or history conflict returns
 `409`.
 
@@ -585,19 +590,22 @@ POST /api/v1/encounters/{id}/discharge-cancellations
 Content-Type: application/json
 
 {
-  "cancelledAt": "2025-09-03T15:00:00-04:00"
+  "cancelledAt": "2025-09-03T15:00:00-04:00",
+  "expectedDischargeId": "44444444-4444-4444-4444-444444444444"
 }
 ```
 
 Returns `200 OK` with `status: "IN_DEPARTMENT"` and `dischargedAt: null`.
 
-Clients reviewing a particular discharge can also send the optional UUID
+Clients must send the UUID
 `expectedDischargeId`, obtained from the timeline or discharge history. It must
 match the current uncancelled discharge record under the encounter write lock;
 a mismatch returns `409` without changing care or audit. This distinguishes
 repeated discharge/cancellation cycles even when discharge timestamps are equal.
-The workbench always sends it. Omitting it preserves the existing operation on
-the current discharge for API callers and demo scripts.
+Omitting it or sending null returns `400` without changing care or audit.
+This tightens the earlier optional-field contract: API callers and scripts must
+read the intended record before requesting its cancellation. The workbench
+already sends this ID.
 
 - The encounter must be `DISCHARGED`, have a matching uncancelled discharge
   record, and have no current location. The patient cannot have another active

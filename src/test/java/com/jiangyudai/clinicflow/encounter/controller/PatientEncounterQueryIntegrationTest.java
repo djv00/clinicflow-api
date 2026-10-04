@@ -1,5 +1,6 @@
 package com.jiangyudai.clinicflow.encounter.controller;
 
+import com.jiangyudai.clinicflow.encounter.service.EncounterQueryService;
 import com.jiangyudai.clinicflow.patient.dto.PatientResponse;
 import com.jiangyudai.clinicflow.encounter.dto.EncounterResponse;
 import com.jiangyudai.clinicflow.encounter.repository.EncounterLocationRepository;
@@ -35,6 +36,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 @WithMockUser(username = "test-operator", roles = "OPERATOR")
 class PatientEncounterQueryIntegrationTest {
+    @Autowired
+    private EncounterQueryService encounterQueries;
+
 
     @Autowired
     private EncounterLocationRepository locations;
@@ -181,7 +185,7 @@ class PatientEncounterQueryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("DISCHARGED"))
                 .andExpect(jsonPath("$.items[0].dischargedAt").isNotEmpty());
-        encounterService.cancelDischarge(current.id(), ADMITTED_AT.plusHours(3), "test-clerk");
+        encounterService.cancelDischarge(current.id(), ADMITTED_AT.plusHours(3), "test-clerk", currentDischargeId(current.id()));
         mockMvc.perform(get(PATH, patient.id()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].status").value("IN_DEPARTMENT"))
@@ -192,5 +196,9 @@ class PatientEncounterQueryIntegrationTest {
     private UUID currentLocationId(UUID encounterId) {
         return locations.findByEncounter_IdAndEndedAtIsNull(encounterId)
                 .map(location -> location.getId()).orElse(null);
+    }
+    private UUID currentDischargeId(UUID encounterId) {
+        return encounterQueries.getDischarges(encounterId).stream()
+                .filter(discharge -> discharge.cancelledAt() == null).findFirst().orElseThrow().id();
     }
 }

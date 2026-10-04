@@ -27,6 +27,11 @@ Edit `.env` before starting:
   two departments, two wards, and three beds. Patients and physicians are created
   through the workbench. Set the flag to `false` for an empty location dictionary.
 - Change `APP_PORT` or `POSTGRES_PORT` if 8080 or 5432 is already occupied.
+- Set `CLINICFLOW_TIME_ZONE` to the hospital's IANA time zone, such as
+  `America/Toronto`; it defaults to `UTC`. Birth-date and admission-date rules use
+  this zone rather than the host or browser zone. Existing offset timestamps
+  keep their original instant. Set this explicitly when upgrading from a release
+  that used the JVM's default zone.
 
 Do not overwrite an existing `.env` when upgrading. It is ignored by Git and
 excluded from the Docker build context. Single-quote values containing `$` or `#`

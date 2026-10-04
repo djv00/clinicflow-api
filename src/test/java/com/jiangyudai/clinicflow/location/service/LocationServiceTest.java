@@ -61,14 +61,14 @@ class LocationServiceTest {
                 .thenReturn(Optional.of(department));
         when(wardRepository.findById(WARD_ID))
                 .thenReturn(Optional.of(ward));
-        when(bedRepository.findById(BED_ID))
+        when(bedRepository.findByIdForUpdate(BED_ID))
                 .thenReturn(Optional.of(bed));
 
         assertThat(locationService.getActiveDepartment(DEPARTMENT_ID))
                 .isSameAs(department);
         assertThat(locationService.getActiveWard(WARD_ID))
                 .isSameAs(ward);
-        assertThat(locationService.getActiveBed(BED_ID, WARD_ID))
+        assertThat(locationService.getActiveBedForUpdate(BED_ID, WARD_ID))
                 .isSameAs(bed);
     }
 
@@ -87,11 +87,11 @@ class LocationServiceTest {
         Bed bed = mock(Bed.class);
 
         when(bed.isActive()).thenReturn(false);
-        when(bedRepository.findById(BED_ID))
+        when(bedRepository.findByIdForUpdate(BED_ID))
                 .thenReturn(Optional.of(bed));
 
         assertThatThrownBy(() ->
-                locationService.getActiveBed(BED_ID, WARD_ID)
+                locationService.getActiveBedForUpdate(BED_ID, WARD_ID)
         ).isInstanceOf(InvalidLocationException.class)
                 .hasMessageContaining("inactive");
     }
@@ -104,11 +104,11 @@ class LocationServiceTest {
 
         Bed bed = createBedInWard(anotherWardId);
 
-        when(bedRepository.findById(BED_ID))
+        when(bedRepository.findByIdForUpdate(BED_ID))
                 .thenReturn(Optional.of(bed));
 
         assertThatThrownBy(() ->
-                locationService.getActiveBed(BED_ID, WARD_ID)
+                locationService.getActiveBedForUpdate(BED_ID, WARD_ID)
         ).isInstanceOf(InvalidLocationException.class)
                 .hasMessageContaining("does not belong to ward");
     }

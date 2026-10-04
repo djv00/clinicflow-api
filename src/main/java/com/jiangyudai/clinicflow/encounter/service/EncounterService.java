@@ -84,6 +84,10 @@ public class EncounterService {
         }
 
         Patient patient = patientService.getPatientForUpdate(patientId);
+        // Birth is a date in the hospital's time zone, not in the caller's chosen offset.
+        if (admittedAt.atZoneSameInstant(clock.getZone()).toLocalDate().isBefore(patient.getDateOfBirth())) {
+            throw new InvalidAdmissionTimeException("Admission date cannot be before the patient's date of birth");
+        }
 
         if (encounterRepository.existsByEncounterNumber(encounterNumber)) {
             throw new DuplicateEncounterNumberException(encounterNumber);
@@ -386,18 +390,7 @@ public class EncounterService {
 
     /**
      * Cancels a mistaken discharge and continues location history from its effective time.
-     */
-    @Transactional
-    public EncounterResponse cancelDischarge(
-            UUID encounterId,
-            OffsetDateTime cancelledAt,
-            String cancelledBy
-    ) {
-        return cancelDischarge(encounterId, cancelledAt, cancelledBy, null);
-    }
-
-    /**
-     * When supplied, the expected record prevents a stale form from cancelling a later discharge.
+     * The expected record prevents a stale caller from cancelling a later discharge.
      */
     @Transactional
     public EncounterResponse cancelDischarge(
@@ -406,6 +399,9 @@ public class EncounterService {
             String cancelledBy,
             UUID expectedDischargeId
     ) {
+        if (expectedDischargeId == null) {
+            throw new InvalidDischargeCancellationException("Expected discharge ID is required");
+        }
         UUID patientId = encounterRepository.findPatientIdById(encounterId)
                 .orElseThrow(() -> new EncounterNotFoundException(encounterId));
 
@@ -426,7 +422,7 @@ public class EncounterService {
         EncounterDischarge discharge = encounterDischargeRepository
                 .findByEncounter_IdAndCancelledAtIsNull(encounterId)
                 .orElseThrow(() -> new DischargeRecordConflictException("Current discharge record is missing"));
-        if (expectedDischargeId != null && !expectedDischargeId.equals(discharge.getId())) {
+        if (!expectedDischargeId.equals(discharge.getId())) {
             throw new DischargeRecordConflictException("The discharge record has changed. Reload it before cancelling.");
         }
         EncounterLocation previous = discharge.getLocation();
