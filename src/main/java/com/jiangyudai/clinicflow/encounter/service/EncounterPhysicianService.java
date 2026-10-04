@@ -24,7 +24,6 @@ import org.springframework.util.StringUtils;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -99,13 +98,6 @@ public class EncounterPhysicianService {
         current.endAt(endedAt, PhysicianAssignmentEndReason.RELEASED, operator, OffsetDateTime.now(clock));
         assignments.flush();
         return PhysicianAssignmentResponse.from(current);
-    }
-
-    /** Reads responsibility history while preventing encounter workflows from changing it mid-read. */
-    @Transactional
-    public List<EncounterPhysicianAssignment> getHistory(UUID encounterId) {
-        encounters.findByIdForRead(encounterId).orElseThrow(() -> new EncounterNotFoundException(encounterId));
-        return assignments.findAllByEncounter_IdOrderByStartedAtAscIdAsc(encounterId);
     }
 
     /** Supplies the current location and assignment IDs together so clients can detect stale selections. */

@@ -70,15 +70,6 @@ public class LocationService {
         return ward;
     }
 
-    public Bed getActiveBed(UUID bedId, UUID wardId) {
-        Bed bed = bedRepository.findById(bedId)
-                .orElseThrow(() ->
-                        new LocationNotFoundException("Bed", bedId)
-                );
-
-        return validateBed(bed, wardId);
-    }
-
     /**
      * Loads a bed with a write lock held by the caller's transaction.
      * This method must be called from an existing workflow transaction.

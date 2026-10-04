@@ -208,7 +208,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(mapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors." + field).exists());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @ParameterizedTest
@@ -220,7 +220,7 @@ class EncounterPhysicianApiIntegrationTest {
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(mapper.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @ParameterizedTest
@@ -254,7 +254,7 @@ class EncounterPhysicianApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/encounters/not-a-uuid/physician-assignments").with(user("viewer").roles("VIEWER")))
                 .andExpect(status().isBadRequest());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     @Test
@@ -296,7 +296,7 @@ class EncounterPhysicianApiIntegrationTest {
         encounters.dischargeEncounter(encounterId, ENTERED.plusHours(3), "discharge-clerk", currentLocationId(encounterId));
         mvc.perform(post(path(encounterId)).with(user("operator").roles("OPERATOR")).with(csrf())
                         .contentType("application/json").content(request)).andExpect(status().isConflict());
-        assertThat(assignments.getHistory(encounterId)).isEmpty();
+        assertThat(assignments.getAssignments(encounterId).assignments()).isEmpty();
     }
 
     private UUID assignFixture() {

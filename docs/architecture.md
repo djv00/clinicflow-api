@@ -157,6 +157,9 @@ uses the [ArchUnit core API](https://www.archunit.org/userguide/html/000_Index.h
 as a test-only dependency. It guards controller/persistence separation, service/HTTP
 separation, entity dependencies, business-independent common code, explicit clocks,
 and DTO fields (including collection elements) that must not expose JPA entities.
+Service rules select the service packages, including services registered through
+`@Bean`. Outside the time configuration package, the clock rule rejects Java time
+`now` calls without a `Clock` argument and direct system-clock factories.
 It intentionally does not impose acyclic feature modules: shared reference entities
 and the documented occupancy query cross those module boundaries.
 

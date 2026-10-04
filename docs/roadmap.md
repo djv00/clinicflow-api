@@ -22,6 +22,7 @@ history. Business rules are implemented in one Spring Boot backend.
 | Encounter physician responsibility | API and page implemented | Assignment, handover, release, eligibility and stale-selection checks, history, and atomic transfer/discharge closure. Patient and inpatient pages show current responsibility and history, with a paginated department physician picker and recovery after conflicts or unconfirmed saves. Writes use session operators; viewers can read. |
 | Container deployment | Implemented; CI verifies the packaged stack | Java runtime image, app/PostgreSQL Compose startup, health checks, persistent volume, configuration guide, and container-recreation acceptance. Public hosting is not provisioned. |
 | Architecture consistency | Implemented | Dedicated encounter queries, transactional response DTOs, stable error codes, injectable time, patient page modules and dependency guard tests. See [architecture](architecture.md). |
+| Review boundary fixes | Implemented | Hospital-zone birth/admission validation, same-day births, required discharge record IDs, removal of unused entity-returning query helpers and wider architecture guards. |
 | Interview walkthrough | Written; rehearsal remains | An English demo script, code reading route, tradeoffs and evidence are in the [walkthrough](interview-walkthrough.md). |
 
 ## Remaining delivery sequence
